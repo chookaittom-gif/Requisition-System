@@ -10,7 +10,8 @@
     "test:node": "vitest run -c vitest.node.config.ts",
     "typecheck": "tsc --noEmit",
     "seed:build": "node scripts/seed-legacy.mjs",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "deploy:all": "powershell -ExecutionPolicy Bypass -File ../deploy-all.ps1"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.0",

@@ -1762,7 +1762,12 @@ function matModal(m){
 
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-bold text-slate-700 mb-1.5">หมวดหมู่/ประเภทวัสดุ</label>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-sm font-bold text-slate-700">หมวดหมู่/ประเภทวัสดุ</label>
+            <button type="button" id="btnQuickAddCat" class="text-xs text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1 transition px-2 py-0.5 rounded-lg hover:bg-brand-50" title="เพิ่มหมวดหมู่ใหม่">
+              <i class="fa-solid fa-plus-circle"></i> เพิ่มหมวดหมู่
+            </button>
+          </div>
           <select id="mCat" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
             <option value="">-- เลือกหมวดหมู่ --</option>
             ${(S.cache.categories || []).map(c => `
@@ -1837,6 +1842,44 @@ function matModal(m){
   }
 
   $('#mCancel').addEventListener('click', closeModal);
+
+  const btnQuickAddCat = $('#btnQuickAddCat');
+  if(btnQuickAddCat){
+    btnQuickAddCat.addEventListener('click', async ()=>{
+      const { value: catName } = await Swal.fire({
+        title: 'เพิ่มหมวดหมู่ใหม่',
+        input: 'text',
+        inputLabel: 'ชื่อหมวดหมู่พัสดุ',
+        inputPlaceholder: 'เช่น หมวดงานเอกสารและกระดาษ',
+        showCancelButton: true,
+        confirmButtonText: 'บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#0284c7',
+        reverseButtons: true,
+        inputValidator: (val) => {
+          if (!val || !val.trim()) return 'กรุณาระบุชื่อหมวดหมู่';
+        }
+      });
+      if (!catName || !catName.trim()) return;
+      const cleanName = catName.trim();
+      showLoader('กำลังบันทึกหมวดหมู่...');
+      const res = await api('apiSaveCategory', {
+        action: 'create',
+        Name: cleanName,
+        actor: S.user.Username
+      });
+      hideLoader();
+      if (!res.ok) return alertErr(res.message);
+      const cr = await api('apiGetCategories');
+      if (cr && cr.ok) S.cache.categories = cr.data;
+      const select = $('#mCat');
+      if (select) {
+        select.innerHTML = '<option value="">-- เลือกหมวดหมู่ --</option>' +
+          (S.cache.categories || []).map(c => `<option value="${esc(c.Name)}" ${c.Name === cleanName ? 'selected' : ''}>${esc(c.Name)}</option>`).join('');
+      }
+      toast('success', 'เพิ่มหมวดหมู่เรียบร้อยแล้ว');
+    });
+  }
 
   $('#mSave').addEventListener('click', async ()=>{
     if(!$('#mCode').value.trim() || !$('#mName').value.trim() || !$('#mUnit').value.trim()){
@@ -3067,11 +3110,65 @@ function openScanner({ title = 'สแกน QR / บาร์โค้ด', onS
 async function viewSettings(){
   const c = $('#content');
   c.innerHTML = skTable(4);
-  const r = await api('apiGetSettings');
+  const [r, catRes] = await Promise.all([
+    api('apiGetSettings'),
+    api('apiGetCategories')
+  ]);
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   const d = r.data;
+  const categories = (catRes && catRes.ok) ? catRes.data : [];
 
-  c.innerHTML = `<div class="max-w-3xl mx-auto animate-fadeUp">${cardWrap('ตั้งค่าระบบ','fa-gear', `
+  const catTools = `
+    <button type="button" id="btnResetOfficeCats" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95" title="ตั้งค่าเป็น 5 หมวดหมู่งานสำนักงานมาตรฐาน">
+      <i class="fa-solid fa-rotate-left text-brand-600"></i> ใช้ 5 หมวดสำนักงาน
+    </button>
+    <button type="button" id="btnAddCat" class="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-soft active:scale-95" title="เพิ่มหมวดหมู่ใหม่">
+      <i class="fa-solid fa-plus"></i> เพิ่มหมวดหมู่
+    </button>
+  `;
+
+  const catRowsHtml = categories.length ? `
+    <div class="overflow-x-auto rounded-2xl border border-slate-100">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
+          <tr>
+            <th class="px-4 py-3 w-12 text-center">#</th>
+            <th class="px-4 py-3">ชื่อหมวดหมู่</th>
+            <th class="px-4 py-3 w-32 text-center">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          ${categories.map((cat, idx) => `
+            <tr class="hover:bg-slate-50/60 transition">
+              <td class="px-4 py-3 text-center text-slate-400 font-medium">${idx + 1}</td>
+              <td class="px-4 py-3 font-bold text-slate-700">${esc(cat.Name)}</td>
+              <td class="px-4 py-3 text-center">
+                <div class="flex items-center justify-center gap-1.5">
+                  <button type="button" data-id="${esc(cat.ID)}" data-name="${esc(cat.Name)}" class="btnEditCat w-8 h-8 rounded-lg bg-sky-50 text-sky-600 hover:bg-sky-100 transition grid place-content-center" title="แก้ไขชื่อ">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                  </button>
+                  <button type="button" data-id="${esc(cat.ID)}" data-name="${esc(cat.Name)}" class="btnDelCat w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition grid place-content-center" title="ลบหมวดหมู่">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : `
+    <div class="p-8 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+      <i class="fa-solid fa-tags text-3xl text-slate-300 mb-2"></i>
+      <p class="text-sm font-bold text-slate-600">ยังไม่มีหมวดหมู่พัสดุ</p>
+      <p class="text-xs text-slate-400 mt-1 mb-4">คลิก "เพิ่มหมวดหมู่" หรือ "ใช้ 5 หมวดสำนักงาน" เพื่อเริ่มต้น</p>
+      <button type="button" id="btnEmptyResetCats" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold hover:bg-brand-700 transition">
+        <i class="fa-solid fa-plus-circle mr-1"></i> เริ่มต้นด้วย 5 หมวดหมู่งานสำนักงาน
+      </button>
+    </div>
+  `;
+
+  c.innerHTML = `<div class="max-w-3xl mx-auto space-y-6 animate-fadeUp">${cardWrap('ตั้งค่าระบบ','fa-gear', `
     <form id="frmSetting" class="space-y-5">
       <div class="flex flex-col sm:flex-row items-center gap-5 p-5 rounded-3xl bg-gradient-to-br from-brand-50 to-white border border-brand-100">
         <div class="w-28 h-28 rounded-3xl bg-white border-2 border-dashed border-brand-200 grid place-content-center overflow-hidden shrink-0">
@@ -3170,7 +3267,16 @@ async function viewSettings(){
       <button type="submit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-light text-white font-bold shadow-soft hover:brightness-110 active:scale-[.99] transition">
         <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
       </button>
-    </form>`)}</div>`;
+    </form>`)}
+    ${cardWrap('จัดการหมวดหมู่พัสดุ', 'fa-tags', `
+      <div class="p-5 space-y-4">
+        <div class="flex items-center justify-between text-xs text-slate-500">
+          <span>มีทั้งหมด <strong class="text-slate-800">${categories.length}</strong> หมวดหมู่ (ใช้จัดกลุ่มในคลังพัสดุและการเบิกจ่าย)</span>
+        </div>
+        ${catRowsHtml}
+      </div>
+    `, catTools)}
+  </div>`;
 
   $('#fLogo').addEventListener('change', e=>{
     const f = e.target.files[0]; if(!f) return;
@@ -3263,6 +3369,122 @@ async function viewSettings(){
       await alertOk(res.message);
       go('a-setting', true);
     }catch(err){ hideLoader(); alertErr(err.message||err); }
+  });
+
+  // Category management handlers
+  const officeStandardCats = [
+    'หมวดงานเอกสารและกระดาษ',
+    'หมวดเครื่องเขียนและอุปกรณ์ตัด',
+    'หมวดอุปกรณ์ยึดติดและเทป',
+    'หมวดอุปกรณ์ไอทีและวัสดุคอมพิวเตอร์',
+    'หมวดงานบ้านงานครัวสำนักงาน'
+  ];
+
+  const handleResetOfficeCats = async ()=>{
+    const cf = await Swal.fire({
+      icon: 'question',
+      title: 'ใช้ชุดหมวดหมู่งานสำนักงาน?',
+      html: '<div class="text-left text-sm space-y-1"><p>ระบบจะตรวจสอบและเพิ่ม 5 หมวดหมู่งานสำนักงานมาตรฐาน:</p><ul class="list-disc pl-5 text-slate-600 font-medium"><li>หมวดงานเอกสารและกระดาษ</li><li>หมวดเครื่องเขียนและอุปกรณ์ตัด</li><li>หมวดอุปกรณ์ยึดติดและเทป</li><li>หมวดอุปกรณ์ไอทีและวัสดุคอมพิวเตอร์</li><li>หมวดงานบ้านงานครัวสำนักงาน</li></ul></div>',
+      showCancelButton: true,
+      confirmButtonText: 'ยืนยัน',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#0284c7',
+      reverseButtons: true
+    });
+    if(!cf.isConfirmed) return;
+    showLoader('กำลังบันทึกหมวดหมู่...');
+    for(const name of officeStandardCats){
+      if(!categories.some(c=> c.Name === name)){
+        await api('apiSaveCategory', { action:'create', Name:name, actor:S.user.Username });
+      }
+    }
+    hideLoader();
+    await alertOk('อัปเดตหมวดหมู่งานสำนักงานเรียบร้อยแล้ว');
+    go('a-setting', true);
+  };
+
+  const btnResetCats = $('#btnResetOfficeCats');
+  if(btnResetCats) btnResetCats.addEventListener('click', handleResetOfficeCats);
+  const btnEmptyReset = $('#btnEmptyResetCats');
+  if(btnEmptyReset) btnEmptyReset.addEventListener('click', handleResetOfficeCats);
+
+  const btnAddCat = $('#btnAddCat');
+  if(btnAddCat){
+    btnAddCat.addEventListener('click', async ()=>{
+      const { value: name } = await Swal.fire({
+        title: 'เพิ่มหมวดหมู่ใหม่',
+        input: 'text',
+        inputLabel: 'ชื่อหมวดหมู่พัสดุ',
+        inputPlaceholder: 'เช่น หมวดงานเอกสารและกระดาษ',
+        showCancelButton: true,
+        confirmButtonText: 'บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#0284c7',
+        reverseButtons: true,
+        inputValidator: (val) => {
+          if(!val || !val.trim()) return 'กรุณาระบุชื่อหมวดหมู่';
+        }
+      });
+      if(!name || !name.trim()) return;
+      showLoader('กำลังบันทึกหมวดหมู่...');
+      const res = await api('apiSaveCategory', { action:'create', Name:name.trim(), actor:S.user.Username });
+      hideLoader();
+      if(!res.ok) return alertErr(res.message);
+      await alertOk(res.message);
+      go('a-setting', true);
+    });
+  }
+
+  $$('.btnEditCat').forEach(btn => {
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-id');
+      const curName = btn.getAttribute('data-name');
+      const { value: name } = await Swal.fire({
+        title: 'แก้ไขชื่อหมวดหมู่',
+        input: 'text',
+        inputValue: curName,
+        inputLabel: 'ชื่อหมวดหมู่พัสดุ',
+        showCancelButton: true,
+        confirmButtonText: 'บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#0284c7',
+        reverseButtons: true,
+        inputValidator: (val) => {
+          if(!val || !val.trim()) return 'กรุณาระบุชื่อหมวดหมู่';
+        }
+      });
+      if(!name || !name.trim() || name.trim() === curName) return;
+      showLoader('กำลังบันทึกการแก้ไข...');
+      const res = await api('apiSaveCategory', { action:'update', ID:id, Name:name.trim(), actor:S.user.Username });
+      hideLoader();
+      if(!res.ok) return alertErr(res.message);
+      await alertOk(res.message);
+      go('a-setting', true);
+    });
+  });
+
+  $$('.btnDelCat').forEach(btn => {
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-id');
+      const name = btn.getAttribute('data-name');
+      const cf = await Swal.fire({
+        icon: 'warning',
+        title: 'ลบหมวดหมู่นี้?',
+        text: `คุณต้องการลบหมวดหมู่ "${name}" ใช่หรือไม่?`,
+        showCancelButton: true,
+        confirmButtonText: 'ลบ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#e11d48',
+        reverseButtons: true
+      });
+      if(!cf.isConfirmed) return;
+      showLoader('กำลังลบหมวดหมู่...');
+      const res = await api('apiSaveCategory', { action:'delete', ID:id, Name:name, actor:S.user.Username });
+      hideLoader();
+      if(!res.ok) return alertErr(res.message);
+      await alertOk(res.message);
+      go('a-setting', true);
+    });
   });
 }
 

@@ -425,7 +425,7 @@ function seedUsersIfEmpty_(){
 function seedCategoriesIfEmpty_(){
   const sh = getSheet_(SHEETS.CATEGORIES);
   if(sh.getLastRow() < 2){
-    ['วัสดุสิ้นเปลือง','เครื่องมือแพทย์','อุปกรณ์ป้องกัน','ยาและเวชภัณฑ์','อื่นๆ'].forEach(name=>{
+    ['หมวดงานเอกสารและกระดาษ','หมวดเครื่องเขียนและอุปกรณ์ตัด','หมวดอุปกรณ์ยึดติดและเทป','หมวดอุปกรณ์ไอทีและวัสดุคอมพิวเตอร์','หมวดงานบ้านงานครัวสำนักงาน'].forEach(name=>{
       appendRow_(SHEETS.CATEGORIES, { ID: genId_('CAT'), Name: name, CreatedAt: nowIso_() });
     });
   }
