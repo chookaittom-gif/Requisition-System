@@ -1,0 +1,2 @@
+ALTER TABLE settings ADD COLUMN telegram_bot_token TEXT NOT NULL DEFAULT '';
+ALTER TABLE requests ADD COLUMN stock_txn TEXT NOT NULL DEFAULT '';
