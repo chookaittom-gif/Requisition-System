@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [Parameter(Position = 0)]
     [string]$Message = "",
@@ -97,8 +97,10 @@ if ($GitStatus) {
     Write-Host "No unstaged changes to commit (working tree clean)." -ForegroundColor Yellow
 }
 
-Write-Host "Pushing to GitHub (origin main)..." -ForegroundColor Gray
-git push origin main
+$CurrentBranch = (git branch --show-current).Trim()
+if ([string]::IsNullOrWhiteSpace($CurrentBranch)) { $CurrentBranch = "main" }
+Write-Host "Pushing to GitHub (origin $CurrentBranch)..." -ForegroundColor Gray
+git push origin $CurrentBranch
 if ($LASTEXITCODE -ne 0) {
     Write-Err "git push failed."
     exit 1
@@ -107,6 +109,7 @@ Write-Success "Pushed to GitHub successfully."
 
 # STEP 2: Google Apps Script (clasp)
 Write-Step "Step 2: Google Apps Script (clasp push & deploy)"
+Write-Host "Target Apps Script ID: 1HB4fXJLclo6pLotiy-4227xioOVGms7pqvD9QG--zQ8lBrbzEbgTPh8m" -ForegroundColor Gray
 Write-Host "Running clasp push..." -ForegroundColor Gray
 clasp push --force
 if ($LASTEXITCODE -ne 0) {

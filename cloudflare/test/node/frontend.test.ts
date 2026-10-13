@@ -57,6 +57,15 @@ describe('public/index.html static checks', () => {
     expect(html).toContain(String.raw`!/bytes=0-\d+/.test(rg)`);
     expect(html).toContain(String.raw`/\.([A-Za-z0-9]+)$/`);
   });
+
+  it('declares favicon links and static assets exist', () => {
+    expect(html).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
+    expect(html).toContain('<link rel="shortcut icon" href="/favicon.ico">');
+    const ico = readFileSync(new URL('../../public/favicon.ico', import.meta.url));
+    const png = readFileSync(new URL('../../public/favicon.png', import.meta.url));
+    expect(ico.length).toBeGreaterThan(0);
+    expect(png.length).toBeGreaterThan(0);
+  });
 });
 
 /** Runs the real upload helpers from the page against a mocked fetch/api. */

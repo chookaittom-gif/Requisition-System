@@ -49,7 +49,7 @@ const HEADERS = {
     'RefDoc','Note','Actor','CreatedAt'
   ],
   AuditLog: ['ID','Action','Entity','EntityID','Detail','Actor','CreatedAt'],
-  Categories: ['ID','Name','CreatedAt'],
+  Categories: ['ID','Name','Code','CreatedAt'],
   OpeningBalances: ['ID','MaterialID','FiscalYear','OpeningQty','SetBy','CreatedAt','UpdatedAt']
 };
 
@@ -58,6 +58,7 @@ function doGet(e){
   ensureSetup();
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('ระบบเบิกจ่ายพัสดุ')
+    .setFaviconUrl('https://lh3.googleusercontent.com/d/1of8t2iKc8OkbPVXstgNsRL_YPlAIbBd3')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -847,9 +848,20 @@ function apiSaveSettings(payload){
 }
 
 /* ============================== CATEGORIES ============================== */
+const DEFAULT_CAT_CODES_ = {
+  'หมวดงานเอกสารและกระดาษ': 'DOC',
+  'หมวดเครื่องเขียนและอุปกรณ์ตัด': 'PEN',
+  'หมวดอุปกรณ์ยึดติดและเทป': 'TAP',
+  'หมวดอุปกรณ์ไอทีและวัสดุคอมพิวเตอร์': 'IT',
+  'หมวดงานบ้านงานครัวสำนักงาน': 'HOM'
+};
+
 function apiGetCategories(){
   try{
-    const data = readAll_(SHEETS.CATEGORIES).sort((a,b)=> String(a.Name).localeCompare(String(b.Name),'th'));
+    const data = readAll_(SHEETS.CATEGORIES).map(c => {
+      const code = String(c.Code || DEFAULT_CAT_CODES_[c.Name] || '').toUpperCase().trim();
+      return Object.assign({}, c, { Code: code });
+    }).sort((a,b)=> String(a.Name).localeCompare(String(b.Name),'th'));
     return { ok:true, data };
   }catch(err){ return { ok:false, message:String(err) }; }
 }
@@ -859,17 +871,33 @@ function apiSaveCategory(payload){
     try{
       const name = String(payload.Name||'').trim();
       if(!name) return { ok:false, message:'กรุณาระบุชื่อหมวดหมู่' };
+      const rawCode = String(payload.Code || payload.code || '').toUpperCase().trim();
+      if(rawCode && !/^[A-Z0-9_-]{2,10}$/.test(rawCode)){
+        return { ok:false, message:'รหัสย่อหมวดหมู่ต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 2-10 ตัวอักษร' };
+      }
+      const cats = readAll_(SHEETS.CATEGORIES);
       if(payload.action === 'delete'){
         deleteRowById_(SHEETS.CATEGORIES, payload.ID);
         logAudit_('DELETE', 'Category', payload.ID, name, payload.actor||'');
         return { ok:true, message:'ลบหมวดหมู่เรียบร้อยแล้ว' };
       }
+      const dupName = cats.find(c => String(c.Name).trim() === name && String(c.ID) !== String(payload.ID));
+      if(dupName) return { ok:false, message:'ชื่อหมวดหมู่ "'+name+'" มีอยู่แล้วในระบบ' };
+      if(rawCode){
+        const dupCode = cats.find(c => {
+          const cCode = String(c.Code || DEFAULT_CAT_CODES_[c.Name] || '').toUpperCase().trim();
+          return cCode === rawCode && String(c.ID) !== String(payload.ID);
+        });
+        if(dupCode) return { ok:false, message:'รหัสย่อหมวดหมู่ "'+rawCode+'" มีอยู่แล้วในระบบ' };
+      }
       if(payload.action === 'update'){
-        updateRowById_(SHEETS.CATEGORIES, payload.ID, { Name:name });
-        logAudit_('UPDATE', 'Category', payload.ID, name, payload.actor||'');
+        const updates = { Name:name };
+        if(rawCode) updates.Code = rawCode;
+        updateRowById_(SHEETS.CATEGORIES, payload.ID, updates);
+        logAudit_('UPDATE', 'Category', payload.ID, name + (rawCode ? ' ('+rawCode+')' : ''), payload.actor||'');
       }else{
-        appendRow_(SHEETS.CATEGORIES, { ID:genId_('CAT'), Name:name, CreatedAt:nowIso_() });
-        logAudit_('CREATE', 'Category', '', name, payload.actor||'');
+        appendRow_(SHEETS.CATEGORIES, { ID:genId_('CAT'), Name:name, Code:rawCode, CreatedAt:nowIso_() });
+        logAudit_('CREATE', 'Category', '', name + (rawCode ? ' ('+rawCode+')' : ''), payload.actor||'');
       }
       return { ok:true, message:'บันทึกหมวดหมู่เรียบร้อยแล้ว' };
     }catch(err){ return { ok:false, message:String(err) }; }

@@ -22,7 +22,7 @@ const MAPS: Record<TableName, ColumnMap> = {
     position: 'Position', department: 'Department', email: 'Email',
     created_at: 'CreatedAt', updated_at: 'UpdatedAt',
   },
-  categories: { id: 'ID', name: 'Name', created_at: 'CreatedAt' },
+  categories: { id: 'ID', name: 'Name', code: 'Code', created_at: 'CreatedAt' },
   materials: {
     id: 'ID', code: 'Code', name: 'Name', unit: 'Unit', unit_price: 'UnitPrice', stock_qty: 'StockQty',
     min_qty: 'MinQty', opening_qty: 'OpeningQty', category: 'Category', material_type: 'MaterialType',

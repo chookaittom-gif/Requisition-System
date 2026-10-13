@@ -223,3 +223,43 @@ describe('fix round 1', () => {
     expect(() => movementStmt(env.DB, { ...base, guardTxn: 'T' })).toThrow();
   });
 });
+
+describe('category code', () => {
+  it('creates category with code, rejects duplicate code, and updates code', async () => {
+    // 1. Create with code
+    const r1 = await rpc('apiSaveCategory', [{ action: 'create', Name: 'หมวดเครื่องมือช่าง', Code: 'TOOL' }]);
+    expect(r1.ok).toBe(true);
+
+    const list1 = await rpc('apiGetCategories', []);
+    expect(list1.ok).toBe(true);
+    const cat = list1.data.find((c: any) => c.Name === 'หมวดเครื่องมือช่าง');
+    expect(cat).toBeTruthy();
+    expect(cat.Code).toBe('TOOL');
+
+    // 2. Reject duplicate code
+    const dupCode = await rpc('apiSaveCategory', [{ action: 'create', Name: 'หมวดช่างกล', Code: 'TOOL' }]);
+    expect(dupCode.ok).toBe(false);
+    expect(dupCode.message).toContain('มีอยู่แล้วในระบบ');
+
+    // 3. Reject duplicate name
+    const dupName = await rpc('apiSaveCategory', [{ action: 'create', Name: 'หมวดเครื่องมือช่าง', Code: 'MECH' }]);
+    expect(dupName.ok).toBe(false);
+    expect(dupName.message).toContain('มีอยู่แล้วในระบบ');
+
+    // 4. Update code
+    const upd = await rpc('apiSaveCategory', [{ action: 'update', ID: cat.ID, Name: 'หมวดเครื่องมือช่างและอุปกรณ์', Code: 'MECH' }]);
+    expect(upd.ok).toBe(true);
+
+    const list2 = await rpc('apiGetCategories', []);
+    const cat2 = list2.data.find((c: any) => c.ID === cat.ID);
+    expect(cat2.Name).toBe('หมวดเครื่องมือช่างและอุปกรณ์');
+    expect(cat2.Code).toBe('MECH');
+
+    // 5. Default fallback code for default office categories
+    await env.DB.prepare("INSERT INTO categories (id, name, created_at) VALUES ('CAT-DOC', 'หมวดงานเอกสารและกระดาษ', '2026-01-01 00:00:00')").run();
+    const list3 = await rpc('apiGetCategories', []);
+    const docCat = list3.data.find((c: any) => c.Name === 'หมวดงานเอกสารและกระดาษ');
+    expect(docCat.Code).toBe('DOC');
+  });
+});
+

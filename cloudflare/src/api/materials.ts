@@ -49,10 +49,24 @@ async function guarded(fn: () => Promise<unknown>): Promise<unknown> {
 const actorOf = (ctx: Ctx): string => ctx.session?.username ?? '';
 
 /* ============================== CATEGORIES ============================== */
+const DEFAULT_CAT_CODES: Record<string, string> = {
+  'หมวดงานเอกสารและกระดาษ': 'DOC',
+  'หมวดเครื่องเขียนและอุปกรณ์ตัด': 'PEN',
+  'หมวดอุปกรณ์ยึดติดและเทป': 'TAP',
+  'หมวดอุปกรณ์ไอทีและวัสดุคอมพิวเตอร์': 'IT',
+  'หมวดงานบ้านงานครัวสำนักงาน': 'HOM',
+};
+
 registerRpc('apiGetCategories', 'public', async (ctx) => {
   const { results } = await ctx.env.DB.prepare('SELECT * FROM categories').all<Obj>();
   const data = results
-    .map((r) => toLegacy('categories', r))
+    .map((r) => {
+      const c = toLegacy('categories', r);
+      if (!c.Code && c.Name && DEFAULT_CAT_CODES[String(c.Name)]) {
+        c.Code = DEFAULT_CAT_CODES[String(c.Name)];
+      }
+      return c;
+    })
     .sort((a, b) => String(a.Name).localeCompare(String(b.Name), 'th'));
   return { ok: true, data };
 });
@@ -72,15 +86,31 @@ registerRpc('apiSaveCategory', 'officer', (ctx, args) =>
       ]);
       return { ok: true, message: 'ลบหมวดหมู่เรียบร้อยแล้ว' };
     }
+
+    const rawCode = str(p.Code || p.code).toUpperCase().trim();
+    if (rawCode && !/^[A-Z0-9_-]{2,10}$/.test(rawCode)) {
+      return fail('รหัสย่อหมวดหมู่ต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 2-10 ตัวอักษร', 'VALIDATION');
+    }
+
+    const dupName = await db.prepare('SELECT id FROM categories WHERE name = ? AND id != ?').bind(name, id || '').first();
+    if (dupName) return fail(`ชื่อหมวดหมู่ "${name}" มีอยู่แล้วในระบบ`);
+
+    if (rawCode) {
+      const dupCode = await db.prepare('SELECT id FROM categories WHERE UPPER(code) = ? AND id != ?').bind(rawCode, id || '').first();
+      if (dupCode) return fail(`รหัสย่อหมวดหมู่ "${rawCode}" มีอยู่แล้วในระบบ`);
+    }
+
     if (p.action === 'update') {
+      const setCode = rawCode || null;
       await db.batch([
-        db.prepare('UPDATE categories SET name = ? WHERE id = ?').bind(name, id),
-        logAudit(db, { action: 'UPDATE', entity: 'Category', entityId: id, detail: name, actor }),
+        db.prepare('UPDATE categories SET name = ?, code = COALESCE(?, code) WHERE id = ?').bind(name, setCode, id),
+        logAudit(db, { action: 'UPDATE', entity: 'Category', entityId: id, detail: `${name} (${rawCode})`, actor }),
       ]);
     } else {
+      const catCode = rawCode || null;
       await db.batch([
-        db.prepare('INSERT INTO categories (id, name, created_at) VALUES (?, ?, ?)').bind(genId('CAT'), name, nowBkk()),
-        logAudit(db, { action: 'CREATE', entity: 'Category', entityId: '', detail: name, actor }),
+        db.prepare('INSERT INTO categories (id, name, code, created_at) VALUES (?, ?, ?, ?)').bind(genId('CAT'), name, catCode, nowBkk()),
+        logAudit(db, { action: 'CREATE', entity: 'Category', entityId: '', detail: `${name} (${rawCode})`, actor }),
       ]);
     }
     return { ok: true, message: 'บันทึกหมวดหมู่เรียบร้อยแล้ว' };
