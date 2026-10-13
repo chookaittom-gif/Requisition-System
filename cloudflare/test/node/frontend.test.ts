@@ -66,6 +66,16 @@ describe('public/index.html static checks', () => {
     expect(ico.length).toBeGreaterThan(0);
     expect(png.length).toBeGreaterThan(0);
   });
+
+  it('configures staticBackdrop and draft auto-save for materials modal with default minQty 5', () => {
+    expect(html).toContain('staticBackdrop = false');
+    expect(html).toContain('saveMatDraft_');
+    expect(html).toContain('getMatDraft_');
+    expect(html).toContain('clearMatDraft_');
+    expect(html).toContain('mat_draft_');
+    expect(html).toContain('btnClearDraft');
+    expect(html).toContain('formVals.MinQty !== undefined && formVals.MinQty !== \'\' ? formVals.MinQty : 5');
+  });
 });
 
 /** Runs the real upload helpers from the page against a mocked fetch/api. */

@@ -1034,13 +1034,15 @@ function emptyBox(text){
 }
 
 /* ---------------- MODAL ---------------- */
-function openModal({title, sub, icon, body, foot, size}){
+function openModal({title, sub, icon, body, foot, size, staticBackdrop = false}){
   $('#modalTitle').textContent = title||'';
   $('#modalSub').textContent   = sub||'';
   $('#modalIcon').className     = 'fa-solid ' + (icon||'fa-pen');
   $('#modalBody').innerHTML     = body||'';
   $('#modalFoot').innerHTML     = foot||'';
   $('#modalBox').className = 'mx-auto my-4 w-full ' + (size||'max-w-2xl') + ' bg-white rounded-[26px] shadow-2xl animate-pop overflow-hidden';
+  if(staticBackdrop) $('#modal').dataset.static = 'true';
+  else delete $('#modal').dataset.static;
   $('#modal').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
@@ -1048,10 +1050,24 @@ function closeModal(){
   try{ stopScanner(); }catch(e){}          // ปิดกล้องทุกครั้งที่ปิด modal (แก้ปัญหากล้องค้างเมื่อกดกากบาท)
   $('#modal').classList.add('hidden');
   $('#modalBody').innerHTML='';
+  delete $('#modal').dataset.static;
   document.body.style.overflow='';
 }
 $('#modalClose').addEventListener('click', closeModal);
-$('#modal').addEventListener('click', e => { if(e.target.id==='modal') closeModal(); });
+$('#modal').addEventListener('click', e => {
+  if(e.target.id==='modal'){
+    if($('#modal').dataset.static === 'true'){
+      const box = $('#modalBox');
+      if(box){
+        box.classList.remove('animate-pop');
+        box.classList.add('scale-[1.01]', 'transition-transform', 'duration-100');
+        setTimeout(() => box.classList.remove('scale-[1.01]'), 120);
+      }
+      return;
+    }
+    closeModal();
+  }
+});
 
 /* ---------------- CHART ---------------- */
 const valueBadgePlugin = {
@@ -1774,15 +1790,65 @@ function generateNextMatCode(catName){
   return `${prefix}-${padded}`;
 }
 
+/* ---------------- MATERIAL DRAFT HELPERS ---------------- */
+const MAT_DRAFT_KEY = () => 'mat_draft_' + (S?.user?.Username || 'default');
+function saveMatDraft_(){
+  if ($('#mID') && $('#mID').value) return; // ไม่บันทึก draft เมื่ออยู่ในโหมดแก้ไขพัสดุเดิม
+  const draft = {
+    Code: $('#mCode')?.value || '',
+    Unit: $('#mUnit')?.value || '',
+    Name: $('#mName')?.value || '',
+    Category: $('#mCat')?.value || '',
+    MaterialType: $('#mType')?.value || '',
+    SizeSpec: $('#mSize')?.value || '',
+    StorageLocation: $('#mLoc')?.value || '',
+    UnitPrice: $('#mPrice')?.value || '',
+    StockQty: $('#mStock')?.value || '',
+    MinQty: $('#mMin')?.value || '5',
+    savedAt: Date.now()
+  };
+  const hasContent = Object.entries(draft).some(([k, v]) => k !== 'MinQty' && k !== 'savedAt' && String(v).trim().length > 0);
+  if (hasContent) {
+    try { localStorage.setItem(MAT_DRAFT_KEY(), JSON.stringify(draft)); }catch(e){}
+  } else {
+    clearMatDraft_();
+  }
+}
+function getMatDraft_(){
+  try {
+    const raw = localStorage.getItem(MAT_DRAFT_KEY());
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function clearMatDraft_(){
+  try { localStorage.removeItem(MAT_DRAFT_KEY()); }catch(e){}
+}
+
 /* m = พัสดุเดิม (มี ID → แก้ไข) | { Code } จากการสแกน (ไม่มี ID → เพิ่มใหม่) | null (เพิ่มใหม่ว่างๆ) */
 function matModal(m){
   const isEdit = !!(m && m.ID);
   const pre = m || {};
+  const draft = !isEdit ? getMatDraft_() : null;
+  const formVals = isEdit ? m : (draft ? { ...draft, Code: pre.Code || draft.Code } : pre);
+  const hasDraft = !isEdit && !!draft;
+
   openModal({
     title: isEdit ? 'แก้ไขข้อมูลพัสดุ' : 'เพิ่มพัสดุใหม่',
     sub: isEdit ? (m.Code + ' • ' + m.Name) : (pre.Code ? ('รหัสจากการสแกน: ' + pre.Code) : 'กรอกข้อมูลพัสดุให้ครบถ้วน'),
     icon: isEdit ? 'fa-pen-to-square' : 'fa-plus',
+    staticBackdrop: true,
     body: `<form id="frmMat" class="space-y-4">
+      ${hasDraft ? `
+      <div id="matDraftNotice" class="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-xs text-amber-800">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-file-pen text-amber-600 text-sm"></i>
+          <span class="font-bold">กำลังแสดงข้อมูลแบบร่างที่บันทึกไว้</span>
+        </div>
+        <button type="button" id="btnClearDraft" class="px-3 py-1 bg-white hover:bg-amber-100 text-amber-700 font-bold border border-amber-300 rounded-xl transition shadow-xs text-xs flex items-center gap-1">
+          <i class="fa-solid fa-trash-can text-[10px]"></i> ล้างแบบร่าง
+        </button>
+      </div>` : ''}
+
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
           <div class="flex items-center justify-between mb-1.5">
@@ -1792,17 +1858,17 @@ function matModal(m){
                 <i class="fa-solid fa-rotate"></i> สร้างรหัสอัตโนมัติ
               </button>` : ''}
           </div>
-          <input id="mCode" value="${esc(pre.Code || '')}" required placeholder="เช่น DOC-0001" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 font-mono font-bold tracking-wider text-brand-700">
+          <input id="mCode" value="${esc(formVals.Code || '')}" required placeholder="เช่น DOC-0001" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 font-mono font-bold tracking-wider text-brand-700">
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">หน่วยนับ <span class="text-rose2">*</span></label>
-          <input id="mUnit" value="${isEdit ? esc(m.Unit) : ''}" required placeholder="เช่น กล่อง, ด้าม, รีม" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mUnit" value="${esc(formVals.Unit || '')}" required placeholder="เช่น กล่อง, ด้าม, รีม" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
       </div>
 
       <div>
         <label class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อพัสดุ <span class="text-rose2">*</span></label>
-        <input id="mName" value="${isEdit ? esc(m.Name) : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+        <input id="mName" value="${esc(formVals.Name || '')}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
       </div>
 
       <div class="grid sm:grid-cols-2 gap-4">
@@ -1822,39 +1888,39 @@ function matModal(m){
             <option value="">-- เลือกหมวดหมู่ --</option>
             ${(S.cache.categories || []).map(c => {
               const pfx = c.Code || getCategoryPrefix(c.Name);
-              return `<option value="${esc(c.Name)}" ${isEdit && m.Category === c.Name ? 'selected' : ''}>${esc(c.Name)}${pfx ? ' [' + esc(pfx) + ']' : ''}</option>`;
+              return `<option value="${esc(c.Name)}" ${(formVals.Category === c.Name) ? 'selected' : ''}>${esc(c.Name)}${pfx ? ' [' + esc(pfx) + ']' : ''}</option>`;
             }).join('')}
           </select>
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">ชนิดวัสดุ (ระบุเจาะจง)</label>
-          <input id="mType" value="${isEdit ? esc(m.MaterialType || m.Category || '') : ''}" placeholder="เช่น วัสดุสำนักงาน, วัสดุงานช่าง" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mType" value="${esc(formVals.MaterialType || formVals.Category || '')}" placeholder="เช่น วัสดุสำนักงาน, วัสดุงานช่าง" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
       </div>
 
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">ขนาด/ลักษณะ</label>
-          <input id="mSize" value="${isEdit ? esc(m.SizeSpec || '') : ''}" placeholder="เช่น ขนาด ก.๓๘*ย.๓๘*ส.๗๕ ซม., 1 ชั้น 300 แผ่น" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mSize" value="${esc(formVals.SizeSpec || '')}" placeholder="เช่น ขนาด ก.๓๘*ย.๓๘*ส.๗๕ ซม., 1 ชั้น 300 แผ่น" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">สถานที่จัดเก็บ</label>
-          <input id="mLoc" value="${isEdit ? esc(m.StorageLocation || '') : ''}" placeholder="เช่น ห้อง สนง., ห้องช่าง, สนง." class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mLoc" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น ห้อง สนง., ห้องช่าง, สนง." class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
       </div>
 
       <div class="grid sm:grid-cols-3 gap-4">
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">ราคาต่อหน่วย (บาท) <span class="text-rose2">*</span></label>
-          <input id="mPrice" type="number" min="0" step="0.01" value="${isEdit ? m.UnitPrice : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mPrice" type="number" min="0" step="0.01" value="${formVals.UnitPrice !== undefined ? formVals.UnitPrice : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนคงเหลือ <span class="text-rose2">*</span></label>
-          <input id="mStock" type="number" min="0" step="1" value="${isEdit ? m.StockQty : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mStock" type="number" min="0" step="1" value="${formVals.StockQty !== undefined ? formVals.StockQty : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จุดสั่งซื้อ (ใกล้หมด)</label>
-          <input id="mMin" type="number" min="0" step="1" value="${isEdit ? m.MinQty : 10}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <input id="mMin" type="number" min="0" step="1" value="${formVals.MinQty !== undefined && formVals.MinQty !== '' ? formVals.MinQty : 5}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
       </div>
 
@@ -1894,6 +1960,22 @@ function matModal(m){
 
   $('#mCancel').addEventListener('click', closeModal);
 
+  if (!isEdit) {
+    const frm = $('#frmMat');
+    if (frm) {
+      frm.addEventListener('input', saveMatDraft_);
+      frm.addEventListener('change', saveMatDraft_);
+    }
+    const btnClearDraft = $('#btnClearDraft');
+    if (btnClearDraft) {
+      btnClearDraft.addEventListener('click', () => {
+        clearMatDraft_();
+        matModal(null);
+        toast('info', 'ล้างข้อมูลแบบร่างเรียบร้อยแล้ว');
+      });
+    }
+  }
+
   const selCat = $('#mCat');
   const codeInp = $('#mCode');
   const btnGenCode = $('#btnGenCode');
@@ -1908,6 +1990,7 @@ function matModal(m){
     if (force || !codeInp.value.trim() || codeInp.value.trim() === autoGeneratedCode) {
       codeInp.value = nextCode;
       autoGeneratedCode = nextCode;
+      saveMatDraft_();
     }
   };
 
@@ -2164,7 +2247,7 @@ function matModal(m){
         Unit: $('#mUnit').value.trim(),
         UnitPrice: parseFloat($('#mPrice').value || 0),
         StockQty: parseFloat($('#mStock').value || 0),
-        MinQty: parseFloat($('#mMin').value || 10),
+        MinQty: parseFloat($('#mMin').value || 5),
         Category: $('#mCat').value || '',
         MaterialType: $('#mType').value.trim() || $('#mCat').value || '',
         SizeSpec: $('#mSize').value.trim(),
@@ -2177,6 +2260,7 @@ function matModal(m){
 
       hideLoader();
       if(!res.ok) return alertErr(res.message);
+      clearMatDraft_();
       closeModal();
       await alertOk(res.message);
       go('a-material', true);

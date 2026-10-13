@@ -13,6 +13,9 @@ param(
     [string]$ActiveGasDeploymentId = "AKfycbwVmsrqKX3f8T9cKUqpEK4i0rGWYV0xdSLN5e_vI8lyxJjyN79xoeAfD8ECmZyU7tcF"
 )
 
+# Ensure UTF-8 console & output encoding for proper Thai commit messages
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 
 function Write-Step {
@@ -135,9 +138,11 @@ Write-Success "Google Apps Script deployed successfully."
 # STEP 3: Cloudflare Workers
 Write-Step "Step 3: Cloudflare Workers Deploy (D1 & Worker)"
 Push-Location "$RootDir\cloudflare"
+$prevCi = $env:CI
+$env:CI = "true"
 try {
-    Write-Host "Applying D1 remote migrations (ims_db)..." -ForegroundColor Gray
-    "y" | npx wrangler d1 migrations apply ims_db --remote
+    Write-Host "Applying D1 remote migrations (DB / ims_db)..." -ForegroundColor Gray
+    npx wrangler d1 migrations apply DB --remote
     if ($LASTEXITCODE -ne 0) {
         Write-Warn "wrangler d1 migrations apply remote returned non-zero code or no new migrations."
     } else {
@@ -153,6 +158,7 @@ try {
     Write-Success "Cloudflare Worker deployed successfully (Account ID: 17abb4914aa1cbfcf03edddedbaea672)."
 }
 finally {
+    $env:CI = $prevCi
     Pop-Location
 }
 
