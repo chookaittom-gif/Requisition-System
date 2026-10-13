@@ -7,7 +7,7 @@ param(
     [switch]$SkipTests,
 
     [Parameter()]
-    [switch]$UpdateActiveGas,
+    [switch]$NewGasVersionOnly,
 
     [Parameter()]
     [string]$ActiveGasDeploymentId = "AKfycbwVmsrqKX3f8T9cKUqpEK4i0rGWYV0xdSLN5e_vI8lyxJjyN79xoeAfD8ECmZyU7tcF"
@@ -118,8 +118,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success "clasp push finished."
 
-if ($UpdateActiveGas) {
-    Write-Host "Updating active deployment ($ActiveGasDeploymentId)..." -ForegroundColor Gray
+if (-not $NewGasVersionOnly -and -not [string]::IsNullOrWhiteSpace($ActiveGasDeploymentId)) {
+    Write-Host "Updating active deployment in-place ($ActiveGasDeploymentId)..." -ForegroundColor Gray
     clasp deploy -i $ActiveGasDeploymentId -d "$Message"
 } else {
     Write-Host "Creating new deployment version..." -ForegroundColor Gray
