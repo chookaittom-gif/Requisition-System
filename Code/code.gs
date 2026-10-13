@@ -550,6 +550,9 @@ function sendEmailNotify_(to, subject, bodyHtml){
 
 function sendTelegramNotify_(botToken, chatId, text){
   if(!botToken || !chatId) return { ok: false, message: 'กรุณาระบุ Telegram Bot Token และ Chat ID' };
+  if(String(botToken).indexOf(':') === -1){
+    return { ok: false, message: 'รูปแบบ Telegram Bot Token ไม่ถูกต้อง (ต้องมีเครื่องหมาย : เช่น 123456:ABC... ที่ได้รับจาก @BotFather)' };
+  }
   try{
     const url = 'https://api.telegram.org/bot' + botToken + '/sendMessage';
     const resp = UrlFetchApp.fetch(url, {

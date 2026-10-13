@@ -9,6 +9,9 @@ export interface TelegramResult {
 /** Legacy sendTelegramNotify_: sendMessage with HTML parse mode. Never throws. */
 export async function sendTelegram(token: string, chatId: string, html: string): Promise<TelegramResult> {
   if (!token || !chatId) return { ok: false, message: 'กรุณาระบุ Telegram Bot Token และ Chat ID' };
+  if (!token.includes(':')) {
+    return { ok: false, message: 'รูปแบบ Telegram Bot Token ไม่ถูกต้อง (ต้องมีเครื่องหมาย : เช่น 123456:ABC... ที่ได้รับจาก @BotFather)' };
+  }
   try {
     const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
