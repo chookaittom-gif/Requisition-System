@@ -83,8 +83,8 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('id="locCombobox"');
     expect(html).toContain('id="locDropdown"');
     expect(html).toContain('id="btnToggleLoc"');
-    expect(html).toContain('ห้องสนง.ศูนย์ลป.');
-    expect(html).toContain('ห้องสนง. ร.รสาธิต');
+    expect(html).toContain('สนง.ศ.ลป.');
+    expect(html).toContain('สนง.รร.สาธิต');
     expect(html).toContain('cdn.tailwindcss.com should not be used in production');
   });
 });

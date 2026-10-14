@@ -1840,7 +1840,7 @@ function matModal(m){
   const draft = !isEdit ? getMatDraft_() : null;
   const formVals = isEdit ? m : (draft ? { ...draft, Code: pre.Code || draft.Code } : pre);
   const hasDraft = !isEdit && !!draft;
-  const defaultLocs = ['ห้องสนง.ศูนย์ลป.', 'ห้องสนง. ร.รสาธิต'];
+  const defaultLocs = ['สนง.ศ.ลป.', 'สนง.รร.สาธิต'];
   const knownLocs = (S.cache.materials || [])
     .map(x => String(x.StorageLocation || '').trim())
     .filter(Boolean);
@@ -1920,7 +1920,7 @@ function matModal(m){
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">สถานที่จัดเก็บ</label>
           <div class="relative" id="locCombobox">
-            <input id="mLoc" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น ห้องสนง.ศูนย์ลป., ห้องสนง. ร.รสาธิต" autocomplete="off" class="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 transition outline-none text-sm text-slate-800">
+            <input id="mLoc" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น สนง.ศ.ลป., สนง.รร.สาธิต" autocomplete="off" class="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 transition outline-none text-sm text-slate-800">
             <button type="button" id="btnToggleLoc" class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 active:scale-95 transition" title="เลือกสถานที่จัดเก็บ" aria-label="เลือกสถานที่จัดเก็บ" tabindex="-1">
               <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" id="iconLocChevron"></i>
             </button>
