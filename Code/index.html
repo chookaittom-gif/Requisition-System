@@ -1605,13 +1605,11 @@ function matModal(m){
   const draft = !isEdit ? getMatDraft_() : null;
   const formVals = isEdit ? m : (draft ? { ...draft, Code: pre.Code || draft.Code } : pre);
   const hasDraft = !isEdit && !!draft;
-  const knownLocs = Array.from(new Set(
-    (S.cache.materials || [])
-      .map(x => String(x.StorageLocation || '').trim())
-      .filter(Boolean)
-  )).sort((a, b) => a.localeCompare(b, 'th'));
   const defaultLocs = ['ห้องสนง.ศูนย์ลป.', 'ห้องสนง. ร.รสาธิต'];
-  const locList = knownLocs.length ? knownLocs : defaultLocs;
+  const knownLocs = (S.cache.materials || [])
+    .map(x => String(x.StorageLocation || '').trim())
+    .filter(Boolean);
+  const locList = Array.from(new Set([...defaultLocs, ...knownLocs])).sort((a, b) => a.localeCompare(b, 'th'));
 
   openModal({
     title: isEdit ? 'แก้ไขข้อมูลพัสดุ' : 'เพิ่มพัสดุใหม่',
@@ -1698,8 +1696,8 @@ function matModal(m){
                   <span class="truncate">${esc(loc)}</span>
                 </div>
               `).join('')}
-              <div class="loc-empty-note hidden px-3 py-2.5 text-xs text-slate-400 text-center italic">
-                กดบันทึกเพื่อใช้สถานที่ใหม่นี้ได้ทันที
+              <div class="loc-empty-note hidden px-3.5 py-2.5 text-xs text-sky-700 bg-sky-50/80 rounded-xl text-center font-medium">
+                สามารถใช้ชื่อสถานที่ใหม่นี้ได้ (จะบันทึกพร้อมข้อมูลพัสดุ)
               </div>
             </div>
           </div>
@@ -1780,6 +1778,16 @@ function matModal(m){
       return matchCount;
     };
 
+    const showAllLocs = () => {
+      locDropdown.querySelectorAll('.loc-item').forEach(it => {
+        it.style.display = 'flex';
+      });
+      const emptyNote = locDropdown.querySelector('.loc-empty-note');
+      if (emptyNote) emptyNote.style.display = 'none';
+      locDropdown.classList.remove('hidden');
+      if (chevron) chevron.classList.add('rotate-180');
+    };
+
     const openLocDropdown = () => {
       filterLocs();
       locDropdown.classList.remove('hidden');
@@ -1794,25 +1802,37 @@ function matModal(m){
     btnToggleLoc.addEventListener('click', (e) => {
       e.stopPropagation();
       if (locDropdown.classList.contains('hidden')) {
-        locInp.focus();
-        openLocDropdown();
+        showAllLocs();
       } else {
         closeLocDropdown();
       }
     });
 
-    locInp.addEventListener('focus', openLocDropdown);
+    locInp.addEventListener('focus', () => {
+      if (!locInp.value.trim()) {
+        showAllLocs();
+      } else {
+        openLocDropdown();
+      }
+    });
+
     locInp.addEventListener('input', () => {
       openLocDropdown();
       if (!isEdit) saveMatDraft_();
     });
 
-    locDropdown.addEventListener('click', (e) => {
+    locDropdown.addEventListener('mousedown', (e) => {
       const item = e.target.closest('.loc-item');
       if (item && item.dataset.val) {
         locInp.value = item.dataset.val;
         closeLocDropdown();
         if (!isEdit) saveMatDraft_();
+      }
+    });
+
+    locBox.addEventListener('focusout', (e) => {
+      if (!locBox.contains(e.relatedTarget)) {
+        closeLocDropdown();
       }
     });
 
@@ -1829,7 +1849,7 @@ function matModal(m){
     document.addEventListener('click', onOutsideClick);
 
     locInp.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' || e.key === 'Enter') {
         closeLocDropdown();
       }
     });
