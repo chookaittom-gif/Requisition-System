@@ -229,6 +229,14 @@ describe('users', () => {
     expect(await rows("SELECT * FROM users WHERE username = 'okuser'")).toHaveLength(0);
   });
 
+  it('duplicate username rejected regardless of case', async () => {
+    const res = await rpc('apiSaveUsers', [
+      [{ action: 'create', Username: 'OFF1', Password: 'p', FullName: 'x', Role: 'officer' }],
+    ]);
+    expect(res).toEqual({ ok: false, message: 'ชื่อผู้ใช้ "OFF1" มีอยู่แล้วในระบบ' });
+    expect(await rows('SELECT id FROM users')).toHaveLength(2);
+  });
+
   it('create requires password and valid role; staff maps to officer', async () => {
     expect(await rpc('apiSaveUsers', [[{ action: 'create', Username: 'a1', Password: '', Role: 'officer' }]])).toEqual({
       ok: false,

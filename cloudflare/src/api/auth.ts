@@ -47,7 +47,8 @@ registerRpc('apiLogin', 'public', async (ctx, args) => {
   if (!username || !password) return fail('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
 
   const db = ctx.env.DB;
-  const u = await db.prepare('SELECT * FROM users WHERE username = ?').bind(username).first<Obj>();
+  // Usernames are case-insensitive (see lib/username.ts); passwords stay case-sensitive.
+  const u = await db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').bind(username).first<Obj>();
   const check = u ? await verifyPassword(String(u.password_hash), password, ctx.env.PW_SALT) : null;
   if (!u || !check?.ok) return fail('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
 
@@ -106,7 +107,7 @@ registerRpc('apiUpdateProfile', 'officer', async (ctx, args) => {
   const username = String(p.Username ?? '').trim();
   if (!username) return fail('กรุณากรอกชื่อผู้ใช้');
   const dup = await db
-    .prepare('SELECT 1 AS x FROM users WHERE username = ? AND id <> ?')
+    .prepare('SELECT 1 AS x FROM users WHERE LOWER(username) = LOWER(?) AND id <> ?')
     .bind(username, id)
     .first();
   if (dup) return fail(`ชื่อผู้ใช้ "${username}" มีอยู่แล้วในระบบ`);

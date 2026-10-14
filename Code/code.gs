@@ -779,12 +779,18 @@ function sanitizeUser_(u){
   return { ID:u.ID, Username:u.Username, FullName:u.FullName, Role:u.Role, Position:u.Position, Department:u.Department||'', Email:u.Email||'' };
 }
 
+/* ชื่อผู้ใช้ไม่สนตัวพิมพ์เล็ก/ใหญ่: เก็บตามที่พิมพ์ (แสดงผลเหมือนเดิม) เทียบแบบ lower —
+   รหัสผ่านยังสนเคสเสมอ */
+function eqUsername_(a, b){
+  return String(a == null ? '' : a).trim().toLowerCase() === String(b == null ? '' : b).trim().toLowerCase();
+}
+
 function apiLogin(payload){
   try{
     const username = String((payload||{}).username||'').trim();
     const password = String((payload||{}).password||'').trim();
     if(!username || !password) return { ok:false, message:'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' };
-    const u = readAll_(SHEETS.USERS).find(x => String(x.Username).trim() === username && checkPw_(x.Password, password));
+    const u = readAll_(SHEETS.USERS).find(x => eqUsername_(x.Username, username) && checkPw_(x.Password, password));
     if(!u) return { ok:false, message:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
     const updates = {};
     if(!isHashed_(u.Password)) updates.Password = hashPw_(password);
@@ -924,7 +930,7 @@ function apiSaveUsers(list){
           return;
         }
         const username = String(item.Username||'').trim();
-        const dup = users.find(u=> String(u.Username).trim()===username && String(u.ID)!==String(item.ID));
+        const dup = users.find(u=> eqUsername_(u.Username, username) && String(u.ID)!==String(item.ID));
         if(dup) throw new Error('ชื่อผู้ใช้ "'+username+'" มีอยู่แล้วในระบบ');
         const pw = String(item.Password||'').trim();
 
@@ -977,7 +983,7 @@ function apiUpdateProfile(payload){
       const old = users.find(x=> String(x.ID)===String(payload.ID));
       if(!old) return { ok:false, message:'ไม่พบผู้ใช้งานนี้' };
       const username = String(payload.Username||'').trim();
-      const dup = users.find(u=> String(u.Username).trim()===username && String(u.ID)!==String(payload.ID));
+      const dup = users.find(u=> eqUsername_(u.Username, username) && String(u.ID)!==String(payload.ID));
       if(dup) return { ok:false, message:'ชื่อผู้ใช้ "'+username+'" มีอยู่แล้วในระบบ' };
       const pw = String(payload.Password||'').trim();
 

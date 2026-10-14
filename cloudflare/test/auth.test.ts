@@ -93,6 +93,17 @@ describe('auth rpc', () => {
     expect(await empty.json()).toEqual({ ok: false, message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
   });
 
+  it('login username is case-insensitive, password stays case-sensitive', async () => {
+    await seedUser();
+    const upper = (await (await post('apiLogin', [{ username: 'U', password: '1234' }])).json()) as any;
+    expect(upper.ok).toBe(true);
+    expect(upper.user.Username).toBe('u');
+    const mixed = (await (await post('apiLogin', [{ username: '  u ', password: '1234' }])).json()) as any;
+    expect(mixed.ok).toBe(true);
+    const wrongCasePw = (await (await post('apiLogin', [{ username: 'U', password: '12345' }])).json()) as any;
+    expect(wrongCasePw).toEqual({ ok: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+  });
+
   it('expired session returns AUTH', async () => {
     await seedUser();
     const past = nowBkk(new Date(Date.now() - 1000));
@@ -141,6 +152,14 @@ describe('auth rpc', () => {
     const { cookie } = await loginCookie();
     const body = (await (await post('apiUpdateProfile', [{ Username: 'other', FullName: 'N' }], cookie)).json()) as any;
     expect(body).toEqual({ ok: false, message: 'ชื่อผู้ใช้ "other" มีอยู่แล้วในระบบ' });
+  });
+
+  it('profile rejects duplicate username regardless of case', async () => {
+    await seedUser();
+    await seedUser({ id: 'U-TEST0002', username: 'other' });
+    const { cookie } = await loginCookie();
+    const body = (await (await post('apiUpdateProfile', [{ Username: 'OTHER', FullName: 'N' }], cookie)).json()) as any;
+    expect(body).toEqual({ ok: false, message: 'ชื่อผู้ใช้ "OTHER" มีอยู่แล้วในระบบ' });
   });
 
   it('bootstrap never exposes telegram token', async () => {

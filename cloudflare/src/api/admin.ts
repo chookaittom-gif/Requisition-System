@@ -13,6 +13,7 @@ import {
   statusChangeText,
 } from '../lib/telegram';
 import { nowBkk } from '../lib/time';
+import { eqUsername } from '../lib/username';
 import { registerRpc } from '../rpc';
 import { notifyHooks } from './requests';
 
@@ -181,7 +182,7 @@ registerRpc('apiSaveUsers', 'admin', async (ctx, args) => {
   const stmts: D1PreparedStatement[] = [];
   const now = nowBkk();
   const dupName = (name: string, selfId: string) =>
-    [...users.values()].some((u) => u.username.trim() === name && u.id !== selfId);
+    [...users.values()].some((u) => u.id !== selfId && eqUsername(u.username, name));
 
   for (const item of list) {
     const actor = str(item.actor);
