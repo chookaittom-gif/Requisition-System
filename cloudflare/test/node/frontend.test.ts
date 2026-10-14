@@ -80,10 +80,11 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('mat_draft_');
     expect(html).toContain('btnClearDraft');
     expect(html).toContain('formVals.MinQty !== undefined && formVals.MinQty !== \'\' ? formVals.MinQty : 5');
-    expect(html).toContain('id="locOptions"');
-    expect(html).toContain('value="ห้องสนง.ศูนย์ลป."');
-    expect(html).toContain('value="ห้องสนง. ร.รสาธิต"');
-    expect(html).toContain('btn-quick-loc');
+    expect(html).toContain('id="locCombobox"');
+    expect(html).toContain('id="locDropdown"');
+    expect(html).toContain('id="btnToggleLoc"');
+    expect(html).toContain('ห้องสนง.ศูนย์ลป.');
+    expect(html).toContain('ห้องสนง. ร.รสาธิต');
     expect(html).toContain('cdn.tailwindcss.com should not be used in production');
   });
 });

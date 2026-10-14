@@ -1605,6 +1605,13 @@ function matModal(m){
   const draft = !isEdit ? getMatDraft_() : null;
   const formVals = isEdit ? m : (draft ? { ...draft, Code: pre.Code || draft.Code } : pre);
   const hasDraft = !isEdit && !!draft;
+  const knownLocs = Array.from(new Set(
+    (S.cache.materials || [])
+      .map(x => String(x.StorageLocation || '').trim())
+      .filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'th'));
+  const defaultLocs = ['ห้องสนง.ศูนย์ลป.', 'ห้องสนง. ร.รสาธิต'];
+  const locList = knownLocs.length ? knownLocs : defaultLocs;
 
   openModal({
     title: isEdit ? 'แก้ไขข้อมูลพัสดุ' : 'เพิ่มพัสดุใหม่',
@@ -1679,18 +1686,22 @@ function matModal(m){
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">สถานที่จัดเก็บ</label>
-          <input id="mLoc" list="locOptions" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น ห้องสนง.ศูนย์ลป., ห้องสนง. ร.รสาธิต" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
-          <datalist id="locOptions">
-            <option value="ห้องสนง.ศูนย์ลป.">
-            <option value="ห้องสนง. ร.รสาธิต">
-          </datalist>
-          <div class="flex flex-wrap gap-1.5 mt-2">
-            <button type="button" class="btn-quick-loc text-xs px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 active:scale-95 transition font-medium flex items-center gap-1" data-val="ห้องสนง.ศูนย์ลป.">
-              <i class="fa-solid fa-location-dot text-[10px] text-sky-500"></i>ห้องสนง.ศูนย์ลป.
+          <div class="relative" id="locCombobox">
+            <input id="mLoc" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น ห้องสนง.ศูนย์ลป., ห้องสนง. ร.รสาธิต" autocomplete="off" class="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 transition outline-none text-sm text-slate-800">
+            <button type="button" id="btnToggleLoc" class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 active:scale-95 transition" title="เลือกสถานที่จัดเก็บ" aria-label="เลือกสถานที่จัดเก็บ" tabindex="-1">
+              <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" id="iconLocChevron"></i>
             </button>
-            <button type="button" class="btn-quick-loc text-xs px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 active:scale-95 transition font-medium flex items-center gap-1" data-val="ห้องสนง. ร.รสาธิต">
-              <i class="fa-solid fa-location-dot text-[10px] text-sky-500"></i>ห้องสนง. ร.รสาธิต
-            </button>
+            <div id="locDropdown" class="hidden absolute left-0 right-0 top-full mt-1.5 z-30 bg-white rounded-2xl border border-slate-200 shadow-xl max-h-52 overflow-y-auto divide-y divide-slate-100 p-1">
+              ${locList.map(loc => `
+                <div class="loc-item px-3.5 py-2.5 rounded-xl text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700 cursor-pointer flex items-center gap-2 transition" data-val="${esc(loc)}">
+                  <i class="fa-solid fa-location-dot text-xs text-sky-500 shrink-0"></i>
+                  <span class="truncate">${esc(loc)}</span>
+                </div>
+              `).join('')}
+              <div class="loc-empty-note hidden px-3 py-2.5 text-xs text-slate-400 text-center italic">
+                กดบันทึกเพื่อใช้สถานที่ใหม่นี้ได้ทันที
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1746,15 +1757,83 @@ function matModal(m){
 
   $('#mCancel').addEventListener('click', closeModal);
 
-  $$('.btn-quick-loc').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const locInp = $('#mLoc');
-      if (locInp) {
-        locInp.value = btn.dataset.val || '';
+  const locInp = $('#mLoc');
+  const locBox = $('#locCombobox');
+  const locDropdown = $('#locDropdown');
+  const btnToggleLoc = $('#btnToggleLoc');
+  const chevron = $('#iconLocChevron');
+
+  if (locInp && locDropdown && btnToggleLoc) {
+    const filterLocs = () => {
+      const q = (locInp.value || '').trim().toLowerCase();
+      let matchCount = 0;
+      locDropdown.querySelectorAll('.loc-item').forEach(it => {
+        const val = (it.dataset.val || '').toLowerCase();
+        const match = !q || val.includes(q);
+        it.style.display = match ? 'flex' : 'none';
+        if (match) matchCount++;
+      });
+      const emptyNote = locDropdown.querySelector('.loc-empty-note');
+      if (emptyNote) {
+        emptyNote.style.display = matchCount === 0 ? 'block' : 'none';
+      }
+      return matchCount;
+    };
+
+    const openLocDropdown = () => {
+      filterLocs();
+      locDropdown.classList.remove('hidden');
+      if (chevron) chevron.classList.add('rotate-180');
+    };
+
+    const closeLocDropdown = () => {
+      locDropdown.classList.add('hidden');
+      if (chevron) chevron.classList.remove('rotate-180');
+    };
+
+    btnToggleLoc.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (locDropdown.classList.contains('hidden')) {
+        locInp.focus();
+        openLocDropdown();
+      } else {
+        closeLocDropdown();
+      }
+    });
+
+    locInp.addEventListener('focus', openLocDropdown);
+    locInp.addEventListener('input', () => {
+      openLocDropdown();
+      if (!isEdit) saveMatDraft_();
+    });
+
+    locDropdown.addEventListener('click', (e) => {
+      const item = e.target.closest('.loc-item');
+      if (item && item.dataset.val) {
+        locInp.value = item.dataset.val;
+        closeLocDropdown();
         if (!isEdit) saveMatDraft_();
       }
     });
-  });
+
+    const onOutsideClick = (e) => {
+      const box = document.getElementById('locCombobox');
+      if (!box) {
+        document.removeEventListener('click', onOutsideClick);
+        return;
+      }
+      if (!box.contains(e.target)) {
+        closeLocDropdown();
+      }
+    };
+    document.addEventListener('click', onOutsideClick);
+
+    locInp.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeLocDropdown();
+      }
+    });
+  }
 
   if (!isEdit) {
     const frm = $('#frmMat');
