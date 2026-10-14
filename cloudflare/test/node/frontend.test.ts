@@ -63,18 +63,28 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('<link rel="shortcut icon" href="/favicon.ico">');
     const ico = readFileSync(new URL('../../public/favicon.ico', import.meta.url));
     const png = readFileSync(new URL('../../public/favicon.png', import.meta.url));
+    const sdu = readFileSync(new URL('../../public/sdu-logo.jpg', import.meta.url));
     expect(ico.length).toBeGreaterThan(0);
     expect(png.length).toBeGreaterThan(0);
+    expect(sdu.length).toBeGreaterThan(0);
+    expect(html).toContain('/sdu-logo.jpg');
+    expect(html).not.toContain('https://www.dusit.ac.th/home/wp-content/uploads/2023/07/SDU.png');
   });
 
   it('configures staticBackdrop and draft auto-save for materials modal with default minQty 5', () => {
     expect(html).toContain('staticBackdrop = false');
+    expect(html).toContain('staticBackdrop: false');
     expect(html).toContain('saveMatDraft_');
     expect(html).toContain('getMatDraft_');
     expect(html).toContain('clearMatDraft_');
     expect(html).toContain('mat_draft_');
     expect(html).toContain('btnClearDraft');
     expect(html).toContain('formVals.MinQty !== undefined && formVals.MinQty !== \'\' ? formVals.MinQty : 5');
+    expect(html).toContain('id="locOptions"');
+    expect(html).toContain('value="ห้องสนง.ศูนย์ลป."');
+    expect(html).toContain('value="ห้องสนง. ร.รสาธิต"');
+    expect(html).toContain('btn-quick-loc');
+    expect(html).toContain('cdn.tailwindcss.com should not be used in production');
   });
 });
 

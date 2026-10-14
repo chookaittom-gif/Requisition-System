@@ -89,6 +89,12 @@ if ($LASTEXITCODE -ne 0) {
 
 $GitStatus = git status --porcelain
 if ($GitStatus) {
+    if ([string]::IsNullOrWhiteSpace((git config user.name))) {
+        git config user.name "chookaittom-gif"
+    }
+    if ([string]::IsNullOrWhiteSpace((git config user.email))) {
+        git config user.email "265235137+chookaittom-gif@users.noreply.github.com"
+    }
     Write-Host "Committing changes with message: '$Message'..." -ForegroundColor Gray
     git commit -m "$Message"
     if ($LASTEXITCODE -ne 0) {
