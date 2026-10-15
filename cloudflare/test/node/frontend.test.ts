@@ -46,7 +46,7 @@ describe('public/index.html static checks', () => {
     expect(html).toContain("'/api/rpc/'");
     expect(html).toContain('uploadFile(');
     expect(html).toContain('exportInventoryXlsx(');
-    expect(html).toContain('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    expect(html).toContain('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js');
     expect(html).toContain('apiStartUpload');
     expect(html).toContain('apiFinishUpload');
     expect(html).toContain('/chunk');
@@ -158,18 +158,20 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('page-break-after:always;');
   });
 
-  it('includes exportMaterialsXlsx with A4 page setup and gridlines', () => {
+  it('includes exportMaterialsXlsx with A4 page setup, borders and gridlines', () => {
     expect(html).toContain('btnExportMatExcel');
     expect(html).toContain('exportMaterialsXlsx(currentMatList || r.data)');
     expect(html).toContain('async function exportMaterialsXlsx(rows)');
-    expect(html).toContain("ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };");
+    expect(html).toContain("ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };");
     expect(html).toContain("ws['!sheetViews'] = [{ showGridLines: true }];");
+    expect(html).toContain('applyExcelStyles');
   });
 
   it('applies A4 page setup and gridlines to account and inventory exports', () => {
-    expect(html).toContain("ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };");
+    expect(html).toContain("wsSummary['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };");
     expect(html).toContain("wsCat['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };");
     expect(html).toContain("wsCat['!sheetViews'] = [{ showGridLines: true }];");
+    expect(html).toContain('const THIN_BORDER =');
   });
 });
 

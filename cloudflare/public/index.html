@@ -1158,11 +1158,68 @@ function loadScript(src){
     document.head.appendChild(s);
   }));
 }
-const XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const XLSX_SRC = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
 async function ensureXlsx(){
-  if(window.XLSX) return;
+  if(window.XLSX && window.XLSX.style_version) return;
   await loadScript(XLSX_SRC);
   if(!window.XLSX) throw new Error('โหลดไลบรารี Excel ไม่สำเร็จ');
+}
+
+const THIN_BORDER = {
+  top: { style: 'thin', color: { rgb: '000000' } },
+  bottom: { style: 'thin', color: { rgb: '000000' } },
+  left: { style: 'thin', color: { rgb: '000000' } },
+  right: { style: 'thin', color: { rgb: '000000' } }
+};
+
+function applyExcelStyles(ws, { startRow = 4, headerRows = 1, endRowOffset = 0, colAligns = [] } = {}){
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+  const tableEndRow = range.e.r - endRowOffset;
+  for (let r = 0; r <= range.e.r; r++) {
+    for (let c = 0; c <= range.e.c; c++) {
+      const ref = XLSX.utils.encode_cell({ r, c });
+      if (r < startRow) {
+        if (ws[ref]) {
+          ws[ref].s = {
+            font: { name: 'TH Sarabun New', sz: r === 0 ? 15 : 12, bold: r === 0 },
+            alignment: { vertical: 'center', horizontal: 'left' }
+          };
+        }
+        continue;
+      }
+      if (r > tableEndRow) {
+        if (ws[ref]) {
+          ws[ref].s = {
+            font: { name: 'TH Sarabun New', sz: 10, italic: true },
+            alignment: { vertical: 'center', horizontal: 'left' }
+          };
+        }
+        continue;
+      }
+      const isHeader = (r >= startRow && r < startRow + headerRows);
+      const isTotal = (r === tableEndRow);
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+      const cell = ws[ref];
+      let hAlign = 'center';
+      if (!isHeader) {
+        hAlign = colAligns[c] || (typeof cell.v === 'number' ? 'right' : 'left');
+      }
+      cell.s = {
+        font: {
+          name: 'TH Sarabun New',
+          sz: isHeader ? 12 : 11,
+          bold: isHeader || isTotal
+        },
+        border: THIN_BORDER,
+        alignment: {
+          wrapText: true,
+          vertical: 'center',
+          horizontal: isHeader ? 'center' : hAlign
+        },
+        fill: isHeader ? { fgColor: { rgb: 'F1F5F9' } } : (isTotal ? { fgColor: { rgb: 'F8FAFC' } } : undefined)
+      };
+    }
+  }
 }
 
 /**
@@ -1208,9 +1265,10 @@ async function exportInventoryXlsx(rep){
 
   const wsSummary = A.aoa_to_sheet(rowsSummary);
   wsSummary['!merges'] = [merge(0,0,0,3), merge(1,0,1,3), merge(2,0,2,3)];
-  wsSummary['!cols'] = [60, 220, 130, 150].map(w=>({ wpx:w }));
+  wsSummary['!cols'] = [8, 34, 18, 20].map(w=>({ wch:w }));
   wsSummary['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
   wsSummary['!sheetViews'] = [{ showGridLines: true }];
+  applyExcelStyles(wsSummary, { startRow: 4, headerRows: 1, colAligns: ['center', 'left', 'right', 'left'] });
   A.book_append_sheet(wb, wsSummary, cleanSheetName(`สรุปงบ ปี ${fyShort}`, 'สรุปวัสดุคงเหลือ'));
 
   // ---- Sheets 2..N: Separate sheet per category (14 columns each) ----
@@ -1281,9 +1339,15 @@ async function exportInventoryXlsx(rep){
       merge(2,0,2,13),
       merge(catRows.length-1, 0, catRows.length-1, 13)
     ];
-    wsCat['!cols'] = [30,65,65,75,240,65,45,65,50,50,50,55,75,65].map(w=>({ wpx:w }));
+    wsCat['!cols'] = [7, 16, 16, 16, 36, 14, 8, 13, 11, 11, 11, 12, 15, 13].map(w=>({ wch:w }));
     wsCat['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
     wsCat['!sheetViews'] = [{ showGridLines: true }];
+    applyExcelStyles(wsCat, {
+      startRow: 4,
+      headerRows: 1,
+      endRowOffset: 2,
+      colAligns: ['center','center','center','center','left','left','center','right','right','right','right','right','right','center']
+    });
 
     let sheetTitle = cleanSheetName(catName, 'หมวดวัสดุ');
     let counter = 1;
@@ -1326,12 +1390,18 @@ async function exportInventoryXlsx(rep){
       merge(2,7+daysInMonth,3,7+daysInMonth), merge(2,8+daysInMonth,3,8+daysInMonth),
       merge(rows3.length-2,0,rows3.length-2,totalCols-1), merge(rows3.length-1,0,rows3.length-1,totalCols-1)
     ];
-    const cols3 = [35,250,45,60,50,45,50];
-    for(let d=1; d<=daysInMonth; d++) cols3.push(24);
-    cols3.push(50, 60);
-    ws3['!cols'] = cols3.map(w=>({ wpx:w }));
+    const cols3 = [7, 36, 8, 13, 11, 11, 12];
+    for(let d=1; d<=daysInMonth; d++) cols3.push(5);
+    cols3.push(11, 12);
+    ws3['!cols'] = cols3.map(w=>({ wch:w }));
     ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
     ws3['!sheetViews'] = [{ showGridLines: true }];
+    applyExcelStyles(ws3, {
+      startRow: 2,
+      headerRows: 2,
+      endRowOffset: 3,
+      colAligns: ['center', 'left', 'center', 'right', 'right', 'right', 'right']
+    });
     A.book_append_sheet(wb, ws3, 'Stock card');
   }
 
@@ -1388,9 +1458,14 @@ async function exportAccountXlsx(r){
 
   const ws = A.aoa_to_sheet(rows);
   ws['!merges'] = [merge(0,0,0,11), merge(1,0,1,11), merge(2,0,2,11)];
-  ws['!cols'] = [70,220,120,60,80,60,80,60,80,60,90,60].map(w=>({ wpx:w }));
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
+  ws['!cols'] = [16, 36, 16, 11, 14, 11, 14, 11, 14, 11, 15, 10].map(w=>({ wch:w }));
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
   ws['!sheetViews'] = [{ showGridLines: true }];
+  applyExcelStyles(ws, {
+    startRow: 4,
+    headerRows: 1,
+    colAligns: ['center','left','center','right','right','right','right','right','right','right','right','center']
+  });
 
   const wb = A.book_new();
   A.book_append_sheet(wb, ws, 'บัญชีพัสดุ');
@@ -1456,9 +1531,14 @@ async function exportMaterialsXlsx(rows){
   const ws = A.aoa_to_sheet(allRows);
   const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
   ws['!merges'] = [merge(0,0,0,12), merge(1,0,1,12), merge(2,0,2,12), merge(allRows.length - 1, 0, allRows.length - 1, 7)];
-  ws['!cols'] = [50, 75, 180, 100, 100, 80, 60, 70, 65, 65, 80, 60, 65].map(w=>({ wpx:w }));
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
+  ws['!cols'] = [7, 16, 36, 16, 14, 14, 8, 15, 14, 14, 16, 10, 11].map(w=>({ wch:w }));
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
   ws['!sheetViews'] = [{ showGridLines: true }];
+  applyExcelStyles(ws, {
+    startRow: 4,
+    headerRows: 1,
+    colAligns: ['center','center','left','center','left','center','center','right','right','right','right','right','center']
+  });
 
   const wb = A.book_new();
   A.book_append_sheet(wb, ws, 'ทะเบียนพัสดุ');
