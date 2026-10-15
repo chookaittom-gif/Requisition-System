@@ -944,6 +944,10 @@ function todayYMD(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+function currentFiscalYear(){
+  const d = new Date();
+  return d.getMonth() >= 9 ? (d.getFullYear() + 543 + 1) : (d.getFullYear() + 543);
+}
 
 function showLoader(text){ $('#loaderText').textContent = text||'กำลังโหลดข้อมูล...'; $('#loader').classList.remove('hidden'); }
 function hideLoader(){ $('#loader').classList.add('hidden'); uploadProgressUi_(null); }
@@ -3387,6 +3391,7 @@ function printInventoryReport(r){
 async function viewAccount(){
   const c = $('#content');
   c.innerHTML = skCards(4) + skTable(10);
+  const currentFY = currentFiscalYear();
 
   const renderAccount = (r)=>{
     const s = r.summary, t = r.total;
@@ -3512,9 +3517,13 @@ async function viewAccount(){
     $('#btnPrintAcc').addEventListener('click', ()=> printAccount(S.cache.accountLast || r));
   };
 
-  const res = await api('apiGetInventoryAccount', { fiscalYear: currentFY });
-  if(!res.ok) return (c.innerHTML = emptyBox(res.message));
-  renderAccount(res);
+  try{
+    const res = await api('apiGetInventoryAccount', { fiscalYear: currentFY });
+    if(!res.ok) return (c.innerHTML = emptyBox(res.message));
+    renderAccount(res);
+  }catch(err){
+    c.innerHTML = emptyBox(err.message || 'เกิดข้อผิดพลาดในการโหลดบัญชีพัสดุ');
+  }
 }
 
 /* =================================================================================

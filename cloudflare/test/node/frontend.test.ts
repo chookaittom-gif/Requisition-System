@@ -138,6 +138,8 @@ describe('public/index.html static checks', () => {
   });
 
   it('includes fiscal year selector and export Excel button in viewAccount', () => {
+    expect(html).toContain('function currentFiscalYear()');
+    expect(html).toContain('const currentFY = currentFiscalYear();');
     expect(html).toContain('id="accFY"');
     expect(html).toContain('id="btnExportAccExcel"');
     expect(html).toContain('exportAccountXlsx(');
