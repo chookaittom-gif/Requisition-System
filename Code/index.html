@@ -2107,8 +2107,9 @@ function matModal(m){
           </select>
         </div>
         <div>
-          <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนที่สั่งซื้อ</label>
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนที่สั่งซื้อ / รับเข้า</label>
           <input id="mOrderQty" type="number" min="0" step="1" value="${formVals.OrderQty !== undefined ? formVals.OrderQty : ''}" placeholder="เช่น 100" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          ${!isEdit ? `<p class="mt-1 text-[11px] text-brand-600 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> ยอดคงเหลือจะตั้งต้นเท่ากับจำนวนนี้ให้อัตโนมัติ</p>` : ''}
         </div>
       </div>
 
@@ -2148,6 +2149,7 @@ function matModal(m){
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนคงเหลือ <span class="text-rose2">*</span></label>
           <input id="mStock" type="number" min="0" step="1" value="${formVals.StockQty !== undefined ? formVals.StockQty : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          ${!isEdit ? `<p class="mt-1 text-[11px] text-slate-400">แก้ไขได้หากมียอดยกยอดมา</p>` : ''}
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จุดสั่งซื้อ (ใกล้หมด)</label>
@@ -2305,11 +2307,28 @@ function matModal(m){
         toast('info', 'ล้างข้อมูลแบบร่างเรียบร้อยแล้ว');
       });
     }
+  }
+
   const acqDateInp = $('#mAcquiredDate');
   if (acqDateInp) {
     acqDateInp.addEventListener('change', e => {
       const th = $('#mAcquiredDateTh');
       if (th) th.textContent = thaiDate(e.target.value);
+    });
+  }
+
+  const orderQtyInp = $('#mOrderQty');
+  const stockInp = $('#mStock');
+  if (!isEdit && orderQtyInp && stockInp) {
+    let stockUserEdited = !!(stockInp.value && stockInp.value !== orderQtyInp.value);
+    stockInp.addEventListener('input', () => {
+      stockUserEdited = true;
+    });
+    orderQtyInp.addEventListener('input', () => {
+      if (!stockUserEdited || !stockInp.value.trim()) {
+        stockInp.value = orderQtyInp.value;
+        saveMatDraft_();
+      }
     });
   }
 
@@ -4633,8 +4652,8 @@ function renderMats(list, key){
             <p class="font-bold text-slate-800">${money(m.UnitPrice)} ฿</p>
           </div>
           <div class="p-2.5 rounded-2xl bg-slate-50">
-            <p class="text-slate-500">คงเหลือ</p>
-            <p class="font-bold text-slate-800">${nf(m.StockQty)} ${esc(m.Unit)}</p>
+            <p class="text-slate-500">คงเหลือ / สั่งซื้อ</p>
+            <p class="font-bold text-slate-800">${nf(m.StockQty)} <span class="text-[11px] text-slate-400 font-normal">/ ${m.OrderQty ? nf(m.OrderQty) : '-'}</span> ${esc(m.Unit)}</p>
           </div>
         </div>
         <div class="mt-3 flex items-center justify-between">
@@ -4659,7 +4678,7 @@ function renderMats(list, key){
   }
 
   return `<div class="overflow-x-auto -mx-5 px-5">
-    <table class="w-full text-sm tbl min-w-[900px]">
+    <table class="w-full text-sm tbl min-w-[980px]">
       <thead>
         <tr class="bg-slate-50 text-slate-600 text-xs">
           <th class="px-3 py-3 rounded-l-xl w-10">
@@ -4674,6 +4693,7 @@ function renderMats(list, key){
           <th class="px-3 py-3 text-center">ภาพ</th>
           <th class="px-3 py-3 text-center">ไฟล์แนบ</th>
           <th class="px-3 py-3 text-right">ราคาต่อหน่วย (บาท)</th>
+          <th class="px-3 py-3 text-center">จำนวนที่สั่งซื้อ</th>
           <th class="px-3 py-3 text-center">จำนวนคงเหลือ</th>
           <th class="px-3 py-3 text-center">จุดสั่งซื้อ</th>
           <th class="px-3 py-3 text-center">สถานะ</th>
@@ -4695,6 +4715,7 @@ function renderMats(list, key){
             <td class="px-3 py-3 text-center">${imgBtn(m)}</td>
             <td class="px-3 py-3 text-center">${fileBtn(m)}</td>
             <td class="px-3 py-3 text-right">${money(m.UnitPrice)}</td>
+            <td class="px-3 py-3 text-center text-slate-600 font-semibold">${m.OrderQty ? nf(m.OrderQty) : '-'}</td>
             <td class="px-3 py-3 text-center font-extrabold ${m.StockState==='OK' ? 'text-slate-800' : 'text-red2'}">${nf(m.StockQty)}</td>
             <td class="px-3 py-3 text-center text-slate-500 font-medium">${nf(m.MinQty)}</td>
             <td class="px-3 py-3 text-center">${badge(m.StockState)}</td>

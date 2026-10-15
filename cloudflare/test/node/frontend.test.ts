@@ -20,6 +20,27 @@ describe('public/index.html static checks', () => {
     });
   }
 
+  it('validates JavaScript syntax in all inline script tags', () => {
+    let idx = 0;
+    let inlineCount = 0;
+    while (true) {
+      const start = html.indexOf('<script', idx);
+      if (start === -1) break;
+      const tagEnd = html.indexOf('>', start);
+      const tagText = html.slice(start, tagEnd + 1);
+      if (tagText.includes('src=')) {
+        idx = tagEnd + 1;
+        continue;
+      }
+      const closeStart = html.indexOf('</script>', tagEnd);
+      const scriptContent = html.slice(tagEnd + 1, closeStart);
+      expect(() => new Function(scriptContent)).not.toThrow();
+      inlineCount++;
+      idx = closeStart + 1;
+    }
+    expect(inlineCount).toBeGreaterThan(0);
+  });
+
   it('uses the worker rpc endpoint and uploadFile', () => {
     expect(html).toContain("'/api/rpc/'");
     expect(html).toContain('uploadFile(');
@@ -99,6 +120,14 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('งบประมาณแผ่นดิน');
     expect(html).toContain('เงินบริจาค');
     expect(html).toContain('อื่นๆ');
+    expect(html).toContain('ยอดคงเหลือจะตั้งต้นเท่ากับจำนวนนี้ให้อัตโนมัติ');
+    expect(html).toContain('stockInp.value = orderQtyInp.value');
+  });
+
+  it('displays OrderQty in materials table and grid view', () => {
+    expect(html).toContain('<th class="px-3 py-3 text-center">จำนวนที่สั่งซื้อ</th>');
+    expect(html).toContain('m.OrderQty ? nf(m.OrderQty) : \'-\'');
+    expect(html).toContain('คงเหลือ / สั่งซื้อ');
   });
 
   it('includes LINE notification setting and test button', () => {
