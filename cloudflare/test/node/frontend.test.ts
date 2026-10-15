@@ -14,6 +14,7 @@ describe('public/index.html static checks', () => {
     'imageFile',
     'docFile',
     'attachFile',
+    'num(',
   ]) {
     it(`does not contain ${banned}`, () => {
       expect(html.includes(banned)).toBe(false);
