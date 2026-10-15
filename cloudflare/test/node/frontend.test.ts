@@ -148,6 +148,27 @@ describe('public/index.html static checks', () => {
   it('supports hiding the logo in printHeader for official reports without logo', () => {
     expect(html).toContain('function printHeader(title, hideLogo = false)');
     expect(html).toContain("printHeader('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)', true)");
+    expect(html).toContain("printHeader('ทะเบียนรายการพัสดุ', true)");
+  });
+
+  it('paginates stock card printout with sequential page numbers', () => {
+    expect(html).toContain('const rowsPerPage = 24;');
+    expect(html).toContain('แผ่นที่ ${page}');
+    expect(html).toContain('page-break-after:always;');
+  });
+
+  it('includes exportMaterialsXlsx with A4 page setup and gridlines', () => {
+    expect(html).toContain('btnExportMatExcel');
+    expect(html).toContain('exportMaterialsXlsx(currentMatList || r.data)');
+    expect(html).toContain('async function exportMaterialsXlsx(rows)');
+    expect(html).toContain("ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };");
+    expect(html).toContain("ws['!sheetViews'] = [{ showGridLines: true }];");
+  });
+
+  it('applies A4 page setup and gridlines to account and inventory exports', () => {
+    expect(html).toContain("ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };");
+    expect(html).toContain("wsCat['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };");
+    expect(html).toContain("wsCat['!sheetViews'] = [{ showGridLines: true }];");
   });
 });
 

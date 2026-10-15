@@ -1209,6 +1209,8 @@ async function exportInventoryXlsx(rep){
   const wsSummary = A.aoa_to_sheet(rowsSummary);
   wsSummary['!merges'] = [merge(0,0,0,3), merge(1,0,1,3), merge(2,0,2,3)];
   wsSummary['!cols'] = [60, 220, 130, 150].map(w=>({ wpx:w }));
+  wsSummary['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
+  wsSummary['!sheetViews'] = [{ showGridLines: true }];
   A.book_append_sheet(wb, wsSummary, cleanSheetName(`สรุปงบ ปี ${fyShort}`, 'สรุปวัสดุคงเหลือ'));
 
   // ---- Sheets 2..N: Separate sheet per category (14 columns each) ----
@@ -1279,7 +1281,9 @@ async function exportInventoryXlsx(rep){
       merge(2,0,2,13),
       merge(catRows.length-1, 0, catRows.length-1, 13)
     ];
-    wsCat['!cols'] = [30,55,55,65,240,55,40,60,45,45,45,50,70,55].map(w=>({ wpx:w }));
+    wsCat['!cols'] = [30,65,65,75,240,65,45,65,50,50,50,55,75,65].map(w=>({ wpx:w }));
+    wsCat['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
+    wsCat['!sheetViews'] = [{ showGridLines: true }];
 
     let sheetTitle = cleanSheetName(catName, 'หมวดวัสดุ');
     let counter = 1;
@@ -1326,6 +1330,8 @@ async function exportInventoryXlsx(rep){
     for(let d=1; d<=daysInMonth; d++) cols3.push(24);
     cols3.push(50, 60);
     ws3['!cols'] = cols3.map(w=>({ wpx:w }));
+    ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
+    ws3['!sheetViews'] = [{ showGridLines: true }];
     A.book_append_sheet(wb, ws3, 'Stock card');
   }
 
@@ -1383,10 +1389,80 @@ async function exportAccountXlsx(r){
   const ws = A.aoa_to_sheet(rows);
   ws['!merges'] = [merge(0,0,0,11), merge(1,0,1,11), merge(2,0,2,11)];
   ws['!cols'] = [70,220,120,60,80,60,80,60,80,60,90,60].map(w=>({ wpx:w }));
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
+  ws['!sheetViews'] = [{ showGridLines: true }];
 
   const wb = A.book_new();
   A.book_append_sheet(wb, ws, 'บัญชีพัสดุ');
   const filename = `บัญชีพัสดุ_${r.fiscalYear ? 'ปีงบ'+r.fiscalYear+'_' : ''}${r.asOf || todayYMD()}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+/**
+ * ส่งออกทะเบียนพัสดุเป็น Excel (.xlsx) พอดีหน้า A4 และขึ้นบรรทัดใหม่ได้
+ */
+async function exportMaterialsXlsx(rows){
+  await ensureXlsx();
+  const A = XLSX.utils;
+  const schoolName = S.settings.SchoolName || 'มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง';
+  const list = rows || S.cache.materials || [];
+
+  const headerRows = [
+    ['ทะเบียนรายการพัสดุ'],
+    ['หน่วยงาน ' + schoolName],
+    ['ข้อมูล ณ วันที่ ' + thaiDate(todayYMD()) + ' (ทั้งหมด ' + num(list.length) + ' รายการ)'],
+    [],
+    ['ลำดับที่','รหัสพัสดุ','ชื่อพัสดุ','หมวดหมู่','ขนาด/ลักษณะ','สถานที่จัดเก็บ','หน่วยนับ','ราคาต่อหน่วย (บาท)','จำนวนที่สั่งซื้อ','จำนวนคงเหลือ','มูลค่าคงเหลือ (บาท)','จุดสั่งซื้อ','สถานะ']
+  ];
+
+  let sumBought = 0;
+  let sumRemain = 0;
+  let sumValue = 0;
+
+  const dataRows = list.map((m, idx) => {
+    const bQty = Number(m.BoughtQty || 0);
+    const rQty = Number(m.StockQty !== undefined ? m.StockQty : (m.RemainQty || 0));
+    const price = Number(m.UnitPrice || 0);
+    const val = rQty * price;
+    sumBought += bQty;
+    sumRemain += rQty;
+    sumValue += val;
+    return [
+      idx + 1,
+      m.Code || '',
+      m.Name || '',
+      m.Category || '-',
+      m.Spec || '-',
+      m.StorageLocation || m.Location || '-',
+      m.Unit || '-',
+      price,
+      bQty,
+      rQty,
+      val,
+      Number(m.MinQty || 0),
+      (rQty <= 0) ? 'หมด' : (rQty <= Number(m.MinQty || 0)) ? 'ใกล้หมด' : 'พร้อมเบิก'
+    ];
+  });
+
+  const footerRow = [
+    '', 'รวมทั้งสิ้น', '', '', '', '', '', '',
+    sumBought,
+    sumRemain,
+    sumValue,
+    '', ''
+  ];
+
+  const allRows = [...headerRows, ...dataRows, footerRow];
+  const ws = A.aoa_to_sheet(allRows);
+  const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
+  ws['!merges'] = [merge(0,0,0,12), merge(1,0,1,12), merge(2,0,2,12), merge(allRows.length - 1, 0, allRows.length - 1, 7)];
+  ws['!cols'] = [50, 75, 180, 100, 100, 80, 60, 70, 65, 65, 80, 60, 65].map(w=>({ wpx:w }));
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
+  ws['!sheetViews'] = [{ showGridLines: true }];
+
+  const wb = A.book_new();
+  A.book_append_sheet(wb, ws, 'ทะเบียนพัสดุ');
+  const filename = `ทะเบียนพัสดุ_${todayYMD()}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 const CHART_SRC = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
@@ -4543,12 +4619,15 @@ async function viewMaterials(){
         btn('btnScanMat','fa-qrcode','สแกนเพิ่ม','bg-brand-600 text-white hover:brightness-110 shadow-soft') +
         btn('btnAddMat','fa-plus','เพิ่มพัสดุ') +
         btn('btnDelMats','fa-trash','ลบที่เลือก','bg-red2/10 text-red2 hover:bg-red2 hover:text-white') +
+        btn('btnExportMatExcel','fa-file-excel','ส่งออก Excel','bg-emerald-700 text-white hover:brightness-110 shadow-sm') +
         btn('btnPrintMats','fa-print','พิมพ์','bg-slate-800 text-white hover:bg-slate-700'))}
     </div>`;
 
+  let currentMatList = r.data;
   $('#btnAddMat').addEventListener('click', ()=> matModal(null));
   $('#btnDelMats').addEventListener('click', batchDeleteMats);
-  $('#btnPrintMats').addEventListener('click', ()=> printMaterials(r.data));
+  $('#btnExportMatExcel').addEventListener('click', ()=> exportMaterialsXlsx(currentMatList || r.data));
+  $('#btnPrintMats').addEventListener('click', ()=> printMaterials(currentMatList || r.data));
 
   /* ---------- ปุ่มสแกนเพิ่ม (กล้อง + ถ่ายรูป + ปืนยิง) ---------- */
   $('#btnScanMat').addEventListener('click', ()=>{
@@ -4590,6 +4669,7 @@ async function viewMaterials(){
     if(cat) list = list.filter(m => m.Category === cat);
     if(st)  list = list.filter(m => m.StockState === st);
 
+    currentMatList = list;
     $('#matList').innerHTML = renderMats(list, key);
     bindMatEvents();
   };
@@ -5163,84 +5243,100 @@ async function viewStockCard(){
 function printStockCard(d){
   const m = d.material;
   const entries = d.entries || [];
-  const minRows = 24; // ให้เต็มหน้ากระดาษ A4 เหมือนแบบฟอร์มจริง
-  const emptyRowsCount = Math.max(0, minRows - entries.length);
+  const rowsPerPage = 24; // ให้เต็มหน้ากระดาษ A4 เหมือนแบบฟอร์มจริง
+  const totalPages = Math.max(1, Math.ceil(entries.length / rowsPerPage));
+  const schoolName = esc(d.schoolName || S.settings.SchoolName || 'มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง');
+  const cat = esc(m.Category || 'วัสดุสำนักงาน');
+  const loc = m.StorageLocation ? `&nbsp;&nbsp;&nbsp;&nbsp;สถานที่จัดเก็บ: <span style="border-bottom:1px dotted #555;">${esc(m.StorageLocation)}</span>` : '';
+  const matName = esc(m.Name);
+  const matCode = esc(m.Code);
+  const matUnit = esc(m.Unit);
+  const fiscalYear = esc(d.fiscalYear || '');
 
-  const html = `
-    <div style="font-family:'Sarabun', 'TH Sarabun New', sans-serif; color:#000; padding:10px 5px; font-size:14px; line-height:1.5;">
-      <!-- หัวเอกสาร -->
-      <div style="text-align:center; font-size:18px; font-weight:bold; margin-bottom:12px;">
-        สต๊อกการ์ด (Stock Card)
-      </div>
+  const pagesHtml = [];
 
-      <div style="text-align:right; font-size:13px; margin-bottom:6px;">
-        แผ่นที่ ....................
-      </div>
+  for(let page = 1; page <= totalPages; page++){
+    const startIdx = (page - 1) * rowsPerPage;
+    const pageEntries = entries.slice(startIdx, startIdx + rowsPerPage);
+    const emptyRowsCount = Math.max(0, rowsPerPage - pageEntries.length);
+    const isLastPage = page === totalPages;
 
-      <div style="margin-bottom:4px; font-size:14px;">
-        ชื่อหน่วยงาน: <span style="font-weight:bold; border-bottom:1px dotted #555; padding-bottom:1px;">${esc(d.schoolName || S.settings.SchoolName || 'มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง')}</span>
-      </div>
+    pagesHtml.push(`
+      <div style="font-family:'Sarabun', 'TH Sarabun New', sans-serif; color:#000; padding:10px 5px; font-size:14px; line-height:1.5; ${isLastPage ? '' : 'page-break-after:always;'}">
+        <!-- หัวเอกสาร -->
+        <div style="text-align:center; font-size:18px; font-weight:bold; margin-bottom:12px;">
+          สต๊อกการ์ด (Stock Card)
+        </div>
 
-      <div style="margin-bottom:4px; font-size:14px;">
-        ประเภทวัสดุ: <span style="font-weight:bold; border-bottom:1px dotted #555; padding-bottom:1px;">${esc(m.Category || 'วัสดุสำนักงาน')}</span>
-        ${m.StorageLocation ? `&nbsp;&nbsp;&nbsp;&nbsp;สถานที่จัดเก็บ: <span style="border-bottom:1px dotted #555;">${esc(m.StorageLocation)}</span>` : ''}
-      </div>
+        <div style="text-align:right; font-size:13px; margin-bottom:6px;">
+          แผ่นที่ ${page}
+        </div>
 
-      <div style="margin-bottom:12px; font-size:14px;">
-        ชื่อสินค้า: <span style="font-weight:bold; border-bottom:1px dotted #555; padding-bottom:1px;">${esc(m.Name)} (รหัส: ${esc(m.Code)})</span>
-        &nbsp;&nbsp;&nbsp;&nbsp;หน่วยนับ: <span style="font-weight:bold; border-bottom:1px dotted #555;">${esc(m.Unit)}</span>
-        &nbsp;&nbsp;&nbsp;&nbsp;ปีงบประมาณ: <span style="border-bottom:1px dotted #555;">${esc(d.fiscalYear)}</span>
-      </div>
+        <div style="margin-bottom:4px; font-size:14px;">
+          ชื่อหน่วยงาน: <span style="font-weight:bold; border-bottom:1px dotted #555; padding-bottom:1px;">${schoolName}</span>
+        </div>
 
-      <!-- ตารางสต็อกการ์ดตามแบบฟอร์มราชการ -->
-      <table style="width:100%; border-collapse:collapse; text-align:center; font-size:13px;">
-        <thead>
-          <tr>
-            <th rowspan="2" style="border:1px solid #000; width:14%; padding:6px 4px; font-weight:bold;">วันที่</th>
-            <th rowspan="2" style="border:1px solid #000; width:38%; padding:6px 4px; font-weight:bold;">รายการ</th>
-            <th colspan="3" style="border:1px solid #000; width:33%; padding:4px; font-weight:bold;">จำนวน</th>
-            <th rowspan="2" style="border:1px solid #000; width:15%; padding:6px 4px; font-weight:bold;">ลงชื่อ</th>
-          </tr>
-          <tr>
-            <th style="border:1px solid #000; width:11%; padding:4px; font-weight:bold;">รับ</th>
-            <th style="border:1px solid #000; width:11%; padding:4px; font-weight:bold;">จ่าย</th>
-            <th style="border:1px solid #000; width:11%; padding:4px; font-weight:bold;">คงเหลือ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${entries.map(e=>`
-            <tr style="height:28px;">
-              <td style="border:1px solid #000; padding:4px; font-size:12px;">${esc(e.dateTh || e.date)}</td>
-              <td style="border:1px solid #000; padding:4px; text-align:left; font-size:12px;">
-                ${esc(e.description)}
-                ${e.refDoc ? ` <span style="font-size:10px; color:#444;">(${esc(e.refDoc)})</span>` : ''}
-              </td>
-              <td style="border:1px solid #000; padding:4px; font-size:12px;">${e.inQty > 0 ? nf(e.inQty) : ''}</td>
-              <td style="border:1px solid #000; padding:4px; font-size:12px;">${e.outQty > 0 ? nf(e.outQty) : ''}</td>
-              <td style="border:1px solid #000; padding:4px; font-weight:bold; font-size:12px;">${nf(e.balance)}</td>
-              <td style="border:1px solid #000; padding:4px; font-size:11px;">${esc(e.actor && e.actor !== '-' ? e.actor : '')}</td>
+        <div style="margin-bottom:4px; font-size:14px;">
+          ประเภทวัสดุ: <span style="font-weight:bold; border-bottom:1px dotted #555; padding-bottom:1px;">${cat}</span>
+          ${loc}
+        </div>
+
+        <div style="margin-bottom:12px; font-size:14px;">
+          ชื่อสินค้า: <span style="font-weight:bold; border-bottom:1px dotted #555; padding-bottom:1px;">${matName} (รหัส: ${matCode})</span>
+          &nbsp;&nbsp;&nbsp;&nbsp;หน่วยนับ: <span style="font-weight:bold; border-bottom:1px dotted #555;">${matUnit}</span>
+          &nbsp;&nbsp;&nbsp;&nbsp;ปีงบประมาณ: <span style="border-bottom:1px dotted #555;">${fiscalYear}</span>
+        </div>
+
+        <!-- ตารางสต็อกการ์ดตามแบบฟอร์มราชการ -->
+        <table style="width:100%; border-collapse:collapse; text-align:center; font-size:13px;">
+          <thead>
+            <tr>
+              <th rowspan="2" style="border:1px solid #000; width:14%; padding:6px 4px; font-weight:bold;">วันที่</th>
+              <th rowspan="2" style="border:1px solid #000; width:38%; padding:6px 4px; font-weight:bold;">รายการ</th>
+              <th colspan="3" style="border:1px solid #000; width:33%; padding:4px; font-weight:bold;">จำนวน</th>
+              <th rowspan="2" style="border:1px solid #000; width:15%; padding:6px 4px; font-weight:bold;">ลงชื่อ</th>
             </tr>
-          `).join('')}
-          ${Array.from({length: emptyRowsCount}).map(()=>`
-            <tr style="height:28px;">
-              <td style="border:1px solid #000; padding:4px;">&nbsp;</td>
-              <td style="border:1px solid #000; padding:4px;"></td>
-              <td style="border:1px solid #000; padding:4px;"></td>
-              <td style="border:1px solid #000; padding:4px;"></td>
-              <td style="border:1px solid #000; padding:4px;"></td>
-              <td style="border:1px solid #000; padding:4px;"></td>
+            <tr>
+              <th style="border:1px solid #000; width:11%; padding:4px; font-weight:bold;">รับ</th>
+              <th style="border:1px solid #000; width:11%; padding:4px; font-weight:bold;">จ่าย</th>
+              <th style="border:1px solid #000; width:11%; padding:4px; font-weight:bold;">คงเหลือ</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${pageEntries.map(e=>`
+              <tr style="height:28px;">
+                <td style="border:1px solid #000; padding:4px; font-size:12px;">${esc(e.dateTh || e.date)}</td>
+                <td style="border:1px solid #000; padding:4px; text-align:left; font-size:12px;">
+                  ${esc(e.description)}
+                  ${e.refDoc ? ` <span style="font-size:10px; color:#444;">(${esc(e.refDoc)})</span>` : ''}
+                </td>
+                <td style="border:1px solid #000; padding:4px; font-size:12px;">${e.inQty > 0 ? nf(e.inQty) : ''}</td>
+                <td style="border:1px solid #000; padding:4px; font-size:12px;">${e.outQty > 0 ? nf(e.outQty) : ''}</td>
+                <td style="border:1px solid #000; padding:4px; font-weight:bold; font-size:12px;">${nf(e.balance)}</td>
+                <td style="border:1px solid #000; padding:4px; font-size:11px;">${esc(e.actor && e.actor !== '-' ? e.actor : '')}</td>
+              </tr>
+            `).join('')}
+            ${Array.from({length: emptyRowsCount}).map(()=>`
+              <tr style="height:28px;">
+                <td style="border:1px solid #000; padding:4px;">&nbsp;</td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
 
-      <div style="margin-top:16px; font-size:11px; text-align:right; color:#555;">
-        พิมพ์เมื่อ ${thaiDate(todayYMD())} • ระบบเบิกจ่ายพัสดุ
+        <div style="margin-top:16px; font-size:11px; text-align:right; color:#555;">
+          พิมพ์เมื่อ ${thaiDate(todayYMD())} • ระบบเบิกจ่ายพัสดุ
+        </div>
       </div>
-    </div>
-  `;
+    `);
+  }
 
-  doPrint(html, false); // false = portrait (A4 แนวตั้ง)
+  doPrint(pagesHtml.join(''), false); // false = portrait (A4 แนวตั้ง)
 }
 
 /* =================================================================================
@@ -5788,17 +5884,36 @@ async function printRequest(id){
 }
 
 function printMaterials(rows){
-  doPrint(`${printHeader('ทะเบียนรายการพัสดุ')}
-    <table>
+  const list = rows || [];
+  const totalVal = list.reduce((s, m) => {
+    const q = m.StockQty !== undefined ? Number(m.StockQty) : Number(m.RemainQty || 0);
+    return s + (q * Number(m.UnitPrice || 0));
+  }, 0);
+
+  doPrint(`${printHeader('ทะเบียนรายการพัสดุ', true)}
+    <table style="width:100%; table-layout:fixed; border-collapse:collapse; word-break:break-word; overflow-wrap:break-word;">
       <thead><tr style="background:#f1f1f1">
-        <th style="width:6%">ที่</th><th style="width:14%">รหัสพัสดุ</th><th>ชื่อพัสดุ</th>
-        <th style="width:12%">หน่วยนับ</th><th style="width:14%">ราคา/หน่วย</th><th style="width:12%">คงเหลือ</th><th style="width:15%">มูลค่ารวม</th>
+        <th style="width:6%">ที่</th><th style="width:15%">รหัสพัสดุ</th><th style="width:31%; text-align:left;">ชื่อพัสดุ</th>
+        <th style="width:10%">หน่วยนับ</th><th style="width:12%; text-align:right;">ราคา/หน่วย</th><th style="width:11%">คงเหลือ</th><th style="width:15%; text-align:right;">มูลค่ารวม</th>
       </tr></thead>
-      <tbody>${rows.map((m,i)=>{
-        const q = m.StockQty!==undefined ? m.StockQty : m.RemainQty;
-        return `<tr><td style="text-align:center">${i+1}</td><td style="text-align:center">${esc(m.Code)}</td><td>${esc(m.Name)}</td>
-        <td style="text-align:center">${esc(m.Unit)}</td><td style="text-align:right">${money(m.UnitPrice)}</td>
-        <td style="text-align:center">${nf(q)}</td><td style="text-align:right">${money(q*m.UnitPrice)}</td></tr>`;}).join('')}</tbody>
+      <tbody>${list.map((m,i)=>{
+        const q = m.StockQty!==undefined ? Number(m.StockQty) : Number(m.RemainQty || 0);
+        const price = Number(m.UnitPrice || 0);
+        return `<tr>
+          <td style="text-align:center; word-break:break-word;">${i+1}</td>
+          <td style="text-align:center; word-break:break-word;">${esc(m.Code)}</td>
+          <td style="text-align:left; word-break:break-word; white-space:normal;">${esc(m.Name)}</td>
+          <td style="text-align:center; word-break:break-word;">${esc(m.Unit)}</td>
+          <td style="text-align:right; word-break:break-word;">${money(price)}</td>
+          <td style="text-align:center; word-break:break-word;">${nf(q)}</td>
+          <td style="text-align:right; word-break:break-word;">${money(q*price)}</td>
+        </tr>`;}).join('')}</tbody>
+      <tfoot>
+        <tr style="background:#f8fafc; font-weight:bold;">
+          <td colspan="5" style="text-align:right; padding:6px 8px;">รวมมูลค่าคงคลังทั้งสิ้น</td>
+          <td colspan="2" style="text-align:right; padding:6px 8px;">${money(totalVal)} บาท</td>
+        </tr>
+      </tfoot>
     </table>
     <div style="margin-top:30px;font-size:14px;text-align:right">ลงชื่อ.................................................เจ้าหน้าที่พัสดุ<br><span style="margin-right:30px">(.................................................)</span></div>
     <div style="margin-top:16px;font-size:11px;text-align:right;color:#555">พิมพ์เมื่อ ${thaiDate(todayYMD())}</div>`);
