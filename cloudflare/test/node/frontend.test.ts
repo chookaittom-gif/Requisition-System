@@ -86,6 +86,7 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('สนง.ศ.ลป.');
     expect(html).toContain('สนง.รร.สาธิต');
     expect(html).toContain('cdn.tailwindcss.com should not be used in production');
+    expect(html).toContain("const btnGenCode = $('#btnGenCode');");
   });
 });
 
