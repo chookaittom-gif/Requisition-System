@@ -12,6 +12,7 @@ import {
   sendTelegram,
   statusChangeText,
 } from '../lib/telegram';
+import { sendLineNotify } from '../lib/line';
 import { nowBkk } from '../lib/time';
 import { eqUsername } from '../lib/username';
 import { registerRpc } from '../rpc';
@@ -23,40 +24,68 @@ const str = (v: unknown): string => String(v ?? '').trim();
 
 /* ============================== NOTIFICATION HOOKS ============================== */
 notifyHooks.onNewRequest = async (env, req) => {
+  const row = await env.DB.prepare('SELECT line_token FROM settings WHERE id = 1').first<Obj>();
+  const lineToken = String(row?.line_token ?? '');
   const cfg = await getNotifyConfig(env);
-  if (!cfg.onNewRequest || !cfg.token || !cfg.chatId) return;
-  await sendTelegram(cfg.token, cfg.chatId, newRequestText(req));
+  if (cfg.onNewRequest) {
+    if (cfg.token && cfg.chatId) {
+      await sendTelegram(cfg.token, cfg.chatId, newRequestText(req));
+    }
+    if (lineToken) {
+      const lineMsg = `\n📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}`;
+      await sendLineNotify(lineToken, lineMsg);
+    }
+  }
 };
 
 notifyHooks.onStatusChange = async (env, req, newStatus, reason) => {
+  const row = await env.DB.prepare('SELECT line_token FROM settings WHERE id = 1').first<Obj>();
+  const lineToken = String(row?.line_token ?? '');
   const cfg = await getNotifyConfig(env);
-  if (!cfg.onStatusChange || !cfg.token || !cfg.chatId) return;
-  let items: Obj[] = [];
-  try {
-    const { results } = await env.DB.prepare(
-      'SELECT code AS Code, name AS Name, unit AS Unit, qty AS Qty, remark AS Remark FROM request_items WHERE request_id = ? ORDER BY rowid',
-    )
-      .bind(String(req.ID ?? ''))
-      .all<Obj>();
-    items = results;
-  } catch (err) {
-    console.error('status notify items failed', (err as Error)?.name);
+  if (cfg.onStatusChange) {
+    let items: Obj[] = [];
+    try {
+      const { results } = await env.DB.prepare(
+        'SELECT code AS Code, name AS Name, unit AS Unit, qty AS Qty, remark AS Remark FROM request_items WHERE request_id = ? ORDER BY rowid',
+      )
+        .bind(String(req.ID ?? ''))
+        .all<Obj>();
+      items = results;
+    } catch (err) {
+      console.error('status notify items failed', (err as Error)?.name);
+    }
+    if (cfg.token && cfg.chatId) {
+      await sendTelegram(cfg.token, cfg.chatId, statusChangeText(req, newStatus, reason, items));
+    }
+    if (lineToken) {
+      const stTh = newStatus === 'APPROVED' ? 'อนุมัติแล้ว' : newStatus === 'REJECTED' ? 'ปฏิเสธ' : newStatus;
+      const lineMsg = `\n📢 อัปเดตสถานะใบขอเบิก\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nสถานะใหม่: ${stTh}${reason ? `\nเหตุผล: ${reason}` : ''}`;
+      await sendLineNotify(lineToken, lineMsg);
+    }
   }
-  await sendTelegram(cfg.token, cfg.chatId, statusChangeText(req, newStatus, reason, items));
 };
 
 /* ============================== SETTINGS ============================== */
 const DEFAULT_SETTINGS = {
   SchoolName: '', Affiliation: '', LogoUrl: '', Address: '', Phone: '', UpdatedAt: '',
-  NotifyEmail: '', TelegramBotToken: '', TelegramChatId: '',
+  NotifyEmail: '', TelegramBotToken: '', TelegramChatId: '', LineToken: '',
   NotifyOnNewRequest: 'YES', NotifyOnStatusChange: 'YES', NotifyLowStock: 'YES', BannerUrl: '',
 };
 
-async function readSettings(env: Env): Promise<{ legacy: Obj; token: string }> {
+async function readSettings(env: Env): Promise<{ legacy: Obj; token: string; lineToken: string }> {
   const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
-  if (!row) return { legacy: { ...DEFAULT_SETTINGS }, token: '' };
+  if (!row) return { legacy: { ...DEFAULT_SETTINGS }, token: '', lineToken: '' };
   const token = String(row.telegram_bot_token ?? '');
-  return { legacy: { ...toLegacy('settings', row), TelegramBotToken: maskToken(token) }, token };
+  const lineToken = String(row.line_token ?? '');
+  return {
+    legacy: {
+      ...toLegacy('settings', row),
+      TelegramBotToken: maskToken(token),
+      LineToken: maskToken(lineToken),
+    },
+    token,
+    lineToken,
+  };
 }
 
 registerRpc('apiGetSettings', 'admin', async (ctx) => ({ ok: true, data: (await readSettings(ctx.env)).legacy }));
@@ -86,33 +115,59 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
   if (!schoolName || !affiliation) return fail('กรุณากรอกชื่อหน่วยงานและสังกัด');
 
   const db = ctx.env.DB;
+  const currentSettings = await readSettings(ctx.env);
   const incoming = str(p.TelegramBotToken);
-  const token = incoming && !isMaskedToken(incoming) ? incoming : (await readSettings(ctx.env)).token;
+  const token = incoming && !isMaskedToken(incoming) ? incoming : currentSettings.token;
+  const incomingLine = str(p.LineToken);
+  const lineToken = incomingLine && !isMaskedToken(incomingLine) ? incomingLine : currentSettings.lineToken;
   const now = nowBkk();
   const d = {
     school_name: schoolName, affiliation, logo_url: logo.value, address: str(p.Address), phone: str(p.Phone),
-    notify_email: str(p.NotifyEmail), telegram_chat_id: str(p.TelegramChatId),
+    notify_email: str(p.NotifyEmail), telegram_chat_id: str(p.TelegramChatId), line_token: lineToken,
     notify_on_new_request: flag(p.NotifyOnNewRequest), notify_on_status_change: flag(p.NotifyOnStatusChange),
     notify_low_stock: flag(p.NotifyLowStock), banner_url: banner.value,
   };
   await db.batch([
     db
       .prepare(
-        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, updated_at)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET school_name = excluded.school_name, affiliation = excluded.affiliation, logo_url = excluded.logo_url,
            address = excluded.address, phone = excluded.phone, notify_email = excluded.notify_email, telegram_bot_token = excluded.telegram_bot_token,
-           telegram_chat_id = excluded.telegram_chat_id, notify_on_new_request = excluded.notify_on_new_request,
+           telegram_chat_id = excluded.telegram_chat_id, line_token = excluded.line_token, notify_on_new_request = excluded.notify_on_new_request,
            notify_on_status_change = excluded.notify_on_status_change, notify_low_stock = excluded.notify_low_stock,
            banner_url = excluded.banner_url, updated_at = excluded.updated_at`,
       )
       .bind(
-        d.school_name, d.affiliation, d.logo_url, d.address, d.phone, d.notify_email, token, d.telegram_chat_id,
+        d.school_name, d.affiliation, d.logo_url, d.address, d.phone, d.notify_email, token, d.telegram_chat_id, d.line_token,
         d.notify_on_new_request, d.notify_on_status_change, d.notify_low_stock, d.banner_url, now,
       ),
     logAudit(db, { action: 'UPDATE', entity: 'Settings', entityId: '', detail: 'บันทึกการตั้งค่าระบบ', actor: str(p.actor) }),
   ]);
   return { ok: true, message: 'บันทึกการตั้งค่าเรียบร้อยแล้ว', data: (await readSettings(ctx.env)).legacy };
+});
+
+registerRpc('apiTestLine', 'admin', async (ctx, args) => {
+  const payload = args[0];
+  let token = '';
+  if (isObj(payload)) {
+    token = str(payload.token ?? payload.LineToken);
+  } else if (typeof payload === 'string') {
+    token = payload.trim();
+  }
+  const row = await ctx.env.DB.prepare('SELECT school_name, line_token FROM settings WHERE id = 1').first<Obj>();
+  if (!token || isMaskedToken(token)) token = String(row?.line_token ?? '');
+  if (!token) return fail('กรุณากรอก LINE Notify Token ก่อนทดสอบ');
+  const msg =
+    `\n🔔 ทดสอบการเชื่อมต่อ LINE Notify\n` +
+    `━━━━━━━━━━━━━━━━━━━\n` +
+    `🏫 ระบบ: ${String(row?.school_name || 'ระบบเบิกจ่ายพัสดุ')}\n` +
+    `📅 เวลาทดสอบ: ${nowBkk()}\n` +
+    `🟢 สถานะ: ส่งข้อความสำเร็จเรียบร้อยแล้ว!\n` +
+    `━━━━━━━━━━━━━━━━━━━`;
+  const res = await sendLineNotify(token, msg);
+  if (!res.ok) return { ok: false, message: res.message };
+  return { ok: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว' };
 });
 
 registerRpc('apiTestTelegram', 'admin', async (ctx, args) => {

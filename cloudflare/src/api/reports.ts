@@ -215,40 +215,49 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
   const f = asObj(filter);
   const from = f.from ? String(f.from) : null;
   const to = f.to ? String(f.to) : null;
+  const fiscalYear = f.fiscalYear ? fiscalYearOf(f.fiscalYear) : (from || to ? null : fiscalYearOf(undefined));
+  const range = fiscalYear ? fiscalYearRange(fiscalYear) : null;
+  const effectiveFrom = from || (range ? range.from : null);
+  const effectiveTo = to || (range ? range.to : null);
 
   const purchaseWhere = ['p.material_id = m.id'];
   const usedWhere = ['i.material_id = m.id', "r.status = 'APPROVED'"];
   const pBinds: unknown[] = [];
   const uBinds: unknown[] = [];
-  if (from) {
+  if (effectiveFrom) {
     purchaseWhere.push('p.purchase_date >= ?');
-    pBinds.push(from);
+    pBinds.push(effectiveFrom);
     usedWhere.push("COALESCE(r.request_date, '') >= ?");
-    uBinds.push(from);
+    uBinds.push(effectiveFrom);
   }
-  if (to) {
+  if (effectiveTo) {
     purchaseWhere.push('p.purchase_date <= ?');
-    pBinds.push(to);
+    pBinds.push(effectiveTo);
     usedWhere.push("COALESCE(r.request_date, '') <= ?");
-    uBinds.push(to);
+    uBinds.push(effectiveTo);
   }
+
+  const obJoin = fiscalYear ? 'LEFT JOIN opening_balances ob ON ob.material_id = m.id AND ob.fiscal_year = ?' : '';
+  const obSelect = fiscalYear ? ', ob.opening_qty AS ob_qty' : '';
+  const mainBinds = fiscalYear ? [...pBinds, ...uBinds, fiscalYear] : [...pBinds, ...uBinds];
+
   const { results } = await ctx.env.DB.prepare(
-    `SELECT m.*,
+    `SELECT m.*${obSelect},
        (SELECT COALESCE(SUM(p.qty), 0) FROM purchases p WHERE ${purchaseWhere.join(' AND ')}) AS purchased,
        (SELECT COALESCE(SUM(i.qty), 0) FROM request_items i JOIN requests r ON r.id = i.request_id WHERE ${usedWhere.join(' AND ')}) AS used
-     FROM materials m`,
+     FROM materials m ${obJoin}`,
   )
-    .bind(...pBinds, ...uBinds)
+    .bind(...mainBinds)
     .all<Obj>();
 
   const data = results
     .map((row) => {
       const m = toLegacy('materials', row);
       const unitPrice = num(m.UnitPrice);
-      const openingQty = num(m.OpeningQty);
+      const openingQty = row.ob_qty !== null && row.ob_qty !== undefined ? num(row.ob_qty) : num(m.OpeningQty);
       const purchaseQty = num(row.purchased);
       const usedQty = num(row.used);
-      const remainQty = num(m.StockQty);
+      const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
       return {
         Code: m.Code,
         Name: m.Name,
@@ -295,7 +304,8 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
     total,
     data,
     asOf: todayBkk(),
-    filter: { from: from || '', to: to || '' },
+    fiscalYear: fiscalYear || undefined,
+    filter: { from: from || (range ? range.from : ''), to: to || (range ? range.to : '') },
   };
 }
 
@@ -474,16 +484,34 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
   const periodOpening = running;
   let totalIn = 0;
   let totalOut = 0;
+
+  // Resolve requester's full name for OUT movements from requests
+  const refDocs = Array.from(new Set(period.map((m) => String(m.ref_doc || '').trim()).filter(Boolean)));
+  const reqNameMap = new Map<string, string>();
+  if (refDocs.length > 0) {
+    const placeholders = refDocs.map(() => '?').join(',');
+    const { results: reqList } = await db
+      .prepare(`SELECT doc_no, full_name FROM requests WHERE doc_no IN (${placeholders})`)
+      .bind(...refDocs)
+      .all<{ doc_no: string; full_name: string }>();
+    for (const r of reqList) {
+      if (r.full_name) reqNameMap.set(r.doc_no, r.full_name);
+    }
+  }
+
   const entries: CardEntry[] = [
     { date: fromDate, dateTh: thaiDateFull(fromDate), description: 'ยอดยกมา', inQty: 0, outQty: 0, balance: periodOpening, actor: '-', refDoc: '' },
   ];
   for (const m of period) {
     const d = String(m.created_at || '').substring(0, 10);
     const qty = num(m.qty);
-    const ref = m.ref_doc ? ` (${m.ref_doc})` : '';
+    const refDoc = String(m.ref_doc || '').trim();
+    const ref = refDoc ? ` (${refDoc})` : '';
     let inQty = 0;
     let outQty = 0;
     let desc = String(m.note || '');
+    let displayActor = String(m.actor || '');
+
     if (m.type === 'IN') {
       inQty = qty;
       totalIn += qty;
@@ -494,6 +522,9 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
       totalOut += qty;
       running -= qty;
       if (!desc) desc = `จ่ายตามใบขอเบิก${ref}`;
+      if (refDoc && reqNameMap.has(refDoc)) {
+        displayActor = reqNameMap.get(refDoc)!;
+      }
     } else if (m.type === 'ADJUST') {
       const after = num(m.after_qty);
       const diff = after - running;
@@ -514,8 +545,8 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
       inQty,
       outQty,
       balance: running,
-      actor: String(m.actor || ''),
-      refDoc: String(m.ref_doc || ''),
+      actor: displayActor,
+      refDoc: refDoc,
     });
   }
 

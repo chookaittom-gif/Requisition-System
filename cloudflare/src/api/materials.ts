@@ -140,6 +140,13 @@ export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
         StorageLocation: m.StorageLocation || '',
         ImageUrl: m.ImageUrl || '',
         FileUrl: m.FileUrl || '',
+        ShopName: m.ShopName || '',
+        ShopAddress: m.ShopAddress || '',
+        ShopPhone: m.ShopPhone || '',
+        ShopTaxId: m.ShopTaxId || '',
+        BudgetSource: m.BudgetSource || 'งบประมาณแผ่นดิน',
+        AcquiredDate: m.AcquiredDate || '',
+        OrderQty: Number(m.OrderQty || 0),
         StockState: computeStockState(stockQty, minQty),
       };
     })
@@ -207,6 +214,13 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
       const materialType = str(item.MaterialType || item.Category);
       const sizeSpec = str(item.SizeSpec);
       const storageLoc = str(item.StorageLocation);
+      const shopName = str(item.ShopName);
+      const shopAddress = str(item.ShopAddress);
+      const shopPhone = str(item.ShopPhone);
+      const shopTaxId = str(item.ShopTaxId);
+      const budgetSource = str(item.BudgetSource || 'งบประมาณแผ่นดิน');
+      const acquiredDate = str(item.AcquiredDate);
+      const orderQty = num(item.OrderQty || 0, 'จำนวนที่สั่งซื้อ');
 
       if (item.action === 'update') {
         const cur = byId.get(id);
@@ -228,9 +242,9 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
         stmts.push(
           db
             .prepare(
-              'UPDATE materials SET code = ?, name = ?, unit = ?, unit_price = ?, stock_qty = COALESCE(?, stock_qty), min_qty = ?, category = ?, material_type = ?, size_spec = ?, storage_location = ?, image_url = ?, file_url = ?, updated_at = ? WHERE id = ?',
+              'UPDATE materials SET code = ?, name = ?, unit = ?, unit_price = ?, stock_qty = COALESCE(?, stock_qty), min_qty = ?, category = ?, material_type = ?, size_spec = ?, storage_location = ?, image_url = ?, file_url = ?, shop_name = ?, shop_address = ?, shop_phone = ?, shop_tax_id = ?, budget_source = ?, acquired_date = ?, order_qty = ?, updated_at = ? WHERE id = ?',
             )
-            .bind(code, name, unit, unitPrice, stockSent ? newStock : null, minQty, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, now, id),
+            .bind(code, name, unit, unitPrice, stockSent ? newStock : null, minQty, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, id),
           logAudit(db, { action: 'UPDATE', entity: 'Material', entityId: id, detail: code, actor }),
         );
         if (cur.code !== code) {
@@ -244,9 +258,9 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
         stmts.push(
           db
             .prepare(
-              'INSERT INTO materials (id, code, name, unit, unit_price, stock_qty, min_qty, opening_qty, category, material_type, size_spec, storage_location, image_url, file_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              'INSERT INTO materials (id, code, name, unit, unit_price, stock_qty, min_qty, opening_qty, category, material_type, size_spec, storage_location, image_url, file_url, shop_name, shop_address, shop_phone, shop_tax_id, budget_source, acquired_date, order_qty, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             )
-            .bind(newId, code, name, unit, unitPrice, newStock, minQty, newStock, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, now, now),
+            .bind(newId, code, name, unit, unitPrice, newStock, minQty, newStock, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, now),
         );
         if (newStock > 0) {
           stmts.push(

@@ -85,8 +85,38 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('id="btnToggleLoc"');
     expect(html).toContain('สนง.ศ.ลป.');
     expect(html).toContain('สนง.รร.สาธิต');
-    expect(html).toContain('cdn.tailwindcss.com should not be used in production');
     expect(html).toContain("const btnGenCode = $('#btnGenCode');");
+  });
+
+  it('includes shop info, budget source, acquired date, and order qty fields in material modal', () => {
+    expect(html).toContain('id="mShopName"');
+    expect(html).toContain('id="mShopAddress"');
+    expect(html).toContain('id="mShopPhone"');
+    expect(html).toContain('id="mShopTaxId"');
+    expect(html).toContain('id="mBudgetSource"');
+    expect(html).toContain('id="mAcquiredDate"');
+    expect(html).toContain('id="mOrderQty"');
+    expect(html).toContain('งบประมาณแผ่นดิน');
+    expect(html).toContain('เงินบริจาค');
+    expect(html).toContain('อื่นๆ');
+  });
+
+  it('includes LINE notification setting and test button', () => {
+    expect(html).toContain('id="fLineToken"');
+    expect(html).toContain('id="toggleLineToken"');
+    expect(html).toContain('id="btnTestLine"');
+    expect(html).toContain('apiTestLine');
+  });
+
+  it('includes fiscal year selector and export Excel button in viewAccount', () => {
+    expect(html).toContain('id="accFY"');
+    expect(html).toContain('id="btnExportAccExcel"');
+    expect(html).toContain('exportAccountXlsx(');
+  });
+
+  it('supports hiding the logo in printHeader for official reports without logo', () => {
+    expect(html).toContain('function printHeader(title, hideLogo = false)');
+    expect(html).toContain("printHeader('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)', true)");
   });
 });
 

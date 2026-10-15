@@ -28,14 +28,16 @@ const SHEETS = {
 const HEADERS = {
   Settings: [
     'SchoolName','Affiliation','LogoUrl','Address','Phone','UpdatedAt',
-    'NotifyEmail','TelegramBotToken','TelegramChatId',
+    'NotifyEmail','TelegramBotToken','TelegramChatId','LineToken',
     'NotifyOnNewRequest','NotifyOnStatusChange','NotifyLowStock','BannerUrl'
   ],
   Users: ['ID','Username','Password','FullName','Role','Position','Department','Email','CreatedAt','UpdatedAt'],
   Materials: [
     'ID','Code','Name','Unit','UnitPrice','StockQty','MinQty','OpeningQty',
     'Category','MaterialType','SizeSpec','StorageLocation',
-    'ImageUrl','FileUrl','CreatedAt','UpdatedAt'
+    'ImageUrl','FileUrl',
+    'ShopName','ShopAddress','ShopPhone','ShopTaxId','BudgetSource','AcquiredDate','OrderQty',
+    'CreatedAt','UpdatedAt'
   ],
   Requests: [
     'ID','DocNo','RequestDate','UserID','FullName','Position','Department','Purpose',
@@ -80,7 +82,7 @@ const FN_ACCESS = {
 
   // Admin only (ผู้ดูแลระบบ):
   apiGetUsers:'admin', apiGetSettings:'admin', apiSaveSettings:'admin', apiSaveUsers:'admin',
-  apiDeleteUsers:'admin', apiGetAuditLog:'admin', apiTestTelegram:'admin',
+  apiDeleteUsers:'admin', apiGetAuditLog:'admin', apiTestTelegram:'admin', apiTestLine:'admin',
   apiRunSchemaMigration:'admin',
   apiExportCSV:'admin'
 };
@@ -585,6 +587,7 @@ function getNotifyConfig_(){
     emails: s.NotifyEmail || '',
     botToken: s.TelegramBotToken || '',
     chatId: s.TelegramChatId || '',
+    lineToken: s.LineToken || '',
     onNewRequest: String(s.NotifyOnNewRequest || 'YES').toUpperCase() === 'YES',
     onStatusChange: String(s.NotifyOnStatusChange || 'YES').toUpperCase() === 'YES',
     onLowStock: String(s.NotifyLowStock || 'YES').toUpperCase() === 'YES',
@@ -592,10 +595,54 @@ function getNotifyConfig_(){
   };
 }
 
+function sendLineNotify_(token, message){
+  if(!token) return { ok: false, message: 'กรุณาระบุ LINE Notify Token' };
+  try{
+    const url = 'https://notify-api.line.me/api/notify';
+    const options = {
+      method: 'post',
+      headers: {
+        'Authorization': 'Bearer ' + String(token).trim()
+      },
+      payload: {
+        message: message
+      },
+      muteHttpExceptions: true
+    };
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    if(code >= 200 && code < 300) return { ok: true, message: 'ส่งข้อความสำเร็จ' };
+    return { ok: false, message: 'LINE API Error (' + code + '): ' + response.getContentText() };
+  }catch(e){
+    console.error('Line error: ' + e);
+    return { ok: false, message: String(e) };
+  }
+}
+
+function apiTestLine(payload){
+  try{
+    let token = '';
+    if(payload && typeof payload === 'object') token = payload.token || payload.LineToken || '';
+    else if(typeof payload === 'string') token = payload.trim();
+    const s = getSettingsObj_();
+    token = token || s.LineToken;
+    if(!token) return { ok: false, message: 'กรุณากรอก LINE Notify Token ก่อนทดสอบ' };
+    const testMsg = '\n🔔 ทดสอบการเชื่อมต่อ LINE Notify\n' +
+      '━━━━━━━━━━━━━━━━━━━\n' +
+      '🏫 ระบบ: ' + (s.SchoolName || 'ระบบเบิกจ่ายพัสดุ') + '\n' +
+      '📅 เวลาทดสอบ: ' + thaiDateFull_(todayStr_()) + '\n' +
+      '🟢 สถานะ: ส่งข้อความสำเร็จเรียบร้อยแล้ว!\n' +
+      '━━━━━━━━━━━━━━━━━━━';
+    const res = sendLineNotify_(token, testMsg);
+    if(res && res.ok === false) return res;
+    return { ok: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว' };
+  }catch(err){ return { ok: false, message: String(err) }; }
+}
+
 function notifyNewRequest_(req){
   const cfg = getNotifyConfig_();
   if(!cfg.onNewRequest) return;
-  if(!cfg.emails && !(cfg.botToken && cfg.chatId)) return;
+  if(!cfg.emails && !(cfg.botToken && cfg.chatId) && !cfg.lineToken) return;
   const subject = '[' + cfg.schoolName + '] มีใบขอเบิกใหม่ ' + req.DocNo;
   const html = `<div style="font-family:Sarabun,sans-serif;line-height:1.6">
     <h3>มีใบขอเบิกพัสดุใหม่</h3>
@@ -634,7 +681,12 @@ function notifyNewRequest_(req){
     noteText +
     attachText + `\n━━━━━━━━━━━━━━━━━━━\n` +
     `⏳ <i>สถานะ: รอการอนุมัติ</i>`;
-  sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
+  if(cfg.botToken && cfg.chatId) sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
+
+  if(cfg.lineToken){
+    const lineMsg = '\n📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + (req.Position ? ' ('+req.Position+')' : '') + '\nฝ่าย/แผนก: ' + (req.Department||'-') + '\nวัตถุประสงค์: ' + (req.Purpose||'-') + '\nจำนวน: ' + req.ItemCount + ' รายการ';
+    sendLineNotify_(cfg.lineToken, lineMsg);
+  }
 }
 
 function notifyStatusChange_(req, newStatus, reason){
@@ -643,7 +695,7 @@ function notifyStatusChange_(req, newStatus, reason){
   const users = readAll_(SHEETS.USERS);
   const user = users.find(u => String(u.ID) === String(req.UserID));
   const userEmail = (user && user.Email) ? user.Email : '';
-  if(!userEmail && !(cfg.botToken && cfg.chatId)) return;
+  if(!userEmail && !(cfg.botToken && cfg.chatId) && !cfg.lineToken) return;
 
   const statusTh = newStatus === 'APPROVED' ? 'อนุมัติแล้ว ✅' : newStatus === 'REJECTED' ? 'ถูกปฏิเสธ ❌' : (newStatus === 'CANCELLED' ? 'ยกเลิกแล้ว ⚪' : newStatus);
   const subject = '[' + cfg.schoolName + '] สถานะใบขอเบิก ' + req.DocNo + ' → ' + statusTh;
@@ -681,7 +733,12 @@ function notifyStatusChange_(req, newStatus, reason){
     itemListText +
     `\n📅 <b>วันที่ดำเนินการ:</b> ${thaiDateFull_(todayStr_())}\n` +
     `━━━━━━━━━━━━━━━━━━━`;
-  sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
+  if(cfg.botToken && cfg.chatId) sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
+
+  if(cfg.lineToken){
+    const lineMsg = '\n📢 อัปเดตสถานะใบขอเบิก\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + '\nสถานะใหม่: ' + statusTh + (reason ? '\nเหตุผล: ' + reason : '');
+    sendLineNotify_(cfg.lineToken, lineMsg);
+  }
 }
 
 /**
@@ -749,7 +806,7 @@ function getSettingsObj_(){
   const sh = getSheet_(SHEETS.SETTINGS);
   if(sh.getLastRow() < 2) return {
     SchoolName:'', Affiliation:'', LogoUrl:'', Address:'', Phone:'', UpdatedAt:'',
-    NotifyEmail:'', TelegramBotToken:'', TelegramChatId:'',
+    NotifyEmail:'', TelegramBotToken:'', TelegramChatId:'', LineToken:'',
     NotifyOnNewRequest:'YES', NotifyOnStatusChange:'YES', NotifyLowStock:'YES', BannerUrl:''
   };
   const headers = HEADERS.Settings;
@@ -834,6 +891,7 @@ function apiSaveSettings(payload){
         NotifyEmail: String(payload.NotifyEmail||'').trim(),
         TelegramBotToken: String(payload.TelegramBotToken||'').trim(),
         TelegramChatId: String(payload.TelegramChatId||'').trim(),
+        LineToken: String(payload.LineToken||'').trim(),
         NotifyOnNewRequest: payload.NotifyOnNewRequest || 'YES',
         NotifyOnStatusChange: payload.NotifyOnStatusChange || 'YES',
         NotifyLowStock: payload.NotifyLowStock || 'YES'
@@ -1052,6 +1110,13 @@ function apiSaveMaterials(list){
         const materialType = String(item.MaterialType || item.Category || '').trim();
         const sizeSpec = String(item.SizeSpec || '').trim();
         const storageLoc = String(item.StorageLocation || '').trim();
+        const shopName = String(item.ShopName || '').trim();
+        const shopAddress = String(item.ShopAddress || '').trim();
+        const shopPhone = String(item.ShopPhone || '').trim();
+        const shopTaxId = String(item.ShopTaxId || '').trim();
+        const budgetSource = String(item.BudgetSource || 'งบประมาณแผ่นดิน').trim();
+        const acquiredDate = String(item.AcquiredDate || '').trim();
+        const orderQty = Number(item.OrderQty || 0);
 
         if(item.action === 'update'){
           const old = materials.find(m=> String(m.ID)===String(item.ID));
@@ -1064,6 +1129,13 @@ function apiSaveMaterials(list){
             MaterialType: materialType,
             SizeSpec: sizeSpec,
             StorageLocation: storageLoc,
+            ShopName: shopName,
+            ShopAddress: shopAddress,
+            ShopPhone: shopPhone,
+            ShopTaxId: shopTaxId,
+            BudgetSource: budgetSource,
+            AcquiredDate: acquiredDate,
+            OrderQty: orderQty,
             ImageUrl: imageUrl, FileUrl: fileUrl, UpdatedAt: nowIso_()
           });
           if(oldStock !== newStock){
@@ -1081,6 +1153,13 @@ function apiSaveMaterials(list){
             MaterialType: materialType,
             SizeSpec: sizeSpec,
             StorageLocation: storageLoc,
+            ShopName: shopName,
+            ShopAddress: shopAddress,
+            ShopPhone: shopPhone,
+            ShopTaxId: shopTaxId,
+            BudgetSource: budgetSource,
+            AcquiredDate: acquiredDate,
+            OrderQty: orderQty,
             ImageUrl: imageUrl, FileUrl: fileUrl, CreatedAt: nowIso_(), UpdatedAt: nowIso_()
           });
           materials.push({ ID:id, Code:code });     // กันรหัสซ้ำในรายการเดียวกัน
@@ -1481,38 +1560,50 @@ function apiGetTeacherDashboard(userId){
 
 function apiGetInventoryAccount(filter){
   try{
+    filter = filter || {};
+    const currentFY = new Date().getMonth() >= 9
+      ? (new Date().getFullYear() + 543 + 1)
+      : (new Date().getFullYear() + 543);
+    const fiscalYear = filter.fiscalYear ? parseInt(filter.fiscalYear, 10) : (filter.from || filter.to ? null : currentFY);
+    const fyRange = fiscalYear ? getFiscalYearRange_(fiscalYear) : null;
+
+    const from = filter.from || (fyRange ? fyRange.start : null);
+    const to   = filter.to   || (fyRange ? fyRange.end : null);
+
     const materials = readAll_(SHEETS.MATERIALS);
     const purchases = readAll_(SHEETS.PURCHASES);
     const reqs  = readAll_(SHEETS.REQUESTS).map(mapRequestRow_);
     const items = readAll_(SHEETS.REQUEST_ITEMS);
+    const openings = fiscalYear ? readAll_(SHEETS.OPENING_BALANCES) : [];
     const approvedReqIds = new Set(reqs.filter(r=> r.Status==='APPROVED').map(r=> r.ID));
 
-    const from = filter && filter.from ? filter.from : null;
-    const to   = filter && filter.to   ? filter.to   : null;
-
     const reqDateMap = {};
-    reqs.forEach(r=> reqDateMap[r.ID] = r.RequestDate);
+    reqs.forEach(r=> reqDateMap[r.ID] = r.RequestDate || r.ApprovedDate || '');
 
     const data = materials.map(m=>{
       const unitPrice  = Number(m.UnitPrice||0);
-      const openingQty = Number(m.OpeningQty||0);
+      let openingQty = Number(m.OpeningQty||0);
+      if(fiscalYear){
+        const ob = openings.find(o=> String(o.MaterialID)===String(m.ID) && String(o.FiscalYear)===String(fiscalYear));
+        if(ob && ob.OpeningQty !== undefined && ob.OpeningQty !== '') openingQty = Number(ob.OpeningQty||0);
+      }
 
       let purchaseList = purchases.filter(p=> String(p.MaterialID)===String(m.ID));
-      if(from) purchaseList = purchaseList.filter(p=> p.PurchaseDate >= from);
-      if(to)   purchaseList = purchaseList.filter(p=> p.PurchaseDate <= to);
+      if(from) purchaseList = purchaseList.filter(p=> (p.PurchaseDate||'').substring(0,10) >= from);
+      if(to)   purchaseList = purchaseList.filter(p=> (p.PurchaseDate||'').substring(0,10) <= to);
       const purchaseQty = purchaseList.reduce((s,p)=> s+Number(p.Qty||0), 0);
 
       let usedList = items.filter(it=> String(it.MaterialID)===String(m.ID) && approvedReqIds.has(it.RequestID));
       if(from || to){
         usedList = usedList.filter(it=>{
-          const d = reqDateMap[it.RequestID] || '';
+          const d = (reqDateMap[it.RequestID] || '').substring(0,10);
           if(from && d < from) return false;
           if(to && d > to) return false;
           return true;
         });
       }
       const usedQty = usedList.reduce((s,it)=> s+Number(it.Qty||0), 0);
-      const remainQty = Number(m.StockQty||0);
+      const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
 
       return {
         Code:m.Code, Name:m.Name, Unit:m.Unit, UnitPrice: unitPrice, Category: m.Category||'',
@@ -1539,7 +1630,7 @@ function apiGetInventoryAccount(filter){
       lowStock: data.filter(x=> x.StockState !== 'OK').length
     };
 
-    return { ok:true, summary, total, data, asOf: todayStr_(), filter: { from:from||'', to:to||'' } };
+    return { ok:true, summary, total, data, asOf: todayStr_(), fiscalYear: fiscalYear||undefined, filter: { from:from||'', to:to||'' } };
   }catch(err){ return { ok:false, message:String(err) }; }
 }
 
@@ -1863,11 +1954,43 @@ function apiExportInventoryReportSheet(filter) {
       } catch(e) {}
     }
 
-    // Sheet 1: ทะเบียนวัสดุคงเหลือ
-    const sh1 = newSS.getActiveSheet();
-    sh1.setName('ทะเบียนวัสดุคงเหลือ');
+    const fyShort = String(rep.fiscalYear || '').slice(-2) || String(rep.fiscalYear || '');
 
+    // Sheet 1: สรุปวัสดุคงเหลือ (สรุปงบ ปี <FY>)
+    const sh1 = newSS.getActiveSheet();
+    sh1.setName('สรุปงบ ปี ' + fyShort);
+    const summaryRows = [
+      ['สรุปวัสดุคงเหลือ'],
+      [rep.schoolName],
+      [`ณ วันที่ ${rep.reportDateThai}`],
+      [],
+      ['ลำดับที่', 'ประเภทวัสดุ', 'จำนวนเงิน', 'หมายเหตุ']
+    ];
+
+    catSummary.forEach((cs, i) => {
+      summaryRows.push([i + 1, cs.category, cs.totalAmount, '']);
+    });
+    summaryRows.push(['', 'วัสดุคงเหลือ', total.Amount, '']);
+
+    sh1.getRange(1, 1, summaryRows.length, 4).setValues(pad2D_(summaryRows, 4));
+    sh1.getRange(1, 1, 1, 4).merge().setFontWeight('bold').setFontSize(13).setHorizontalAlignment('center');
+    sh1.getRange(2, 1, 1, 4).merge().setFontWeight('bold').setFontSize(11).setHorizontalAlignment('center');
+    sh1.getRange(3, 1, 1, 4).merge().setFontSize(10).setHorizontalAlignment('center');
+    sh1.getRange(5, 1, 1, 4).setBackground('#075985').setFontColor('#ffffff').setFontWeight('bold').setFontSize(9.5).setHorizontalAlignment('center');
+    sh1.getRange(summaryRows.length, 1, 1, 4).setFontWeight('bold').setFontSize(9.5);
+    const colWidths1 = [60, 180, 120, 140];
+    colWidths1.forEach((w, i) => sh1.setColumnWidth(i + 1, w));
+    if (summaryRows.length >= 6) {
+      sh1.getRange(6, 1, summaryRows.length - 5, 4).setFontSize(9);
+      sh1.getRange(5, 1, summaryRows.length - 4, 4).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+      sh1.getRange(6, 1, summaryRows.length - 5, 1).setHorizontalAlignment('center');
+      sh1.getRange(6, 3, summaryRows.length - 4, 1).setNumberFormat('#,##0.00').setHorizontalAlignment('right');
+      for (let r = 6; r <= summaryRows.length; r++) sh1.setRowHeight(r, 24);
+    }
+
+    // Sheet 2: ทะเบียนวัสดุคงเหลือ (14 คอลัมน์)
     const catTitle = rep.category ? rep.category : 'ทั้งหมด';
+    const sh2 = newSS.insertSheet(rep.category ? rep.category.substring(0, 31) : 'ทะเบียนวัสดุคงเหลือ');
     const rows = [
       [`รายงานการสำรวจทะเบียนวัสดุ${catTitle}คงเหลือ`],
       [`หน่วยงาน ${rep.schoolName}`],
@@ -1898,63 +2021,30 @@ function apiExportInventoryReportSheet(filter) {
     rows.push([]);
     rows.push(['หมายเหตุ :  การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี']);
 
-    sh1.getRange(1, 1, rows.length, 14).setValues(pad2D_(rows, 14));
+    sh2.getRange(1, 1, rows.length, 14).setValues(pad2D_(rows, 14));
 
     // Style Header & Merge Cells
-    sh1.getRange(1, 1, 1, 14).merge().setFontWeight('bold').setFontSize(13).setHorizontalAlignment('center');
-    sh1.getRange(2, 1, 1, 14).merge().setFontWeight('bold').setFontSize(11).setHorizontalAlignment('center');
-    sh1.getRange(3, 1, 1, 14).merge().setFontSize(10).setHorizontalAlignment('center');
-    sh1.getRange(5, 1, 1, 14).setBackground('#075985').setFontColor('#ffffff').setFontWeight('bold').setFontSize(9.5).setHorizontalAlignment('center');
-    sh1.getRange(rows.length - 2, 1, 1, 14).setFontWeight('bold').setFontSize(9.5);
-    sh1.getRange(rows.length, 1, 1, 14).merge().setFontSize(9);
-    sh1.getRange(5, 1, rows.length - 4, 14).setWrap(true);
-    // ponytail: ความกว้างรวม 860px พอดีพิมพ์ A4 แนวนอน 100% ไม่หลุดเส้นประแบ่งหน้า
-    const colWidths1 = [30, 55, 55, 65, 240, 55, 40, 60, 45, 45, 45, 50, 70, 55];
-    colWidths1.forEach((w, i) => sh1.setColumnWidth(i + 1, w));
-    if (rows.length >= 7) {
-      sh1.getRange(6, 1, rows.length - 7, 14).setFontSize(9);
-      sh1.getRange(5, 1, rows.length - 6, 14).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
-      sh1.getRange(6, 1, rows.length - 7, 1).setHorizontalAlignment('center');
-      sh1.getRange(6, 4, rows.length - 7, 1).setHorizontalAlignment('center');
-      sh1.getRange(6, 7, rows.length - 7, 1).setHorizontalAlignment('center');
-      sh1.getRange(6, 8, rows.length - 7, 1).setNumberFormat('#,##0.00').setHorizontalAlignment('right');
-      sh1.getRange(6, 9, rows.length - 7, 4).setHorizontalAlignment('center');
-      sh1.getRange(6, 13, rows.length - 7, 1).setNumberFormat('#,##0.00').setHorizontalAlignment('right');
-      sh1.getRange(6, 14, rows.length - 7, 1).setHorizontalAlignment('center');
-      sh1.getRange(rows.length - 2, 8, 1, 6).setNumberFormat('#,##0.00');
-      // ความสูงแถว 34px ให้ข้อความ 2 บรรทัดแสดงผลครบถ้วนไม่ถูกตัดขอบล่าง
-      for (let r = 6; r <= rows.length - 2; r++) sh1.setRowHeight(r, 34);
-    }
-
-    // Sheet 2: สรุปวัสดุคงเหลือ
-    const sh2 = newSS.insertSheet('สรุปวัสดุคงเหลือ');
-    const summaryRows = [
-      ['สรุปวัสดุคงเหลือ'],
-      [rep.schoolName],
-      [`ณ วันที่ ${rep.reportDateThai}`],
-      [],
-      ['ลำดับที่', 'ประเภทวัสดุ', 'จำนวนเงิน', 'หมายเหตุ']
-    ];
-
-    catSummary.forEach((cs, i) => {
-      summaryRows.push([i + 1, cs.category, cs.totalAmount, '']);
-    });
-    summaryRows.push(['', 'วัสดุคงเหลือ', total.Amount, '']);
-
-    sh2.getRange(1, 1, summaryRows.length, 4).setValues(pad2D_(summaryRows, 4));
-    sh2.getRange(1, 1, 1, 4).merge().setFontWeight('bold').setFontSize(13).setHorizontalAlignment('center');
-    sh2.getRange(2, 1, 1, 4).merge().setFontWeight('bold').setFontSize(11).setHorizontalAlignment('center');
-    sh2.getRange(3, 1, 1, 4).merge().setFontSize(10).setHorizontalAlignment('center');
-    sh2.getRange(5, 1, 1, 4).setBackground('#075985').setFontColor('#ffffff').setFontWeight('bold').setFontSize(9.5).setHorizontalAlignment('center');
-    sh2.getRange(summaryRows.length, 1, 1, 4).setFontWeight('bold').setFontSize(9.5);
-    const colWidths2 = [60, 180, 120, 140];
+    sh2.getRange(1, 1, 1, 14).merge().setFontWeight('bold').setFontSize(13).setHorizontalAlignment('center');
+    sh2.getRange(2, 1, 1, 14).merge().setFontWeight('bold').setFontSize(11).setHorizontalAlignment('center');
+    sh2.getRange(3, 1, 1, 14).merge().setFontSize(10).setHorizontalAlignment('center');
+    sh2.getRange(5, 1, 1, 14).setBackground('#075985').setFontColor('#ffffff').setFontWeight('bold').setFontSize(9.5).setHorizontalAlignment('center');
+    sh2.getRange(rows.length - 2, 1, 1, 14).setFontWeight('bold').setFontSize(9.5);
+    sh2.getRange(rows.length, 1, 1, 14).merge().setFontSize(9);
+    sh2.getRange(5, 1, rows.length - 4, 14).setWrap(true);
+    const colWidths2 = [30, 55, 55, 65, 240, 55, 40, 60, 45, 45, 45, 50, 70, 55];
     colWidths2.forEach((w, i) => sh2.setColumnWidth(i + 1, w));
-    if (summaryRows.length >= 6) {
-      sh2.getRange(6, 1, summaryRows.length - 5, 4).setFontSize(9);
-      sh2.getRange(5, 1, summaryRows.length - 4, 4).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
-      sh2.getRange(6, 1, summaryRows.length - 5, 1).setHorizontalAlignment('center');
-      sh2.getRange(6, 3, summaryRows.length - 4, 1).setNumberFormat('#,##0.00').setHorizontalAlignment('right');
-      for (let r = 6; r <= summaryRows.length; r++) sh2.setRowHeight(r, 24);
+    if (rows.length >= 7) {
+      sh2.getRange(6, 1, rows.length - 7, 14).setFontSize(9);
+      sh2.getRange(5, 1, rows.length - 6, 14).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+      sh2.getRange(6, 1, rows.length - 7, 1).setHorizontalAlignment('center');
+      sh2.getRange(6, 4, rows.length - 7, 1).setHorizontalAlignment('center');
+      sh2.getRange(6, 7, rows.length - 7, 1).setHorizontalAlignment('center');
+      sh2.getRange(6, 8, rows.length - 7, 1).setNumberFormat('#,##0.00').setHorizontalAlignment('right');
+      sh2.getRange(6, 9, rows.length - 7, 4).setHorizontalAlignment('center');
+      sh2.getRange(6, 13, rows.length - 7, 1).setNumberFormat('#,##0.00').setHorizontalAlignment('right');
+      sh2.getRange(6, 14, rows.length - 7, 1).setHorizontalAlignment('center');
+      sh2.getRange(rows.length - 2, 8, 1, 6).setNumberFormat('#,##0.00');
+      for (let r = 6; r <= rows.length - 2; r++) sh2.setRowHeight(r, 34);
     }
 
     // Sheet 3: Stock card (แบบตารางจ่ายออกแยกรายวัน 31 วัน ตามฟอร์ม ม.สวนดุสิต ลำปาง)
@@ -2234,6 +2324,12 @@ function apiGetStockCard(materialId, filter) {
     let totalIn = 0;
     let totalOut = 0;
 
+    const allRequests = readAll_(SHEETS.REQUESTS);
+    const reqNameMap = {};
+    allRequests.forEach(r => {
+      if(r.DocNo && r.FullName) reqNameMap[String(r.DocNo).trim()] = r.FullName;
+    });
+
     const entries = [];
     // บรรทัดแรก: ยอดยกมา
     entries.push({
@@ -2254,16 +2350,22 @@ function apiGetStockCard(materialId, filter) {
       let outQty = 0;
 
       let desc = m.Note || '';
+      let displayActor = m.Actor || '';
+      const refDoc = String(m.RefDoc || '').trim();
+
       if (m.Type === 'IN') {
         inQty = qty;
         totalIn += qty;
         runningBalance += qty;
-        if (!desc) desc = 'รับเข้าสต๊อก' + (m.RefDoc ? ' (' + m.RefDoc + ')' : '');
+        if (!desc) desc = 'รับเข้าสต๊อก' + (refDoc ? ' (' + refDoc + ')' : '');
       } else if (m.Type === 'OUT') {
         outQty = qty;
         totalOut += qty;
         runningBalance -= qty;
-        if (!desc) desc = 'จ่ายตามใบขอเบิก' + (m.RefDoc ? ' (' + m.RefDoc + ')' : '');
+        if (!desc) desc = 'จ่ายตามใบขอเบิก' + (refDoc ? ' (' + refDoc + ')' : '');
+        if (refDoc && reqNameMap[refDoc]) {
+          displayActor = reqNameMap[refDoc];
+        }
       } else if (m.Type === 'ADJUST') {
         const after = parseFloat(m.AfterQty) || 0;
         const diff = after - runningBalance;
@@ -2280,8 +2382,8 @@ function apiGetStockCard(materialId, filter) {
         inQty: inQty,
         outQty: outQty,
         balance: runningBalance,
-        actor: m.Actor || '',
-        refDoc: m.RefDoc || ''
+        actor: displayActor,
+        refDoc: refDoc
       });
     });
 

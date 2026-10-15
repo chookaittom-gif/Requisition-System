@@ -27,6 +27,8 @@ const MAPS: Record<TableName, ColumnMap> = {
     id: 'ID', code: 'Code', name: 'Name', unit: 'Unit', unit_price: 'UnitPrice', stock_qty: 'StockQty',
     min_qty: 'MinQty', opening_qty: 'OpeningQty', category: 'Category', material_type: 'MaterialType',
     size_spec: 'SizeSpec', storage_location: 'StorageLocation', image_url: 'ImageUrl', file_url: 'FileUrl',
+    shop_name: 'ShopName', shop_address: 'ShopAddress', shop_phone: 'ShopPhone', shop_tax_id: 'ShopTaxId',
+    budget_source: 'BudgetSource', acquired_date: 'AcquiredDate', order_qty: 'OrderQty',
     created_at: 'CreatedAt', updated_at: 'UpdatedAt',
   },
   requests: {
@@ -59,6 +61,7 @@ const MAPS: Record<TableName, ColumnMap> = {
   settings: {
     school_name: 'SchoolName', affiliation: 'Affiliation', logo_url: 'LogoUrl', address: 'Address',
     phone: 'Phone', updated_at: 'UpdatedAt', notify_email: 'NotifyEmail', telegram_chat_id: 'TelegramChatId',
+    line_token: 'LineToken',
     notify_on_new_request: 'NotifyOnNewRequest', notify_on_status_change: 'NotifyOnStatusChange',
     notify_low_stock: 'NotifyLowStock', banner_url: 'BannerUrl',
   },

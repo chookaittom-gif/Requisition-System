@@ -1170,85 +1170,220 @@ async function ensureXlsx(){
  */
 async function exportInventoryXlsx(rep){
   await ensureXlsx();
-  const info = rep.reportInfo, data = rep.data || [], total = rep.total || {};
-  const catTitle = info.category ? info.category : 'ทั้งหมด';
+  const info = rep.reportInfo || {}, data = rep.data || [], total = rep.total || {};
   const rd = String(info.reportDate || todayYMD());
   const yy = parseInt(rd.substring(0,4),10), mm = parseInt(rd.substring(5,7),10);
   const daysInMonth = new Date(yy, mm, 0).getDate();
-  const monthPrefix = rd.substring(0,7);
   const thMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
   const monthTitle = thMonths[mm-1] + ' ' + (yy + 543);
+  const fyShort = String(info.fiscalYear || '').slice(-2) || String(info.fiscalYear || '');
 
-  const dayOut = rep.dayOut || {};   // { materialId: { day: qty } } จาก apiGetInventoryReport (อนุมัติแล้ว ตามวันที่ขอเบิกในเดือนนั้น)
-
+  const dayOut = rep.dayOut || {};
   const A = XLSX.utils;
   const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
+  const wb = A.book_new();
 
-  // ---- Sheet 1 ----
-  const rows1 = [
-    ['รายงานการสำรวจทะเบียนวัสดุ' + catTitle + 'คงเหลือ'],
-    ['หน่วยงาน ' + info.schoolName],
-    ['ปีงบประมาณ ' + info.fiscalYear + ' (ณ วันที่ ' + info.reportDateThai + ')'],
+  const cleanSheetName = (name, fallback) => {
+    let s = String(name || fallback || 'Sheet').replace(/[\\/?*[\]:]/g, '_').trim();
+    if(!s) s = fallback || 'Sheet';
+    return s.length > 31 ? s.substring(0, 31) : s;
+  };
+
+  // ---- Sheet 1: สรุปงบ ปี <FY> (Summary by category) ----
+  const rowsSummary = [
+    ['สรุปวัสดุคงเหลือ'],
+    [info.schoolName || S.settings.SchoolName || ''],
+    ['ณ วันที่ ' + (info.reportDateThai || thaiDate(rd))],
     [],
-    ['ลำดับที่','ประเภทวัสดุ','ชนิดวัสดุ','รหัสวัสดุ','รายการวัสดุ','ขนาด/ลักษณะ','หน่วยนับ','ราคาต่อหน่วย','ยอดยกมา','จำนวนรับ','จำนวนเบิก','ยอดคงเหลือ','จำนวนเงิน','สถานที่จัดเก็บ']
+    ['ลำดับที่','ประเภทวัสดุ','จำนวนเงิน','หมายเหตุ']
   ];
-  data.forEach(r=> rows1.push([r.seq, r.Category, r.MaterialType, r.Code, r.Name, r.SizeSpec, r.Unit, r.UnitPrice, r.OpeningQty, r.PurchaseQty, r.UsedQty, r.RemainQty, r.Amount, r.StorageLocation]));
-  rows1.push(['','รวม','','','','','','', total.OpeningQty, total.PurchaseQty, total.UsedQty, total.RemainQty, total.Amount, '']);
-  rows1.push([]);
-  rows1.push(['หมายเหตุ :  การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี']);
-  const ws1 = A.aoa_to_sheet(rows1);
-  ws1['!merges'] = [merge(0,0,0,13), merge(1,0,1,13), merge(2,0,2,13), merge(rows1.length-1,0,rows1.length-1,13)];
-  ws1['!cols'] = [30,55,55,65,240,55,40,60,45,45,45,50,70,55].map(w=>({ wpx:w }));
-
-  // ---- Sheet 2 ----
-  const rows2 = [['สรุปวัสดุคงเหลือ'], [info.schoolName], ['ณ วันที่ ' + info.reportDateThai], [], ['ลำดับที่','ประเภทวัสดุ','จำนวนเงิน','หมายเหตุ']];
-  (rep.categorySummary || []).forEach((cs,i)=> rows2.push([i+1, cs.category, cs.totalAmount, '']));
-  rows2.push(['','วัสดุคงเหลือ', total.Amount, '']);
-  const ws2 = A.aoa_to_sheet(rows2);
-  ws2['!merges'] = [merge(0,0,0,3), merge(1,0,1,3), merge(2,0,2,3)];
-  ws2['!cols'] = [60,180,120,140].map(w=>({ wpx:w }));
-
-  // ---- Sheet 3 : Stock card ----
-  const head3 = ['ลำดับ','รายการวัสดุ','หน่วยนับ','ราคาต่อหน่วย','รายละเอียดรับเข้า','','','รายละเอียดจ่ายออก (วันที่)'];
-  for(let d=2; d<=daysInMonth; d++) head3.push('');
-  head3.push('รวม'); head3.push('ยอดคงเหลือ');
-  const head4 = ['','','','','ยอดยกมา','รับ','รวมยอด'];
-  for(let d=1; d<=daysInMonth; d++) head4.push(d);
-  head4.push('รวม'); head4.push('');
-  const rows3 = [['Stock Card  วัสดุ' + catTitle + '  ' + info.schoolName + ' ประจำเดือน ' + monthTitle], [], head3, head4];
-  data.forEach((r,idx)=>{
-    const op = parseFloat(r.OpeningQty) || 0, rec = parseFloat(r.PurchaseQty) || 0;
-    const row = [idx+1, r.Name, r.Unit, r.UnitPrice, op, rec > 0 ? rec : '', op + rec];
-    let sum = 0;
-    for(let d=1; d<=daysInMonth; d++){
-      const q = (dayOut[String(r.ID)] && dayOut[String(r.ID)][d]) || 0;
-      row.push(q > 0 ? q : ''); sum += q;
-    }
-    row.push(sum); row.push(r.RemainQty);
-    rows3.push(row);
+  (rep.categorySummary || []).forEach((cs, i)=>{
+    rowsSummary.push([i + 1, cs.category, cs.totalAmount, '']);
   });
-  rows3.push([]);
-  rows3.push(['หมายเหตุ : ยอดรับเมื่อวันที่ ...........................................................']);
-  rows3.push(['* คำแนะนำการพิมพ์ A4 แนวนอน: ไปที่ เมนูพิมพ์ (Print) > การตั้งค่ามาตราส่วน (Scaling) > เลือก "Fit All Columns on One Page" (ปรับทุกคอลัมน์ให้อยู่ใน 1 หน้า)']);
-  const totalCols = 7 + daysInMonth + 2;
-  const ws3 = A.aoa_to_sheet(rows3);
-  ws3['!merges'] = [
-    merge(0,0,0,totalCols-1),
-    merge(2,0,3,0), merge(2,1,3,1), merge(2,2,3,2), merge(2,3,3,3),
-    merge(2,4,2,6), merge(2,7,2,6+daysInMonth),
-    merge(2,7+daysInMonth,3,7+daysInMonth), merge(2,8+daysInMonth,3,8+daysInMonth),
-    merge(rows3.length-2,0,rows3.length-2,totalCols-1), merge(rows3.length-1,0,rows3.length-1,totalCols-1)
+  rowsSummary.push(['', 'วัสดุคงเหลือ', total.Amount || 0, '']);
+
+  const wsSummary = A.aoa_to_sheet(rowsSummary);
+  wsSummary['!merges'] = [merge(0,0,0,3), merge(1,0,1,3), merge(2,0,2,3)];
+  wsSummary['!cols'] = [60, 220, 130, 150].map(w=>({ wpx:w }));
+  A.book_append_sheet(wb, wsSummary, cleanSheetName(`สรุปงบ ปี ${fyShort}`, 'สรุปวัสดุคงเหลือ'));
+
+  // ---- Sheets 2..N: Separate sheet per category (14 columns each) ----
+  const cats = [];
+  if (info.category) {
+    cats.push(info.category);
+  } else if (rep.categorySummary && rep.categorySummary.length > 0) {
+    rep.categorySummary.forEach(cs => { if (!cats.includes(cs.category)) cats.push(cs.category); });
+  } else {
+    data.forEach(r => {
+      const c = r.Category || 'ทั่วไป';
+      if (!cats.includes(c)) cats.push(c);
+    });
+  }
+  if (cats.length === 0) cats.push('ทะเบียนวัสดุคงเหลือ');
+
+  const usedSheetNames = new Set([cleanSheetName(`สรุปงบ ปี ${fyShort}`, 'สรุปวัสดุคงเหลือ')]);
+
+  cats.forEach(catName => {
+    const catItems = (info.category || cats.length > 1)
+      ? data.filter(r => (r.Category || 'ทั่วไป') === catName)
+      : data;
+
+    if (catItems.length === 0 && cats.length > 1) return;
+
+    let cOpen = 0, cPurch = 0, cUsed = 0, cRemain = 0, cAmt = 0;
+    const catRows = [
+      ['รายงานการสำรวจทะเบียนวัสดุ' + (catName === 'ทะเบียนวัสดุคงเหลือ' ? '' : catName) + 'คงเหลือ'],
+      ['หน่วยงาน ' + (info.schoolName || S.settings.SchoolName || '')],
+      ['ปีงบประมาณ ' + info.fiscalYear + ' (ณ วันที่ ' + (info.reportDateThai || thaiDate(rd)) + ')'],
+      [],
+      ['ลำดับที่','ประเภทวัสดุ','ชนิดวัสดุ','รหัสวัสดุ','รายการวัสดุ','ขนาด/ลักษณะ','หน่วยนับ','ราคาต่อหน่วย','ยอดยกมา','จำนวนรับ','จำนวนเบิก','ยอดคงเหลือ','จำนวนเงิน','สถานที่จัดเก็บ']
+    ];
+
+    catItems.forEach((r, idx)=>{
+      cOpen   += parseFloat(r.OpeningQty) || 0;
+      cPurch  += parseFloat(r.PurchaseQty) || 0;
+      cUsed   += parseFloat(r.UsedQty) || 0;
+      cRemain += parseFloat(r.RemainQty) || 0;
+      cAmt    += parseFloat(r.Amount) || 0;
+
+      catRows.push([
+        idx + 1,
+        r.Category || '',
+        r.MaterialType || '',
+        r.Code || '',
+        r.Name || '',
+        r.SizeSpec || '',
+        r.Unit || '',
+        r.UnitPrice || 0,
+        r.OpeningQty || 0,
+        r.PurchaseQty || 0,
+        r.UsedQty || 0,
+        r.RemainQty || 0,
+        r.Amount || 0,
+        r.StorageLocation || ''
+      ]);
+    });
+
+    catRows.push(['', 'รวม', '', '', '', '', '', '', cOpen, cPurch, cUsed, cRemain, cAmt, '']);
+    catRows.push([]);
+    catRows.push(['หมายเหตุ :  การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี']);
+
+    const wsCat = A.aoa_to_sheet(catRows);
+    wsCat['!merges'] = [
+      merge(0,0,0,13),
+      merge(1,0,1,13),
+      merge(2,0,2,13),
+      merge(catRows.length-1, 0, catRows.length-1, 13)
+    ];
+    wsCat['!cols'] = [30,55,55,65,240,55,40,60,45,45,45,50,70,55].map(w=>({ wpx:w }));
+
+    let sheetTitle = cleanSheetName(catName, 'หมวดวัสดุ');
+    let counter = 1;
+    while (usedSheetNames.has(sheetTitle)) {
+      sheetTitle = cleanSheetName(`${catName}_${counter++}`, 'หมวดวัสดุ');
+    }
+    usedSheetNames.add(sheetTitle);
+    A.book_append_sheet(wb, wsCat, sheetTitle);
+  });
+
+  // ---- Optional Sheet: Stock card รายเดือน ----
+  if (data.length > 0) {
+    const head3 = ['ลำดับ','รายการวัสดุ','หน่วยนับ','ราคาต่อหน่วย','รายละเอียดรับเข้า','','','รายละเอียดจ่ายออก (วันที่)'];
+    for(let d=2; d<=daysInMonth; d++) head3.push('');
+    head3.push('รวม'); head3.push('ยอดคงเหลือ');
+    const head4 = ['','','','','ยอดยกมา','รับ','รวมยอด'];
+    for(let d=1; d<=daysInMonth; d++) head4.push(d);
+    head4.push('รวม'); head4.push('');
+    const rows3 = [['Stock Card  ' + (info.schoolName || '') + ' ประจำเดือน ' + monthTitle], [], head3, head4];
+    data.forEach((r,idx)=>{
+      const op = parseFloat(r.OpeningQty) || 0, rec = parseFloat(r.PurchaseQty) || 0;
+      const row = [idx+1, r.Name, r.Unit, r.UnitPrice, op, rec > 0 ? rec : '', op + rec];
+      let sum = 0;
+      for(let d=1; d<=daysInMonth; d++){
+        const q = (dayOut[String(r.ID)] && dayOut[String(r.ID)][d]) || 0;
+        row.push(q > 0 ? q : ''); sum += q;
+      }
+      row.push(sum); row.push(r.RemainQty);
+      rows3.push(row);
+    });
+    rows3.push([]);
+    rows3.push(['หมายเหตุ : ยอดรับเมื่อวันที่ ...........................................................']);
+    rows3.push(['* คำแนะนำการพิมพ์ A4 แนวนอน: ไปที่ เมนูพิมพ์ (Print) > การตั้งค่ามาตราส่วน (Scaling) > เลือก "Fit All Columns on One Page" (ปรับทุกคอลัมน์ให้อยู่ใน 1 หน้า)']);
+    const totalCols = 7 + daysInMonth + 2;
+    const ws3 = A.aoa_to_sheet(rows3);
+    ws3['!merges'] = [
+      merge(0,0,0,totalCols-1),
+      merge(2,0,3,0), merge(2,1,3,1), merge(2,2,3,2), merge(2,3,3,3),
+      merge(2,4,2,6), merge(2,7,2,6+daysInMonth),
+      merge(2,7+daysInMonth,3,7+daysInMonth), merge(2,8+daysInMonth,3,8+daysInMonth),
+      merge(rows3.length-2,0,rows3.length-2,totalCols-1), merge(rows3.length-1,0,rows3.length-1,totalCols-1)
+    ];
+    const cols3 = [35,250,45,60,50,45,50];
+    for(let d=1; d<=daysInMonth; d++) cols3.push(24);
+    cols3.push(50, 60);
+    ws3['!cols'] = cols3.map(w=>({ wpx:w }));
+    A.book_append_sheet(wb, ws3, 'Stock card');
+  }
+
+  XLSX.writeFile(wb, 'รายงานการสำรวจทะเบียนวัสดุคงเหลือ_' + info.fiscalYear + '_' + (info.reportDate || todayYMD()) + '.xlsx');
+}
+
+/**
+ * ส่งออกบัญชีพัสดุ (ทะเบียนคุมวัสดุ) เป็น Excel (.xlsx) ไม่มีโลโก้
+ */
+async function exportAccountXlsx(r){
+  await ensureXlsx();
+  const A = XLSX.utils;
+  const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
+  const t = r.total || {};
+  const schoolName = S.settings.SchoolName || 'มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง';
+  const fyText = r.fiscalYear ? `ปีงบประมาณ ${r.fiscalYear}` : '';
+  const rangeText = (r.filter && (r.filter.from || r.filter.to))
+    ? `ช่วง ${r.filter.from || '...'} ถึง ${r.filter.to || '...'}`
+    : 'ทั้งหมด';
+
+  const rows = [
+    ['บัญชีพัสดุ (ทะเบียนคุมวัสดุ)'],
+    ['หน่วยงาน ' + schoolName],
+    [(fyText ? fyText + ' • ' : '') + 'ข้อมูล ณ วันที่ ' + thaiDate(r.asOf) + ' (' + rangeText + ')'],
+    [],
+    ['รหัสพัสดุ','รายการพัสดุ','หมวดหมู่','ยอดยกมา','มูลค่ายกมา','จัดซื้อ','มูลค่าจัดซื้อ','ใช้ไป','มูลค่าใช้ไป','คงเหลือ','มูลค่าคงเหลือ','สถานะ']
   ];
-  const cols3 = [35,250,45,60,50,45,50];
-  for(let d=1; d<=daysInMonth; d++) cols3.push(24);
-  cols3.push(50, 60);
-  ws3['!cols'] = cols3.map(w=>({ wpx:w }));
+
+  (r.data || []).forEach(x=>{
+    rows.push([
+      x.Code || '',
+      x.Name || '',
+      x.Category || '-',
+      x.OpeningQty || 0,
+      x.OpeningAmount || 0,
+      x.PurchaseQty || 0,
+      x.PurchaseAmount || 0,
+      x.UsedQty || 0,
+      x.UsedAmount || 0,
+      x.RemainQty || 0,
+      x.RemainAmount || 0,
+      x.StockState || 'OK'
+    ]);
+  });
+
+  rows.push([
+    '', 'รวมทั้งสิ้น', '',
+    t.OpeningQty || 0, t.OpeningAmount || 0,
+    t.PurchaseQty || 0, t.PurchaseAmount || 0,
+    t.UsedQty || 0, t.UsedAmount || 0,
+    t.RemainQty || 0, t.RemainAmount || 0,
+    ''
+  ]);
+
+  const ws = A.aoa_to_sheet(rows);
+  ws['!merges'] = [merge(0,0,0,11), merge(1,0,1,11), merge(2,0,2,11)];
+  ws['!cols'] = [70,220,120,60,80,60,80,60,80,60,90,60].map(w=>({ wpx:w }));
 
   const wb = A.book_new();
-  A.book_append_sheet(wb, ws1, 'ทะเบียนวัสดุคงเหลือ');
-  A.book_append_sheet(wb, ws2, 'สรุปวัสดุคงเหลือ');
-  A.book_append_sheet(wb, ws3, 'Stock card');
-  XLSX.writeFile(wb, 'รายงานการสำรวจทะเบียนวัสดุคงเหลือ_' + info.fiscalYear + '_' + info.reportDate + '.xlsx');
+  A.book_append_sheet(wb, ws, 'บัญชีพัสดุ');
+  const filename = `บัญชีพัสดุ_${r.fiscalYear ? 'ปีงบ'+r.fiscalYear+'_' : ''}${r.asOf || todayYMD()}.xlsx`;
+  XLSX.writeFile(wb, filename);
 }
 const CHART_SRC = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
 const H5Q_SRC   = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
@@ -1817,6 +1952,13 @@ const MAT_DRAFT_KEY = () => 'mat_draft_' + (S?.user?.Username || 'default');
 function saveMatDraft_(){
   if ($('#mID') && $('#mID').value) return; // ไม่บันทึก draft เมื่ออยู่ในโหมดแก้ไขพัสดุเดิม
   const draft = {
+    ShopName: $('#mShopName')?.value || '',
+    ShopAddress: $('#mShopAddress')?.value || '',
+    ShopPhone: $('#mShopPhone')?.value || '',
+    ShopTaxId: $('#mShopTaxId')?.value || '',
+    BudgetSource: $('#mBudgetSource')?.value || '',
+    AcquiredDate: $('#mAcquiredDate')?.value || '',
+    OrderQty: $('#mOrderQty')?.value || '',
     Code: $('#mCode')?.value || '',
     Unit: $('#mUnit')?.value || '',
     Name: $('#mName')?.value || '',
@@ -1876,6 +2018,33 @@ function matModal(m){
         </button>
       </div>` : ''}
 
+      <!-- ข้อมูลร้านค้า / ผู้จำหน่าย (อยู่ช่องแรก) -->
+      <div class="p-4 rounded-3xl bg-slate-50 border border-slate-200/80 space-y-3">
+        <div class="flex items-center gap-2 text-slate-800 font-bold text-xs uppercase tracking-wider">
+          <i class="fa-solid fa-store text-brand-600"></i> ข้อมูลร้านค้า / ผู้จำหน่าย
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">ชื่อร้านค้า</label>
+            <input id="mShopName" value="${esc(formVals.ShopName || '')}" placeholder="เช่น บริษัท สวนดุสิต ซัพพลาย จำกัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">หมายเลขกำกับภาษี</label>
+            <input id="mShopTaxId" value="${esc(formVals.ShopTaxId || '')}" placeholder="เช่น 01055xxxxxxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">ที่อยู่ร้านค้า</label>
+            <input id="mShopAddress" value="${esc(formVals.ShopAddress || '')}" placeholder="เลขที่ ถนน ตำบล อำเภอ จังหวัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">เบอร์โทรศัพท์ร้านค้า</label>
+            <input id="mShopPhone" value="${esc(formVals.ShopPhone || '')}" placeholder="เช่น 02-xxx-xxxx, 08x-xxx-xxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+          </div>
+        </div>
+      </div>
+
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
           <div class="flex items-center justify-between mb-1.5">
@@ -1920,8 +2089,26 @@ function matModal(m){
           </select>
         </div>
         <div>
-          <label class="block text-sm font-bold text-slate-700 mb-1.5">ชนิดวัสดุ (ระบุเจาะจง)</label>
-          <input id="mType" value="${esc(formVals.MaterialType || formVals.Category || '')}" placeholder="เช่น วัสดุสำนักงาน, วัสดุงานช่าง" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">วันที่ได้มา</label>
+          <input id="mAcquiredDate" type="date" value="${esc(formVals.AcquiredDate || todayYMD())}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm">
+          <p class="mt-1 text-xs text-brand-600 font-semibold" id="mAcquiredDateTh">${thaiDate(formVals.AcquiredDate || todayYMD())}</p>
+          <input type="hidden" id="mType" value="${esc(formVals.MaterialType || formVals.Category || '')}">
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">แหล่งงบประมาณ</label>
+          <select id="mBudgetSource" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+            <option value="">-- เลือกแหล่งงบประมาณ --</option>
+            <option value="งบประมาณแผ่นดิน" ${(formVals.BudgetSource==='งบประมาณแผ่นดิน')?'selected':''}>งบประมาณแผ่นดิน</option>
+            <option value="เงินบริจาค" ${(formVals.BudgetSource==='เงินบริจาค')?'selected':''}>เงินบริจาค</option>
+            <option value="อื่นๆ" ${(formVals.BudgetSource==='อื่นๆ')?'selected':''}>อื่นๆ</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนที่สั่งซื้อ</label>
+          <input id="mOrderQty" type="number" min="0" step="1" value="${formVals.OrderQty !== undefined ? formVals.OrderQty : ''}" placeholder="เช่น 100" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
       </div>
 
@@ -1933,7 +2120,7 @@ function matModal(m){
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">สถานที่จัดเก็บ</label>
           <div class="relative" id="locCombobox">
-            <input id="mLoc" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น สนง.ศ.ลป., สนง.รร.สาธิต" autocomplete="off" class="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 transition outline-none text-sm text-slate-800">
+            <input id="mLoc" value="${esc(formVals.StorageLocation || '')}" placeholder="เช่น สนง.ศ.ลป., สนง.รร.สาธิต หรือพิมพ์สถานที่ใหม่" autocomplete="off" class="w-full pl-4 pr-10 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 transition outline-none text-sm text-slate-800">
             <button type="button" id="btnToggleLoc" class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 active:scale-95 transition" title="เลือกสถานที่จัดเก็บ" aria-label="เลือกสถานที่จัดเก็บ" tabindex="-1">
               <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" id="iconLocChevron"></i>
             </button>
@@ -1949,6 +2136,7 @@ function matModal(m){
               </div>
             </div>
           </div>
+          <p class="mt-1 text-[11px] text-slate-400">เลือกจากรายการหรือพิมพ์สถานที่ใหม่ลงในช่องได้ทันที</p>
         </div>
       </div>
 
@@ -2117,6 +2305,12 @@ function matModal(m){
         toast('info', 'ล้างข้อมูลแบบร่างเรียบร้อยแล้ว');
       });
     }
+  const acqDateInp = $('#mAcquiredDate');
+  if (acqDateInp) {
+    acqDateInp.addEventListener('change', e => {
+      const th = $('#mAcquiredDateTh');
+      if (th) th.textContent = thaiDate(e.target.value);
+    });
   }
 
   const selCat = $('#mCat');
@@ -2404,6 +2598,13 @@ function matModal(m){
         MaterialType: $('#mType').value.trim() || $('#mCat').value || '',
         SizeSpec: $('#mSize').value.trim(),
         StorageLocation: $('#mLoc').value.trim(),
+        ShopName: $('#mShopName')?.value.trim() || '',
+        ShopAddress: $('#mShopAddress')?.value.trim() || '',
+        ShopPhone: $('#mShopPhone')?.value.trim() || '',
+        ShopTaxId: $('#mShopTaxId')?.value.trim() || '',
+        BudgetSource: $('#mBudgetSource')?.value.trim() || '',
+        AcquiredDate: $('#mAcquiredDate')?.value.trim() || '',
+        OrderQty: parseFloat($('#mOrderQty')?.value || 0),
         OpeningQty: isEdit ? m.OpeningQty : parseFloat($('#mStock').value || 0),
         ImageUrl: newImageUrl || (isEdit ? (m.ImageUrl || '') : ''),
         FileUrl: newFileUrl || (isEdit ? (m.FileUrl || '') : ''),
@@ -3185,6 +3386,15 @@ async function viewAccount(){
       <div class="mt-5">${cardWrap('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)','fa-book', `
         <div class="mb-4 flex flex-wrap gap-3 items-end">
           <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">ปีงบประมาณ</label>
+            <select id="accFY" class="px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold bg-white text-slate-700">
+              <option value="">-- ทุกปีงบประมาณ --</option>
+              ${[currentFY+1, currentFY, currentFY-1, currentFY-2].map(y => `
+                <option value="${y}" ${String(r.fiscalYear)===String(y)?'selected':''}>ปีงบประมาณ ${y}</option>
+              `).join('')}
+            </select>
+          </div>
+          <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">จากวันที่</label>
             <input id="accFrom" type="date" value="${esc((r.filter&&r.filter.from)||'')}" class="px-4 py-2.5 rounded-2xl border border-slate-200 text-sm">
           </div>
@@ -3192,10 +3402,13 @@ async function viewAccount(){
             <label class="block text-xs font-bold text-slate-600 mb-1">ถึงวันที่</label>
             <input id="accTo" type="date" value="${esc((r.filter&&r.filter.to)||'')}" class="px-4 py-2.5 rounded-2xl border border-slate-200 text-sm">
           </div>
-          <button type="button" id="btnAccFilter" class="px-4 py-2.5 rounded-2xl bg-brand-600 text-white text-sm font-bold hover:brightness-110 transition">
+          <button type="button" id="btnAccFilter" class="px-4 py-2.5 rounded-2xl bg-brand-600 text-white text-sm font-bold hover:brightness-110 active:scale-95 transition">
             <i class="fa-solid fa-filter"></i> กรอง
           </button>
           <button type="button" id="btnAccReset" class="px-4 py-2.5 rounded-2xl bg-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-300 transition">ล้าง</button>
+          <button type="button" id="btnExportAccExcel" class="px-4 py-2.5 rounded-2xl bg-emerald-700 text-white text-sm font-bold hover:brightness-110 active:scale-95 transition flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-file-excel"></i> ส่งออก Excel
+          </button>
           <button type="button" id="btnPrintAcc" class="px-4 py-2.5 rounded-2xl bg-slate-800 text-white text-sm font-bold hover:bg-slate-700 transition">
             <i class="fa-solid fa-print"></i> พิมพ์
           </button>
@@ -3257,7 +3470,9 @@ async function viewAccount(){
 
     $('#btnAccFilter').addEventListener('click', async ()=>{
       showLoader('กำลังกรองข้อมูล...');
+      const selFY = $('#accFY')?.value ? parseInt($('#accFY').value, 10) : '';
       const res = await api('apiGetInventoryAccount', {
+        fiscalYear: selFY,
         from: $('#accFrom').value || '',
         to: $('#accTo').value || ''
       });
@@ -3268,16 +3483,17 @@ async function viewAccount(){
 
     $('#btnAccReset').addEventListener('click', async ()=>{
       showLoader('กำลังโหลด...');
-      const res = await api('apiGetInventoryAccount', {});
+      const res = await api('apiGetInventoryAccount', { fiscalYear: currentFY });
       hideLoader();
       if(!res.ok) return alertErr(res.message);
       renderAccount(res);
     });
 
+    $('#btnExportAccExcel').addEventListener('click', ()=> exportAccountXlsx(S.cache.accountLast || r));
     $('#btnPrintAcc').addEventListener('click', ()=> printAccount(S.cache.accountLast || r));
   };
 
-  const res = await api('apiGetInventoryAccount', {});
+  const res = await api('apiGetInventoryAccount', { fiscalYear: currentFY });
   if(!res.ok) return (c.innerHTML = emptyBox(res.message));
   renderAccount(res);
 }
@@ -3713,7 +3929,7 @@ async function viewSettings(){
       </div>
 
       <div class="mt-2 p-5 rounded-3xl bg-slate-50 border border-slate-200">
-        <h4 class="font-extrabold text-slate-800 mb-4"><i class="fa-solid fa-bell text-brand-600"></i> การแจ้งเตือน (Email + Telegram)</h4>
+        <h4 class="font-extrabold text-slate-800 mb-4"><i class="fa-solid fa-bell text-brand-600"></i> การแจ้งเตือน (Email + Telegram + LINE)</h4>
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-bold text-slate-700 mb-1.5">อีเมลรับแจ้งเตือน (คั่นด้วย ,)</label>
@@ -3738,6 +3954,21 @@ async function viewSettings(){
               </div>
               <input id="fTgChat" value="${esc(d.TelegramChatId||'')}" placeholder="-100xxxxxxxxxx หรือ user id" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white">
             </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-sm font-bold text-slate-700">LINE Notify Token</label>
+              <button type="button" id="btnTestLine" class="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 transition">
+                <i class="fa-brands fa-line text-base text-emerald-500"></i> ทดสอบส่งข้อความ LINE
+              </button>
+            </div>
+            <div class="relative">
+              <input id="fLineToken" type="password" autocomplete="off" value="${esc(d.LineToken||'')}" placeholder="ใส่ LINE Notify Token" class="w-full pl-4 pr-11 py-3 rounded-2xl border border-slate-200 bg-white">
+              <button type="button" id="toggleLineToken" aria-label="แสดงหรือซ่อน LINE Token" class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition flex items-center justify-center">
+                <i class="fa-regular fa-eye"></i>
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">รับ Token ได้จาก <a href="https://notify-bot.line.me" target="_blank" rel="noopener" class="text-brand-600 underline">notify-bot.line.me</a> (แจ้งเตือนเมื่อมีใบขอเบิกใหม่ หรือเปลี่ยนสถานะ)</p>
           </div>
           <div class="flex flex-wrap gap-4 text-sm">
             <label class="flex items-center gap-2 cursor-pointer">
@@ -3826,6 +4057,17 @@ async function viewSettings(){
     });
   }
 
+  const btnLineToggle = $('#toggleLineToken');
+  if(btnLineToggle){
+    btnLineToggle.addEventListener('click', ()=>{
+      const input = $('#fLineToken');
+      if(!input) return;
+      const isPass = input.type === 'password';
+      input.type = isPass ? 'text' : 'password';
+      btnLineToggle.innerHTML = isPass ? '<i class="fa-regular fa-eye-slash"></i>' : '<i class="fa-regular fa-eye"></i>';
+    });
+  }
+
   const btnTestTg = $('#btnTestTg');
   if(btnTestTg){
     btnTestTg.addEventListener('click', async ()=>{
@@ -3839,6 +4081,21 @@ async function viewSettings(){
       hideLoader();
       if(!res.ok) return alertErr(res.message);
       await alertOk('ส่งข้อความทดสอบไปยัง Telegram สำเร็จแล้ว! ตรวจสอบในห้องแชท Telegram ได้เลย');
+    });
+  }
+
+  const btnTestLine = $('#btnTestLine');
+  if(btnTestLine){
+    btnTestLine.addEventListener('click', async ()=>{
+      const token = ($('#fLineToken')?.value || '').trim();
+      if(!token){
+        return alertErr('กรุณากรอก LINE Notify Token ก่อนทดสอบ');
+      }
+      showLoader('กำลังส่งข้อความทดสอบไปยัง LINE...');
+      const res = await api('apiTestLine', { token });
+      hideLoader();
+      if(!res.ok) return alertErr(res.message);
+      await alertOk('ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว! ตรวจสอบในกลุ่มหรือแชท LINE ได้เลย');
     });
   }
 
@@ -3859,6 +4116,7 @@ async function viewSettings(){
         NotifyEmail: $('#fNotifyEmail').value.trim(),
         TelegramBotToken: $('#fTgToken').value.trim(),
         TelegramChatId: $('#fTgChat').value.trim(),
+        LineToken: $('#fLineToken')?.value.trim() || '',
         NotifyOnNewRequest: $('#fOnNew').checked ? 'YES' : 'NO',
         NotifyOnStatusChange: $('#fOnStatus').checked ? 'YES' : 'NO',
         NotifyLowStock: $('#fOnLow').checked ? 'YES' : 'NO'
@@ -5431,10 +5689,10 @@ function myReqTable(list, full, key){
 /* =================================================================================
  *  PRINT (ฟอร์มมาตรฐานเอกสารราชการ)
  * ================================================================================= */
-function printHeader(title){
+function printHeader(title, hideLogo = false){
   const s = S.settings;
   return `<div style="text-align:center;margin-bottom:10px">
-    ${s.LogoUrl?`<img src="${esc(s.LogoUrl)}" style="display:block;margin:0 auto;height:70px;object-fit:contain" onerror="this.style.display='none'">`:''}
+    ${(!hideLogo && s.LogoUrl)?`<img src="${esc(s.LogoUrl)}" style="display:block;margin:0 auto;height:70px;object-fit:contain" onerror="this.style.display='none'">`:''}
     <div style="font-size:20px;font-weight:700;margin-top:4px">${esc(title)}</div>
     <div style="font-size:16px;font-weight:600">${esc(s.SchoolName||'')}</div>
     <div style="font-size:14px">${esc(s.Affiliation||'')}</div>
@@ -5532,7 +5790,7 @@ function printLowStock(rows){
 function printAccount(r){
   const t = r.total;
   doPrint(`<div>
-    ${printHeader('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)')}
+    ${printHeader('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)', true)}
     <div style="font-size:12px;text-align:right;margin-bottom:6px">ข้อมูล ณ วันที่ ${thaiDate(r.asOf)}</div>
     <table class="acct-table">
       <colgroup>

@@ -252,11 +252,11 @@ describe('dashboards', () => {
     expect(r.data.map((x: any) => x.Code)).toEqual(['H-1', 'P-1', 'P-2']);
     expect(r.data[1]).toMatchObject({
       OpeningQty: 5, OpeningAmount: 50, PurchaseQty: 15, PurchaseAmount: 150,
-      UsedQty: 5, UsedAmount: 50, RemainQty: 20, RemainAmount: 200, StockState: 'OK',
+      UsedQty: 5, UsedAmount: 50, RemainQty: 15, RemainAmount: 150, StockState: 'OK',
     });
-    expect(r.data[2].StockState).toBe('LOW');
-    expect(r.total).toMatchObject({ OpeningQty: 13, PurchaseQty: 35, UsedQty: 14, RemainQty: 30, RemainAmount: 960 });
-    expect(r.summary).toEqual({ totalMaterials: 3, remainValue: 960, usedValue: r.total.UsedAmount, lowStock: 1 });
+    expect(r.data[2].StockState).toBe('OK');
+    expect(r.total).toMatchObject({ OpeningQty: 13, PurchaseQty: 35, UsedQty: 14, RemainQty: 34, RemainAmount: 1730 });
+    expect(r.summary).toEqual({ totalMaterials: 3, remainValue: 1730, usedValue: r.total.UsedAmount, lowStock: 0 });
     expect(r.filter).toEqual({ from: '2025-10-01', to: '2026-09-30' });
   });
 });
