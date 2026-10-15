@@ -4191,25 +4191,22 @@ async function viewSettings(){
           </div>
           <div>
             <div class="flex items-center justify-between mb-1.5">
-              <label class="block text-sm font-bold text-slate-700">LINE Notify Token</label>
+              <label class="block text-sm font-bold text-slate-700">LINE Webhook URL</label>
               <button type="button" id="btnTestLine" class="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 transition">
                 <i class="fa-brands fa-line text-base text-emerald-500"></i> ทดสอบส่งข้อความ LINE
               </button>
             </div>
             <div class="relative">
-              <input id="fLineToken" type="password" autocomplete="off" value="${esc(d.LineToken||'')}" placeholder="ใส่ LINE Notify Token" class="w-full pl-4 pr-11 py-3 rounded-2xl border border-slate-200 bg-white">
+              <input id="fLineToken" type="password" autocomplete="off" value="${esc(d.LineToken||'')}" placeholder="https://..." class="w-full pl-4 pr-11 py-3 rounded-2xl border border-slate-200 bg-white">
               <button type="button" id="toggleLineToken" aria-label="แสดงหรือซ่อน LINE Token" class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition flex items-center justify-center">
                 <i class="fa-regular fa-eye"></i>
               </button>
             </div>
-            <p class="text-[11px] text-slate-400 mt-1">รับ Token ได้จาก <a href="https://notify-bot.line.me" target="_blank" rel="noopener" class="text-brand-600 underline">notify-bot.line.me</a> (แจ้งเตือนเมื่อมีใบขอเบิกใหม่ หรือเปลี่ยนสถานะ)</p>
+            <p class="text-[11px] text-slate-400 mt-1">ระบบจะส่งข้อมูลใบขอเบิกใหม่ (เลขที่, ผู้ขอเบิก, แผนก, วัตถุประสงค์) ไปยัง URL นี้แบบ JSON ต้องขึ้นต้นด้วย https://</p>
           </div>
           <div class="flex flex-wrap gap-4 text-sm">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="fOnNew" ${d.NotifyOnNewRequest!=='NO'?'checked':''} class="w-4 h-4 accent-brand-600"> แจ้งเมื่อมีใบขอเบิกใหม่
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="fOnStatus" ${d.NotifyOnStatusChange!=='NO'?'checked':''} class="w-4 h-4 accent-brand-600"> แจ้งเมื่อเปลี่ยนสถานะ
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="fOnLow" ${d.NotifyLowStock!=='NO'?'checked':''} class="w-4 h-4 accent-brand-600"> แจ้งสต็อกต่ำ (รายวัน)
@@ -4323,7 +4320,7 @@ async function viewSettings(){
     btnTestLine.addEventListener('click', async ()=>{
       const token = ($('#fLineToken')?.value || '').trim();
       if(!token){
-        return alertErr('กรุณากรอก LINE Notify Token ก่อนทดสอบ');
+        return alertErr('กรุณากรอก LINE Webhook URL ก่อนทดสอบ');
       }
       showLoader('กำลังส่งข้อความทดสอบไปยัง LINE...');
       const res = await api('apiTestLine', { token });
@@ -4352,7 +4349,7 @@ async function viewSettings(){
         TelegramChatId: $('#fTgChat').value.trim(),
         LineToken: $('#fLineToken')?.value.trim() || '',
         NotifyOnNewRequest: $('#fOnNew').checked ? 'YES' : 'NO',
-        NotifyOnStatusChange: $('#fOnStatus').checked ? 'YES' : 'NO',
+        NotifyOnStatusChange: d.NotifyOnStatusChange || 'NO',
         NotifyLowStock: $('#fOnLow').checked ? 'YES' : 'NO'
       });
       hideLoader();

@@ -595,27 +595,24 @@ function getNotifyConfig_(){
   };
 }
 
-function sendLineNotify_(token, message){
-  if(!token) return { ok: false, message: 'กรุณาระบุ LINE Notify Token' };
+// LINE Notify ปิดบริการแล้ว: ส่ง JSON ไปยัง LINE Webhook URL ที่ตั้งค่าไว้ (URL เป็นความลับ ห้าม log)
+function sendLineWebhook_(url, payload){
+  const u = String(url || '').trim();
+  if(!u) return { ok: false, message: 'กรุณาระบุ LINE Webhook URL' };
+  if(!/^https:\/\//i.test(u)) return { ok: false, message: 'LINE Webhook URL ต้องขึ้นต้นด้วย https://' };
   try{
-    const url = 'https://notify-api.line.me/api/notify';
-    const options = {
+    const response = UrlFetchApp.fetch(u, {
       method: 'post',
-      headers: {
-        'Authorization': 'Bearer ' + String(token).trim()
-      },
-      payload: {
-        message: message
-      },
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
       muteHttpExceptions: true
-    };
-    const response = UrlFetchApp.fetch(url, options);
+    });
     const code = response.getResponseCode();
     if(code >= 200 && code < 300) return { ok: true, message: 'ส่งข้อความสำเร็จ' };
-    return { ok: false, message: 'LINE API Error (' + code + '): ' + response.getContentText() };
+    return { ok: false, message: 'LINE Webhook Error (' + code + ')' };
   }catch(e){
-    console.error('Line error: ' + e);
-    return { ok: false, message: String(e) };
+    console.error('Line webhook error');
+    return { ok: false, message: 'ส่งข้อความ LINE ไม่สำเร็จ' };
   }
 }
 
@@ -626,14 +623,9 @@ function apiTestLine(payload){
     else if(typeof payload === 'string') token = payload.trim();
     const s = getSettingsObj_();
     token = token || s.LineToken;
-    if(!token) return { ok: false, message: 'กรุณากรอก LINE Notify Token ก่อนทดสอบ' };
-    const testMsg = '\n🔔 ทดสอบการเชื่อมต่อ LINE Notify\n' +
-      '━━━━━━━━━━━━━━━━━━━\n' +
-      '🏫 ระบบ: ' + (s.SchoolName || 'ระบบเบิกจ่ายพัสดุ') + '\n' +
-      '📅 เวลาทดสอบ: ' + thaiDateFull_(todayStr_()) + '\n' +
-      '🟢 สถานะ: ส่งข้อความสำเร็จเรียบร้อยแล้ว!\n' +
-      '━━━━━━━━━━━━━━━━━━━';
-    const res = sendLineNotify_(token, testMsg);
+    if(!token) return { ok: false, message: 'กรุณากรอก LINE Webhook URL ก่อนทดสอบ' };
+    const testMsg = '🔔 ทดสอบการเชื่อมต่อ LINE\nระบบ: ' + (s.SchoolName || 'ระบบเบิกจ่ายพัสดุ') + '\nเวลาทดสอบ: ' + thaiDateFull_(todayStr_());
+    const res = sendLineWebhook_(token, { event: 'test', message: testMsg });
     if(res && res.ok === false) return res;
     return { ok: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว' };
   }catch(err){ return { ok: false, message: String(err) }; }
@@ -653,39 +645,22 @@ function notifyNewRequest_(req){
     <p style="color:#0284c7">กรุณาเข้าสู่ระบบเพื่อตรวจสอบและอนุมัติ</p></div>`;
   sendEmailNotify_(cfg.emails, subject, html);
 
-  let itemListText = '';
-  if(Array.isArray(req.Items) && req.Items.length > 0){
-    itemListText = '\n\n📦 <b>รายการพัสดุที่ขอเบิก:</b>\n' + req.Items.map((it, idx) => {
-      const name = it.MaterialName || it.Name || it.Code || 'พัสดุ';
-      const qty = Number(it.Qty || 1).toLocaleString('th-TH');
-      const unit = it.Unit || 'หน่วย';
-      const remark = it.Remark ? ` <i>(${it.Remark})</i>` : '';
-      return `${idx + 1}. ${name} (${qty} ${unit})${remark}`;
-    }).join('\n');
-  }
-
-  const reqDate = req.RequestDate ? (thaiDateFull_(req.RequestDate) || req.RequestDate) : thaiDateFull_(todayStr_());
-  const attachText = req.AttachUrl ? `\n📎 <b>ไฟล์แนบ:</b> <a href="${req.AttachUrl}">ดูเอกสารแนบ</a>` : '';
-  const noteText = req.Note ? `\n💬 <b>หมายเหตุ:</b> ${req.Note}` : '';
-
+  // ข้อความ Telegram แบบสั้น (ไม่มีรายการพัสดุ/หมายเหตุ/ไฟล์แนบ) ให้ตรงกับฝั่ง Cloudflare
   const tg = `🔔 <b>มีใบขอเบิกพัสดุใหม่</b>\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
     `📄 <b>เลขที่:</b> <code>${req.DocNo}</code>\n` +
-    `📅 <b>วันที่ขอเบิก:</b> ${reqDate}\n` +
-    `👤 <b>ผู้ขอเบิก:</b> ${req.FullName}${req.Position ? ' ('+req.Position+')' : ''}\n` +
+    `👤 <b>ผู้ขอเบิก:</b> ${req.FullName}\n` +
     `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${req.Department || '-'}\n` +
-    `🎯 <b>มีความจำเป็นต้องเบิกพัสดุเพื่อ:</b> ${req.Purpose || '-'}\n` +
-    `💰 <b>มูลค่ารวม:</b> ${Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2})} บาท\n` +
-    `📊 <b>จำนวน:</b> ${req.ItemCount} รายการ` +
-    itemListText +
-    noteText +
-    attachText + `\n━━━━━━━━━━━━━━━━━━━\n` +
-    `⏳ <i>สถานะ: รอการอนุมัติ</i>`;
+    `🎯 <b>วัตถุประสงค์:</b> ${req.Purpose || '-'}\n` +
+    `📊 <b>จำนวน:</b> ${req.ItemCount} รายการ | <b>มูลค่ารวม:</b> ${Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2})} บาท`;
   if(cfg.botToken && cfg.chatId) sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
 
   if(cfg.lineToken){
-    const lineMsg = '\n📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + (req.Position ? ' ('+req.Position+')' : '') + '\nฝ่าย/แผนก: ' + (req.Department||'-') + '\nวัตถุประสงค์: ' + (req.Purpose||'-') + '\nจำนวน: ' + req.ItemCount + ' รายการ';
-    sendLineNotify_(cfg.lineToken, lineMsg);
+    sendLineWebhook_(cfg.lineToken, {
+      event: 'new_request',
+      message: '📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + '\nแผนก: ' + (req.Department||'-') + '\nวัตถุประสงค์: ' + (req.Purpose||'-') + '\nจำนวน: ' + req.ItemCount + ' รายการ | มูลค่ารวม: ' + Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2}) + ' บาท',
+      docNo: req.DocNo, fullName: req.FullName, department: req.Department || '', purpose: req.Purpose || '',
+      itemCount: req.ItemCount, totalAmount: req.TotalAmount
+    });
   }
 }
 
@@ -695,7 +670,8 @@ function notifyStatusChange_(req, newStatus, reason){
   const users = readAll_(SHEETS.USERS);
   const user = users.find(u => String(u.ID) === String(req.UserID));
   const userEmail = (user && user.Email) ? user.Email : '';
-  if(!userEmail && !(cfg.botToken && cfg.chatId) && !cfg.lineToken) return;
+  // ส่งเฉพาะอีเมลถึงผู้ขอเบิก ส่วน Telegram/LINE ไม่แจ้งเมื่อเปลี่ยนสถานะ
+  if(!userEmail) return;
 
   const statusTh = newStatus === 'APPROVED' ? 'อนุมัติแล้ว ✅' : newStatus === 'REJECTED' ? 'ถูกปฏิเสธ ❌' : (newStatus === 'CANCELLED' ? 'ยกเลิกแล้ว ⚪' : newStatus);
   const subject = '[' + cfg.schoolName + '] สถานะใบขอเบิก ' + req.DocNo + ' → ' + statusTh;
@@ -703,42 +679,7 @@ function notifyStatusChange_(req, newStatus, reason){
     <h3>สถานะใบขอเบิกของคุณเปลี่ยนแล้ว</h3>
     <p><b>เลขที่:</b> ${req.DocNo}<br><b>สถานะใหม่:</b> ${statusTh}<br>
     ${reason ? '<b>เหตุผล:</b> '+reason+'<br>' : ''}<b>วันที่:</b> ${todayStr_()}</p></div>`;
-  if(userEmail) sendEmailNotify_(userEmail, subject, html);
-
-  // ดึงรายการพัสดุประกอบการแจ้งเตือน
-  let itemListText = '';
-  try {
-    const items = readAll_(SHEETS.REQUEST_ITEMS).filter(it => String(it.RequestID) === String(req.ID));
-    if(items.length > 0){
-      itemListText = '\n\n📦 <b>รายการพัสดุ:</b>\n' + items.map((it, idx) => {
-        const name = it.MaterialName || it.Name || it.Code || 'พัสดุ';
-        const qty = Number(it.Qty || 1).toLocaleString('th-TH');
-        const unit = it.Unit || 'หน่วย';
-        const remark = it.Remark ? ` <i>(${it.Remark})</i>` : '';
-        return `${idx + 1}. ${name} (${qty} ${unit})${remark}`;
-      }).join('\n');
-    }
-  } catch(_) {}
-
-  const statusHeader = newStatus === 'APPROVED' ? '✅ <b>อนุมัติใบขอเบิกพัสดุ</b>' : (newStatus === 'REJECTED' ? '❌ <b>ปฏิเสธใบขอเบิกพัสดุ</b>' : '📋 <b>อัปเดตสถานะใบขอเบิก</b>');
-  const reqDate = req.RequestDate ? (thaiDateFull_(req.RequestDate) || req.RequestDate) : '';
-  const tg = `${statusHeader}\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
-    `📄 <b>เลขที่:</b> <code>${req.DocNo}</code>\n` +
-    (reqDate ? `📅 <b>วันที่ขอเบิก:</b> ${reqDate}\n` : '') +
-    `👤 <b>ผู้ขอเบิก:</b> ${req.FullName}${req.Position ? ' ('+req.Position+')' : ''}\n` +
-    `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${req.Department || '-'}\n` +
-    `📊 <b>สถานะ:</b> <b>${statusTh}</b>` +
-    (reason ? `\n💬 <b>เหตุผล/หมายเหตุ:</b> ${reason}` : '') +
-    itemListText +
-    `\n📅 <b>วันที่ดำเนินการ:</b> ${thaiDateFull_(todayStr_())}\n` +
-    `━━━━━━━━━━━━━━━━━━━`;
-  if(cfg.botToken && cfg.chatId) sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
-
-  if(cfg.lineToken){
-    const lineMsg = '\n📢 อัปเดตสถานะใบขอเบิก\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + '\nสถานะใหม่: ' + statusTh + (reason ? '\nเหตุผล: ' + reason : '');
-    sendLineNotify_(cfg.lineToken, lineMsg);
-  }
+  sendEmailNotify_(userEmail, subject, html);
 }
 
 /**

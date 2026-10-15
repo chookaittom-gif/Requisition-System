@@ -1,5 +1,4 @@
 import type { Env } from '../env';
-import { todayBkk } from './time';
 
 export interface TelegramResult {
   ok: boolean;
@@ -86,78 +85,16 @@ export async function getNotifyConfig(env: Env): Promise<NotifyConfig> {
 
 type Obj = Record<string, unknown>;
 
-const num = (v: unknown): string => Number(v || 1).toLocaleString('th-TH');
-
-function itemLines(items: Obj[]): string {
-  return items
-    .map((it, idx) => {
-      const name = esc(it.MaterialName || it.Name || it.Code || 'พัสดุ');
-      const unit = esc(it.Unit || 'หน่วย');
-      const remark = it.Remark ? ` <i>(${esc(it.Remark)})</i>` : '';
-      return `${idx + 1}. ${name} (${num(it.Qty)} ${unit})${remark}`;
-    })
-    .join('\n');
-}
-
-/** Legacy notifyNewRequest_ Telegram text. */
+/** New-request Telegram text: short on purpose (no item list, note or attachment). */
 export function newRequestText(req: Obj): string {
-  const itemListText =
-    Array.isArray(req.Items) && req.Items.length > 0
-      ? '\n\n📦 <b>รายการพัสดุที่ขอเบิก:</b>\n' + itemLines(req.Items as Obj[])
-      : '';
-  const reqDate = req.RequestDate ? thaiDateFull(String(req.RequestDate)) || String(req.RequestDate) : thaiDateFull(todayBkk());
-  const attachText = req.AttachUrl
-    ? `\n📎 <b>ไฟล์แนบ:</b> <a href="${esc(req.AttachUrl).replace(/"/g, '&quot;')}">ดูเอกสารแนบ</a>`
-    : '';
-  const noteText = req.Note ? `\n💬 <b>หมายเหตุ:</b> ${esc(req.Note)}` : '';
+  const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
   return (
     `🔔 <b>มีใบขอเบิกพัสดุใหม่</b>\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
     `📄 <b>เลขที่:</b> <code>${esc(req.DocNo)}</code>\n` +
-    `📅 <b>วันที่ขอเบิก:</b> ${reqDate}\n` +
-    `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}${req.Position ? ' (' + esc(req.Position) + ')' : ''}\n` +
+    `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}\n` +
     `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${esc(req.Department || '-')}\n` +
-    `🎯 <b>มีความจำเป็นต้องเบิกพัสดุเพื่อ:</b> ${esc(req.Purpose || '-')}\n` +
-    `💰 <b>มูลค่ารวม:</b> ${Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\n` +
-    `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ` +
-    itemListText +
-    noteText +
-    attachText +
-    `\n━━━━━━━━━━━━━━━━━━━\n` +
-    `⏳ <i>สถานะ: รอการอนุมัติ</i>`
-  );
-}
-
-/** Legacy notifyStatusChange_ Telegram text. */
-export function statusChangeText(req: Obj, newStatus: string, reason: string, items: Obj[]): string {
-  const statusTh =
-    newStatus === 'APPROVED'
-      ? 'อนุมัติแล้ว ✅'
-      : newStatus === 'REJECTED'
-        ? 'ถูกปฏิเสธ ❌'
-        : newStatus === 'CANCELLED'
-          ? 'ยกเลิกแล้ว ⚪'
-          : newStatus;
-  const itemListText = items.length > 0 ? '\n\n📦 <b>รายการพัสดุ:</b>\n' + itemLines(items) : '';
-  const statusHeader =
-    newStatus === 'APPROVED'
-      ? '✅ <b>อนุมัติใบขอเบิกพัสดุ</b>'
-      : newStatus === 'REJECTED'
-        ? '❌ <b>ปฏิเสธใบขอเบิกพัสดุ</b>'
-        : '📋 <b>อัปเดตสถานะใบขอเบิก</b>';
-  const reqDate = req.RequestDate ? thaiDateFull(String(req.RequestDate)) || String(req.RequestDate) : '';
-  return (
-    `${statusHeader}\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
-    `📄 <b>เลขที่:</b> <code>${esc(req.DocNo)}</code>\n` +
-    (reqDate ? `📅 <b>วันที่ขอเบิก:</b> ${reqDate}\n` : '') +
-    `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}${req.Position ? ' (' + esc(req.Position) + ')' : ''}\n` +
-    `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${esc(req.Department || '-')}\n` +
-    `📊 <b>สถานะ:</b> <b>${statusTh}</b>` +
-    (reason ? `\n💬 <b>เหตุผล/หมายเหตุ:</b> ${esc(reason)}` : '') +
-    itemListText +
-    `\n📅 <b>วันที่ดำเนินการ:</b> ${thaiDateFull(todayBkk())}\n` +
-    `━━━━━━━━━━━━━━━━━━━`
+    `🎯 <b>วัตถุประสงค์:</b> ${esc(req.Purpose || '-')}\n` +
+    `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`
   );
 }
 

@@ -4,41 +4,24 @@ export interface LineResult {
 }
 
 /**
- * Send notification via LINE Notify API.
- * Never throws; returns { ok, message }.
+ * POST a JSON notification to the LINE webhook URL saved in settings (LINE Notify has been shut down).
+ * The URL is a secret: it is never logged or returned in error messages. Never throws; returns { ok, message }.
  */
-export async function sendLineNotify(token: string, message: string): Promise<LineResult> {
-  const trimmed = String(token || '').trim();
-  if (!trimmed) return { ok: false, message: 'กรุณาระบุ LINE Notify Token' };
+export async function sendLineWebhook(url: string, payload: Record<string, unknown>): Promise<LineResult> {
+  const trimmed = String(url || '').trim();
+  if (!trimmed) return { ok: false, message: 'กรุณาระบุ LINE Webhook URL' };
+  if (!/^https:\/\//i.test(trimmed)) return { ok: false, message: 'LINE Webhook URL ต้องขึ้นต้นด้วย https://' };
 
   try {
-    const body = new URLSearchParams();
-    body.append('message', message);
-
-    const resp = await fetch('https://notify-api.line.me/api/notify', {
+    const resp = await fetch(trimmed, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${trimmed}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-
-    if (resp.status >= 200 && resp.status < 300) {
-      return { ok: true, message: 'ส่งข้อความสำเร็จ' };
-    }
-
-    let errMsg = `LINE API Error (${resp.status})`;
-    const content = await resp.text().catch(() => '');
-    try {
-      const parsed = JSON.parse(content) as { message?: string } | null;
-      if (parsed?.message) errMsg += `: ${parsed.message}`;
-    } catch {
-      if (content) errMsg += `: ${content.substring(0, 100)}`;
-    }
-    return { ok: false, message: errMsg };
+    if (resp.status >= 200 && resp.status < 300) return { ok: true, message: 'ส่งข้อความสำเร็จ' };
+    return { ok: false, message: `LINE Webhook Error (${resp.status})` };
   } catch (err) {
-    console.error('LINE notify error', (err as Error)?.name);
+    console.error('LINE webhook error', (err as Error)?.name);
     return { ok: false, message: 'ส่งข้อความ LINE ไม่สำเร็จ' };
   }
 }

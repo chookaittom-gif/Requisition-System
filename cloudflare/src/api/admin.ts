@@ -10,9 +10,8 @@ import {
   maskToken,
   newRequestText,
   sendTelegram,
-  statusChangeText,
 } from '../lib/telegram';
-import { sendLineNotify } from '../lib/line';
+import { sendLineWebhook } from '../lib/line';
 import { nowBkk } from '../lib/time';
 import { eqUsername } from '../lib/username';
 import { registerRpc } from '../rpc';
@@ -23,44 +22,22 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const str = (v: unknown): string => String(v ?? '').trim();
 
 /* ============================== NOTIFICATION HOOKS ============================== */
+// Only new requests are announced; status changes (approve/reject/cancel) send nothing.
 notifyHooks.onNewRequest = async (env, req) => {
   const row = await env.DB.prepare('SELECT line_token FROM settings WHERE id = 1').first<Obj>();
-  const lineToken = String(row?.line_token ?? '');
+  const lineUrl = String(row?.line_token ?? '');
   const cfg = await getNotifyConfig(env);
   if (cfg.onNewRequest) {
     if (cfg.token && cfg.chatId) {
       await sendTelegram(cfg.token, cfg.chatId, newRequestText(req));
     }
-    if (lineToken) {
-      const lineMsg = `\n📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}`;
-      await sendLineNotify(lineToken, lineMsg);
-    }
-  }
-};
-
-notifyHooks.onStatusChange = async (env, req, newStatus, reason) => {
-  const row = await env.DB.prepare('SELECT line_token FROM settings WHERE id = 1').first<Obj>();
-  const lineToken = String(row?.line_token ?? '');
-  const cfg = await getNotifyConfig(env);
-  if (cfg.onStatusChange) {
-    let items: Obj[] = [];
-    try {
-      const { results } = await env.DB.prepare(
-        'SELECT code AS Code, name AS Name, unit AS Unit, qty AS Qty, remark AS Remark FROM request_items WHERE request_id = ? ORDER BY rowid',
-      )
-        .bind(String(req.ID ?? ''))
-        .all<Obj>();
-      items = results;
-    } catch (err) {
-      console.error('status notify items failed', (err as Error)?.name);
-    }
-    if (cfg.token && cfg.chatId) {
-      await sendTelegram(cfg.token, cfg.chatId, statusChangeText(req, newStatus, reason, items));
-    }
-    if (lineToken) {
-      const stTh = newStatus === 'APPROVED' ? 'อนุมัติแล้ว' : newStatus === 'REJECTED' ? 'ปฏิเสธ' : newStatus;
-      const lineMsg = `\n📢 อัปเดตสถานะใบขอเบิก\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nสถานะใหม่: ${stTh}${reason ? `\nเหตุผล: ${reason}` : ''}`;
-      await sendLineNotify(lineToken, lineMsg);
+    if (lineUrl) {
+      await sendLineWebhook(lineUrl, {
+        event: 'new_request',
+        message: `📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท`,
+        docNo: req.DocNo, fullName: req.FullName, department: req.Department, purpose: req.Purpose,
+        itemCount: req.ItemCount, totalAmount: req.TotalAmount,
+      });
     }
   }
 };
@@ -149,23 +126,17 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
 
 registerRpc('apiTestLine', 'admin', async (ctx, args) => {
   const payload = args[0];
-  let token = '';
+  let url = '';
   if (isObj(payload)) {
-    token = str(payload.token ?? payload.LineToken);
+    url = str(payload.token ?? payload.LineToken);
   } else if (typeof payload === 'string') {
-    token = payload.trim();
+    url = payload.trim();
   }
   const row = await ctx.env.DB.prepare('SELECT school_name, line_token FROM settings WHERE id = 1').first<Obj>();
-  if (!token || isMaskedToken(token)) token = String(row?.line_token ?? '');
-  if (!token) return fail('กรุณากรอก LINE Notify Token ก่อนทดสอบ');
-  const msg =
-    `\n🔔 ทดสอบการเชื่อมต่อ LINE Notify\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
-    `🏫 ระบบ: ${String(row?.school_name || 'ระบบเบิกจ่ายพัสดุ')}\n` +
-    `📅 เวลาทดสอบ: ${nowBkk()}\n` +
-    `🟢 สถานะ: ส่งข้อความสำเร็จเรียบร้อยแล้ว!\n` +
-    `━━━━━━━━━━━━━━━━━━━`;
-  const res = await sendLineNotify(token, msg);
+  if (!url || isMaskedToken(url)) url = String(row?.line_token ?? '');
+  if (!url) return fail('กรุณากรอก LINE Webhook URL ก่อนทดสอบ');
+  const msg = `🔔 ทดสอบการเชื่อมต่อ LINE\nระบบ: ${String(row?.school_name || 'ระบบเบิกจ่ายพัสดุ')}\nเวลาทดสอบ: ${nowBkk()}`;
+  const res = await sendLineWebhook(url, { event: 'test', message: msg });
   if (!res.ok) return { ok: false, message: res.message };
   return { ok: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว' };
 });

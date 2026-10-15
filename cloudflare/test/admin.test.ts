@@ -360,8 +360,8 @@ describe('request notifications', () => {
     expect(url).toBe('https://api.telegram.org/bot123456:ABCDEFG/sendMessage');
     expect(body.text).toContain(`<code>${r.doc_no}</code>`);
     expect(body.text).toContain('🔔 <b>มีใบขอเบิกพัสดุใหม่</b>');
-    expect(body.text).toContain('1. พัสดุ A1 (2 ชิ้น)');
-    expect(body.text).toContain('⏳ <i>สถานะ: รอการอนุมัติ</i>');
+    expect(body.text).toContain('🎯 <b>วัตถุประสงค์:</b> ใช้งาน'); expect(body.text).not.toContain('1. พัสดุ A1');
+    expect(body.text).not.toContain('รอการอนุมัติ');
   });
 
   it('new request sends nothing when flag is NO; telegram failure does not break the RPC', async () => {
@@ -378,21 +378,40 @@ describe('request notifications', () => {
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled());
   });
 
-  it('status change sends telegram with reason when REJECTED', async () => {
+  it('status change sends no telegram message (only new requests are announced)', async () => {
     await setSettings();
     await addMat('M1', 'A1', 10, 1);
     await create();
     const [r] = await rows('SELECT * FROM requests');
     await vi.waitFor(() => expect(sent()).toHaveLength(1));
-    const res = await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'REJECTED', RejectReason: 'ไม่อนุมัติ <test>' }]]);
+    const res = await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'REJECTED', RejectReason: 'ไม่อนุมัติ' }]]);
     expect(res.ok).toBe(true);
+    await new Promise((r2) => setTimeout(r2, 50));
+    expect(sent()).toHaveLength(1);
+  });
+
+  it('new request posts JSON to the LINE webhook URL when it is https', async () => {
+    await setSettings();
+    await env.DB.prepare('UPDATE settings SET line_token = ? WHERE id = 1').bind('https://line-hook.test/abc').run();
+    await addMat('M1', 'A1', 10, 1);
+    await create();
+    const [r] = await rows('SELECT * FROM requests');
     await vi.waitFor(() => expect(sent()).toHaveLength(2));
-    const text = sent()[1].body.text as string;
-    expect(text).toContain('❌ <b>ปฏิเสธใบขอเบิกพัสดุ</b>');
-    expect(text).toContain(`<code>${r.doc_no}</code>`);
-    expect(text).toContain('ถูกปฏิเสธ ❌');
-    expect(text).toContain('💬 <b>เหตุผล/หมายเหตุ:</b> ไม่อนุมัติ &lt;test&gt;');
-    expect(text).toContain('1. พัสดุ A1 (2 ชิ้น)');
+    const hook = sent().find((s: { url: string }) => s.url === 'https://line-hook.test/abc');
+    expect(hook?.body.event).toBe('new_request');
+    expect(hook?.body.docNo).toBe(r.doc_no);
+    expect(hook?.body.message).toContain('วัตถุประสงค์: ใช้งาน');
+    expect(hook?.body.message).toContain('จำนวน: 1 รายการ | มูลค่ารวม: 20.00 บาท');
+  });
+
+  it('LINE webhook ignores a URL that is not https', async () => {
+    await setSettings();
+    await env.DB.prepare('UPDATE settings SET line_token = ? WHERE id = 1').bind('http://line-hook.test/abc').run();
+    await addMat('M1', 'A1', 10, 1);
+    await create();
+    await vi.waitFor(() => expect(sent()).toHaveLength(1));
+    await new Promise((r2) => setTimeout(r2, 50));
+    expect(sent().map((s: { url: string }) => s.url)).toEqual(['https://api.telegram.org/bot123456:ABCDEFG/sendMessage']);
   });
 
   it('status change sends nothing when flag is NO', async () => {
