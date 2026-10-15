@@ -1158,79 +1158,127 @@ function loadScript(src){
     document.head.appendChild(s);
   }));
 }
-const XLSX_SRC = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
-async function ensureXlsx(){
-  if(window.XLSX && window.XLSX.style_version) return;
-  await loadScript(XLSX_SRC);
-  if(!window.XLSX) throw new Error('โหลดไลบรารี Excel ไม่สำเร็จ');
+const EXCELJS_SRC = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+async function ensureExcelJs(){
+  if(window.ExcelJS) return;
+  await loadScript(EXCELJS_SRC);
+  if(!window.ExcelJS) throw new Error('โหลดไลบรารี Excel ไม่สำเร็จ');
 }
+const ensureXlsx = ensureExcelJs;
 
 const THIN_BORDER = {
-  top: { style: 'thin', color: { rgb: '000000' } },
-  bottom: { style: 'thin', color: { rgb: '000000' } },
-  left: { style: 'thin', color: { rgb: '000000' } },
-  right: { style: 'thin', color: { rgb: '000000' } }
+  top: { style: 'thin', color: { argb: 'FF000000' } },
+  left: { style: 'thin', color: { argb: 'FF000000' } },
+  bottom: { style: 'thin', color: { argb: 'FF000000' } },
+  right: { style: 'thin', color: { argb: 'FF000000' } }
 };
 
-function applyExcelStyles(ws, { startRow = 4, headerRows = 1, endRowOffset = 0, colAligns = [] } = {}){
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
-  const tableEndRow = range.e.r - endRowOffset;
-  for (let r = 0; r <= range.e.r; r++) {
-    for (let c = 0; c <= range.e.c; c++) {
-      const ref = XLSX.utils.encode_cell({ r, c });
-      if (r < startRow) {
-        if (ws[ref]) {
-          ws[ref].s = {
-            font: { name: 'TH Sarabun New', sz: r === 0 ? 15 : 12, bold: r === 0 },
-            alignment: { vertical: 'center', horizontal: 'left' }
-          };
-        }
-        continue;
+async function saveExcelWorkbook(wb, filename){
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const XLSX = {
+  writeFile: (wb, filename) => saveExcelWorkbook(wb, filename)
+};
+
+function addStyledSheet(wb, name, { rows, merges, colWidths, orientation = 'landscape', startRow = 4, headerRows = 1, endRowOffset = 0, colAligns = [] } = {}){
+  const ws = wb.addWorksheet(name, {
+    pageSetup: {
+      paperSize: 9,
+      orientation: orientation,
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      showGridLines: true
+    },
+    views: [{ showGridLines: true }]
+  });
+
+  if (colWidths && colWidths.length) {
+    ws.columns = colWidths.map(w => ({ width: typeof w === 'object' ? (w.wch || 12) : w }));
+  }
+
+  rows.forEach(r => ws.addRow(r));
+
+  if (merges && merges.length) {
+    merges.forEach(m => {
+      if (m && m.s && m.e) {
+        ws.mergeCells(m.s.r + 1, m.s.c + 1, m.e.r + 1, m.e.c + 1);
+      } else if (Array.isArray(m) && m.length === 4) {
+        ws.mergeCells(m[0] + 1, m[1] + 1, m[2] + 1, m[3] + 1);
       }
-      if (r > tableEndRow) {
-        if (ws[ref]) {
-          ws[ref].s = {
-            font: { name: 'TH Sarabun New', sz: 10, italic: true },
-            alignment: { vertical: 'center', horizontal: 'left' }
-          };
-        }
-        continue;
+    });
+  }
+
+  const tableEndRow = rows.length - 1 - endRowOffset;
+  const colCount = (colWidths && colWidths.length) || (rows[startRow] && rows[startRow].length) || 1;
+
+  for (let r = 0; r < rows.length; r++) {
+    const rowObj = ws.getRow(r + 1);
+    if (r < startRow) {
+      for (let c = 1; c <= colCount; c++) {
+        const cell = rowObj.getCell(c);
+        cell.font = { name: 'TH Sarabun New', size: r === 0 ? 15 : 12, bold: r === 0 };
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
       }
-      const isHeader = (r >= startRow && r < startRow + headerRows);
-      const isTotal = (r === tableEndRow);
-      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
-      const cell = ws[ref];
+      continue;
+    }
+    if (r > tableEndRow) {
+      for (let c = 1; c <= colCount; c++) {
+        const cell = rowObj.getCell(c);
+        cell.font = { name: 'TH Sarabun New', size: 10, italic: true };
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      }
+      continue;
+    }
+    const isHeader = (r >= startRow && r < startRow + headerRows);
+    const isTotal = (r === tableEndRow);
+    for (let c = 1; c <= colCount; c++) {
+      const cell = rowObj.getCell(c);
       let hAlign = 'center';
       if (!isHeader) {
-        hAlign = colAligns[c] || (typeof cell.v === 'number' ? 'right' : 'left');
+        hAlign = colAligns[c - 1] || (typeof cell.value === 'number' ? 'right' : 'left');
       }
-      cell.s = {
-        font: {
-          name: 'TH Sarabun New',
-          sz: isHeader ? 12 : 11,
-          bold: isHeader || isTotal
-        },
-        border: THIN_BORDER,
-        alignment: {
-          wrapText: true,
-          vertical: 'center',
-          horizontal: isHeader ? 'center' : hAlign
-        },
-        fill: isHeader ? { fgColor: { rgb: 'F1F5F9' } } : (isTotal ? { fgColor: { rgb: 'F8FAFC' } } : undefined)
+      cell.font = {
+        name: 'TH Sarabun New',
+        size: isHeader ? 12 : 11,
+        bold: isHeader || isTotal
       };
+      cell.border = THIN_BORDER;
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: isHeader ? 'center' : hAlign,
+        wrapText: true
+      };
+      if (isHeader) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      } else if (isTotal) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
     }
   }
+  return ws;
 }
 
+function applyExcelStyles(){ /* Backward-compat stub */ }
+
 /**
- * สร้างไฟล์ XLSX ในเบราว์เซอร์ (SheetJS) 3 ชีต ตามรูปแบบรายงานเดิมของ GAS:
+ * สร้างไฟล์ XLSX ในเบราว์เซอร์ (ExcelJS) 3 ชีต ตามรูปแบบรายงานเดิมของ GAS:
  *   ทะเบียนวัสดุคงเหลือ / สรุปวัสดุคงเหลือ / Stock card (จ่ายออกรายวันของเดือนในรายงาน)
  * @param {object} rep ผลลัพธ์ของ apiGetInventoryReport ({reportInfo,data,categorySummary,total,dayOut})
  *
  * ข้อมูลจ่ายออกรายวัน: rep.dayOut จาก apiGetInventoryReport
  */
 async function exportInventoryXlsx(rep){
-  await ensureXlsx();
+  await ensureExcelJs();
   const info = rep.reportInfo || {}, data = rep.data || [], total = rep.total || {};
   const rd = String(info.reportDate || todayYMD());
   const yy = parseInt(rd.substring(0,4),10), mm = parseInt(rd.substring(5,7),10);
@@ -1240,9 +1288,10 @@ async function exportInventoryXlsx(rep){
   const fyShort = String(info.fiscalYear || '').slice(-2) || String(info.fiscalYear || '');
 
   const dayOut = rep.dayOut || {};
-  const A = XLSX.utils;
   const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
-  const wb = A.book_new();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SDU';
+  wb.created = new Date();
 
   const cleanSheetName = (name, fallback) => {
     let s = String(name || fallback || 'Sheet').replace(/[\\/?*[\]:]/g, '_').trim();
@@ -1263,13 +1312,15 @@ async function exportInventoryXlsx(rep){
   });
   rowsSummary.push(['', 'วัสดุคงเหลือ', total.Amount || 0, '']);
 
-  const wsSummary = A.aoa_to_sheet(rowsSummary);
-  wsSummary['!merges'] = [merge(0,0,0,3), merge(1,0,1,3), merge(2,0,2,3)];
-  wsSummary['!cols'] = [8, 34, 18, 20].map(w=>({ wch:w }));
-  wsSummary['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0 };
-  wsSummary['!sheetViews'] = [{ showGridLines: true }];
-  applyExcelStyles(wsSummary, { startRow: 4, headerRows: 1, colAligns: ['center', 'left', 'right', 'left'] });
-  A.book_append_sheet(wb, wsSummary, cleanSheetName(`สรุปงบ ปี ${fyShort}`, 'สรุปวัสดุคงเหลือ'));
+  addStyledSheet(wb, cleanSheetName(`สรุปงบ ปี ${fyShort}`, 'สรุปวัสดุคงเหลือ'), {
+    rows: rowsSummary,
+    merges: [merge(0,0,0,3), merge(1,0,1,3), merge(2,0,2,3)],
+    colWidths: [8, 34, 18, 20],
+    orientation: 'portrait',
+    startRow: 4,
+    headerRows: 1,
+    colAligns: ['center', 'left', 'right', 'left']
+  });
 
   // ---- Sheets 2..N: Separate sheet per category (14 columns each) ----
   const cats = [];
@@ -1332,30 +1383,28 @@ async function exportInventoryXlsx(rep){
     catRows.push([]);
     catRows.push(['หมายเหตุ :  การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี']);
 
-    const wsCat = A.aoa_to_sheet(catRows);
-    wsCat['!merges'] = [
-      merge(0,0,0,13),
-      merge(1,0,1,13),
-      merge(2,0,2,13),
-      merge(catRows.length-1, 0, catRows.length-1, 13)
-    ];
-    wsCat['!cols'] = [7, 16, 16, 16, 36, 14, 8, 13, 11, 11, 11, 12, 15, 13].map(w=>({ wch:w }));
-    wsCat['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
-    wsCat['!sheetViews'] = [{ showGridLines: true }];
-    applyExcelStyles(wsCat, {
-      startRow: 4,
-      headerRows: 1,
-      endRowOffset: 2,
-      colAligns: ['center','center','center','center','left','left','center','right','right','right','right','right','right','center']
-    });
-
     let sheetTitle = cleanSheetName(catName, 'หมวดวัสดุ');
     let counter = 1;
     while (usedSheetNames.has(sheetTitle)) {
       sheetTitle = cleanSheetName(`${catName}_${counter++}`, 'หมวดวัสดุ');
     }
     usedSheetNames.add(sheetTitle);
-    A.book_append_sheet(wb, wsCat, sheetTitle);
+
+    addStyledSheet(wb, sheetTitle, {
+      rows: catRows,
+      merges: [
+        merge(0,0,0,13),
+        merge(1,0,1,13),
+        merge(2,0,2,13),
+        merge(catRows.length-1, 0, catRows.length-1, 13)
+      ],
+      colWidths: [7, 16, 16, 16, 36, 14, 8, 13, 11, 11, 11, 12, 15, 13],
+      orientation: 'landscape',
+      startRow: 4,
+      headerRows: 1,
+      endRowOffset: 2,
+      colAligns: ['center','center','center','center','left','left','center','right','right','right','right','right','right','center']
+    });
   });
 
   // ---- Optional Sheet: Stock card รายเดือน ----
@@ -1380,10 +1429,9 @@ async function exportInventoryXlsx(rep){
     });
     rows3.push([]);
     rows3.push(['หมายเหตุ : ยอดรับเมื่อวันที่ ...........................................................']);
-    rows3.push(['* คำแนะนำการพิมพ์ A4 แนวนอน: ไปที่ เมนูพิมพ์ (Print) > การตั้งค่ามาตราส่วน (Scaling) > เลือก "Fit All Columns on One Page" (ปรับทุกคอลัมน์ให้อยู่ใน 1 หน้า)']);
+    rows3.push(['* เอกสารจัดทำในรูปแบบ A4 แนวนอน (Landscape) ปรับขนาดพอดี 1 หน้ากว้างอัตโนมัติ']);
     const totalCols = 7 + daysInMonth + 2;
-    const ws3 = A.aoa_to_sheet(rows3);
-    ws3['!merges'] = [
+    const merges3 = [
       merge(0,0,0,totalCols-1),
       merge(2,0,3,0), merge(2,1,3,1), merge(2,2,3,2), merge(2,3,3,3),
       merge(2,4,2,6), merge(2,7,2,6+daysInMonth),
@@ -1393,27 +1441,27 @@ async function exportInventoryXlsx(rep){
     const cols3 = [7, 36, 8, 13, 11, 11, 12];
     for(let d=1; d<=daysInMonth; d++) cols3.push(5);
     cols3.push(11, 12);
-    ws3['!cols'] = cols3.map(w=>({ wch:w }));
-    ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
-    ws3['!sheetViews'] = [{ showGridLines: true }];
-    applyExcelStyles(ws3, {
+
+    addStyledSheet(wb, 'Stock card', {
+      rows: rows3,
+      merges: merges3,
+      colWidths: cols3,
+      orientation: 'landscape',
       startRow: 2,
       headerRows: 2,
       endRowOffset: 3,
       colAligns: ['center', 'left', 'center', 'right', 'right', 'right', 'right']
     });
-    A.book_append_sheet(wb, ws3, 'Stock card');
   }
 
-  XLSX.writeFile(wb, 'รายงานการสำรวจทะเบียนวัสดุคงเหลือ_' + info.fiscalYear + '_' + (info.reportDate || todayYMD()) + '.xlsx');
+  await XLSX.writeFile(wb, 'รายงานการสำรวจทะเบียนวัสดุคงเหลือ_' + info.fiscalYear + '_' + (info.reportDate || todayYMD()) + '.xlsx');
 }
 
 /**
  * ส่งออกบัญชีพัสดุ (ทะเบียนคุมวัสดุ) เป็น Excel (.xlsx) ไม่มีโลโก้
  */
 async function exportAccountXlsx(r){
-  await ensureXlsx();
-  const A = XLSX.utils;
+  await ensureExcelJs();
   const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
   const t = r.total || {};
   const schoolName = S.settings.SchoolName || 'มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง';
@@ -1456,29 +1504,29 @@ async function exportAccountXlsx(r){
     ''
   ]);
 
-  const ws = A.aoa_to_sheet(rows);
-  ws['!merges'] = [merge(0,0,0,11), merge(1,0,1,11), merge(2,0,2,11)];
-  ws['!cols'] = [16, 36, 16, 11, 14, 11, 14, 11, 14, 11, 15, 10].map(w=>({ wch:w }));
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
-  ws['!sheetViews'] = [{ showGridLines: true }];
-  applyExcelStyles(ws, {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SDU';
+  wb.created = new Date();
+
+  addStyledSheet(wb, 'บัญชีพัสดุ', {
+    rows,
+    merges: [merge(0,0,0,11), merge(1,0,1,11), merge(2,0,2,11)],
+    colWidths: [16, 36, 16, 11, 14, 11, 14, 11, 14, 11, 15, 10],
+    orientation: 'landscape',
     startRow: 4,
     headerRows: 1,
     colAligns: ['center','left','center','right','right','right','right','right','right','right','right','center']
   });
 
-  const wb = A.book_new();
-  A.book_append_sheet(wb, ws, 'บัญชีพัสดุ');
   const filename = `บัญชีพัสดุ_${r.fiscalYear ? 'ปีงบ'+r.fiscalYear+'_' : ''}${r.asOf || todayYMD()}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  await XLSX.writeFile(wb, filename);
 }
 
 /**
  * ส่งออกทะเบียนพัสดุเป็น Excel (.xlsx) พอดีหน้า A4 และขึ้นบรรทัดใหม่ได้
  */
 async function exportMaterialsXlsx(rows){
-  await ensureXlsx();
-  const A = XLSX.utils;
+  await ensureExcelJs();
   const schoolName = S.settings.SchoolName || 'มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง';
   const list = rows || S.cache.materials || [];
 
@@ -1528,22 +1576,24 @@ async function exportMaterialsXlsx(rows){
   ];
 
   const allRows = [...headerRows, ...dataRows, footerRow];
-  const ws = A.aoa_to_sheet(allRows);
   const merge = (r1,c1,r2,c2)=>({ s:{ r:r1, c:c1 }, e:{ r:r2, c:c2 } });
-  ws['!merges'] = [merge(0,0,0,12), merge(1,0,1,12), merge(2,0,2,12), merge(allRows.length - 1, 0, allRows.length - 1, 7)];
-  ws['!cols'] = [7, 16, 36, 16, 14, 14, 8, 15, 14, 14, 16, 10, 11].map(w=>({ wch:w }));
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
-  ws['!sheetViews'] = [{ showGridLines: true }];
-  applyExcelStyles(ws, {
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SDU';
+  wb.created = new Date();
+
+  addStyledSheet(wb, 'ทะเบียนพัสดุ', {
+    rows: allRows,
+    merges: [merge(0,0,0,12), merge(1,0,1,12), merge(2,0,2,12), merge(allRows.length - 1, 0, allRows.length - 1, 7)],
+    colWidths: [7, 16, 36, 16, 14, 14, 8, 15, 14, 14, 16, 10, 11],
+    orientation: 'landscape',
     startRow: 4,
     headerRows: 1,
     colAligns: ['center','center','left','center','left','center','center','right','right','right','right','right','center']
   });
 
-  const wb = A.book_new();
-  A.book_append_sheet(wb, ws, 'ทะเบียนพัสดุ');
   const filename = `ทะเบียนพัสดุ_${todayYMD()}.xlsx`;
-  XLSX.writeFile(wb, filename);
+  await XLSX.writeFile(wb, filename);
 }
 const CHART_SRC = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
 const H5Q_SRC   = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
