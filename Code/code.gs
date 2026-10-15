@@ -29,7 +29,7 @@ const HEADERS = {
   Settings: [
     'SchoolName','Affiliation','LogoUrl','Address','Phone','UpdatedAt',
     'NotifyEmail','TelegramBotToken','TelegramChatId','LineToken',
-    'NotifyOnNewRequest','NotifyOnStatusChange','NotifyLowStock','BannerUrl'
+    'NotifyOnNewRequest','NotifyOnStatusChange','NotifyLowStock','BannerUrl','LineTo'
   ],
   Users: ['ID','Username','Password','FullName','Role','Position','Department','Email','CreatedAt','UpdatedAt'],
   Materials: [
@@ -588,6 +588,7 @@ function getNotifyConfig_(){
     botToken: s.TelegramBotToken || '',
     chatId: s.TelegramChatId || '',
     lineToken: s.LineToken || '',
+    lineTo: s.LineTo || '',
     onNewRequest: String(s.NotifyOnNewRequest || 'YES').toUpperCase() === 'YES',
     onStatusChange: String(s.NotifyOnStatusChange || 'YES').toUpperCase() === 'YES',
     onLowStock: String(s.NotifyLowStock || 'YES').toUpperCase() === 'YES',
@@ -595,23 +596,27 @@ function getNotifyConfig_(){
   };
 }
 
-// LINE Notify ปิดบริการแล้ว: ส่ง JSON ไปยัง LINE Webhook URL ที่ตั้งค่าไว้ (URL เป็นความลับ ห้าม log)
-function sendLineWebhook_(url, payload){
-  const u = String(url || '').trim();
-  if(!u) return { ok: false, message: 'กรุณาระบุ LINE Webhook URL' };
-  if(!/^https:\/\//i.test(u)) return { ok: false, message: 'LINE Webhook URL ต้องขึ้นต้นด้วย https://' };
+// LINE Notify ปิดบริการแล้ว: ส่งผ่าน LINE Messaging API (push) token และ to เป็นความลับ ห้าม log
+function sendLinePush_(token, to, text){
+  const t = String(token || '').trim();
+  const dest = String(to || '').trim();
+  if(!t) return { ok: false, message: 'กรุณาระบุ LINE Channel access token' };
+  if(!dest) return { ok: false, message: 'กรุณาระบุ LINE Group ID หรือ User ID' };
   try{
-    const response = UrlFetchApp.fetch(u, {
+    const response = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
       method: 'post',
       contentType: 'application/json',
-      payload: JSON.stringify(payload),
+      headers: { 'Authorization': 'Bearer ' + t },
+      payload: JSON.stringify({ to: dest, messages: [{ type: 'text', text: text }] }),
       muteHttpExceptions: true
     });
     const code = response.getResponseCode();
     if(code >= 200 && code < 300) return { ok: true, message: 'ส่งข้อความสำเร็จ' };
-    return { ok: false, message: 'LINE Webhook Error (' + code + ')' };
+    let msg = 'LINE API Error (' + code + ')';
+    try{ const j = JSON.parse(response.getContentText()); if(j && j.message) msg += ': ' + j.message; }catch(_){}
+    return { ok: false, message: msg };
   }catch(e){
-    console.error('Line webhook error');
+    console.error('Line push error');
     return { ok: false, message: 'ส่งข้อความ LINE ไม่สำเร็จ' };
   }
 }
@@ -619,13 +624,15 @@ function sendLineWebhook_(url, payload){
 function apiTestLine(payload){
   try{
     let token = '';
-    if(payload && typeof payload === 'object') token = payload.token || payload.LineToken || '';
+    let to = '';
+    if(payload && typeof payload === 'object'){ token = payload.token || payload.LineToken || ''; to = payload.to || payload.LineTo || ''; }
     else if(typeof payload === 'string') token = payload.trim();
     const s = getSettingsObj_();
     token = token || s.LineToken;
-    if(!token) return { ok: false, message: 'กรุณากรอก LINE Webhook URL ก่อนทดสอบ' };
+    to = to || s.LineTo;
+    if(!token || !to) return { ok: false, message: 'กรุณากรอก LINE Channel access token และ Group ID ก่อนทดสอบ' };
     const testMsg = '🔔 ทดสอบการเชื่อมต่อ LINE\nระบบ: ' + (s.SchoolName || 'ระบบเบิกจ่ายพัสดุ') + '\nเวลาทดสอบ: ' + thaiDateFull_(todayStr_());
-    const res = sendLineWebhook_(token, { event: 'test', message: testMsg });
+    const res = sendLinePush_(token, to, testMsg);
     if(res && res.ok === false) return res;
     return { ok: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว' };
   }catch(err){ return { ok: false, message: String(err) }; }
@@ -654,13 +661,8 @@ function notifyNewRequest_(req){
     `📊 <b>จำนวน:</b> ${req.ItemCount} รายการ | <b>มูลค่ารวม:</b> ${Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2})} บาท`;
   if(cfg.botToken && cfg.chatId) sendTelegramNotify_(cfg.botToken, cfg.chatId, tg);
 
-  if(cfg.lineToken){
-    sendLineWebhook_(cfg.lineToken, {
-      event: 'new_request',
-      message: '📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + '\nแผนก: ' + (req.Department||'-') + '\nวัตถุประสงค์: ' + (req.Purpose||'-') + '\nจำนวน: ' + req.ItemCount + ' รายการ | มูลค่ารวม: ' + Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2}) + ' บาท',
-      docNo: req.DocNo, fullName: req.FullName, department: req.Department || '', purpose: req.Purpose || '',
-      itemCount: req.ItemCount, totalAmount: req.TotalAmount
-    });
+  if(cfg.lineToken && cfg.lineTo){
+    sendLinePush_(cfg.lineToken, cfg.lineTo, '📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + '\nแผนก: ' + (req.Department||'-') + '\nวัตถุประสงค์: ' + (req.Purpose||'-') + '\nจำนวน: ' + req.ItemCount + ' รายการ | มูลค่ารวม: ' + Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2}) + ' บาท');
   }
 }
 
@@ -748,7 +750,7 @@ function getSettingsObj_(){
   if(sh.getLastRow() < 2) return {
     SchoolName:'', Affiliation:'', LogoUrl:'', Address:'', Phone:'', UpdatedAt:'',
     NotifyEmail:'', TelegramBotToken:'', TelegramChatId:'', LineToken:'',
-    NotifyOnNewRequest:'YES', NotifyOnStatusChange:'YES', NotifyLowStock:'YES', BannerUrl:''
+    NotifyOnNewRequest:'YES', NotifyOnStatusChange:'YES', NotifyLowStock:'YES', BannerUrl:'', LineTo:''
   };
   const headers = HEADERS.Settings;
   const row = sh.getRange(2, 1, 1, headers.length).getValues()[0];
@@ -833,6 +835,7 @@ function apiSaveSettings(payload){
         TelegramBotToken: String(payload.TelegramBotToken||'').trim(),
         TelegramChatId: String(payload.TelegramChatId||'').trim(),
         LineToken: String(payload.LineToken||'').trim(),
+        LineTo: String(payload.LineTo||'').trim(),
         NotifyOnNewRequest: payload.NotifyOnNewRequest || 'YES',
         NotifyOnStatusChange: payload.NotifyOnStatusChange || 'YES',
         NotifyLowStock: payload.NotifyLowStock || 'YES'

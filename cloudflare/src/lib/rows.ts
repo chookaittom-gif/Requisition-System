@@ -61,7 +61,7 @@ const MAPS: Record<TableName, ColumnMap> = {
   settings: {
     school_name: 'SchoolName', affiliation: 'Affiliation', logo_url: 'LogoUrl', address: 'Address',
     phone: 'Phone', updated_at: 'UpdatedAt', notify_email: 'NotifyEmail', telegram_chat_id: 'TelegramChatId',
-    line_token: 'LineToken',
+    line_token: 'LineToken', line_to: 'LineTo',
     notify_on_new_request: 'NotifyOnNewRequest', notify_on_status_change: 'NotifyOnStatusChange',
     notify_low_stock: 'NotifyLowStock', banner_url: 'BannerUrl',
   },

@@ -4,24 +4,35 @@ export interface LineResult {
 }
 
 /**
- * POST a JSON notification to the LINE webhook URL saved in settings (LINE Notify has been shut down).
- * The URL is a secret: it is never logged or returned in error messages. Never throws; returns { ok, message }.
+ * Push a text message through the LINE Messaging API (LINE Notify has been shut down).
+ * `token` is the Channel access token and `to` a Group ID or User ID; both are secrets and are never logged.
+ * Never throws; returns { ok, message }.
  */
-export async function sendLineWebhook(url: string, payload: Record<string, unknown>): Promise<LineResult> {
-  const trimmed = String(url || '').trim();
-  if (!trimmed) return { ok: false, message: 'กรุณาระบุ LINE Webhook URL' };
-  if (!/^https:\/\//i.test(trimmed)) return { ok: false, message: 'LINE Webhook URL ต้องขึ้นต้นด้วย https://' };
+export async function sendLinePush(token: string, to: string, text: string): Promise<LineResult> {
+  const t = String(token || '').trim();
+  const dest = String(to || '').trim();
+  if (!t) return { ok: false, message: 'กรุณาระบุ LINE Channel access token' };
+  if (!dest) return { ok: false, message: 'กรุณาระบุ LINE Group ID หรือ User ID' };
 
   try {
-    const resp = await fetch(trimmed, {
+    const resp = await fetch('https://api.line.me/v2/bot/message/push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ to: dest, messages: [{ type: 'text', text }] }),
     });
     if (resp.status >= 200 && resp.status < 300) return { ok: true, message: 'ส่งข้อความสำเร็จ' };
-    return { ok: false, message: `LINE Webhook Error (${resp.status})` };
+
+    let msg = `LINE API Error (${resp.status})`;
+    const content = await resp.text().catch(() => '');
+    try {
+      const parsed = JSON.parse(content) as { message?: string } | null;
+      if (parsed?.message) msg += `: ${parsed.message}`;
+    } catch {
+      /* non-JSON body: keep the status only */
+    }
+    return { ok: false, message: msg };
   } catch (err) {
-    console.error('LINE webhook error', (err as Error)?.name);
+    console.error('LINE push error', (err as Error)?.name);
     return { ok: false, message: 'ส่งข้อความ LINE ไม่สำเร็จ' };
   }
 }

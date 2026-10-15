@@ -11,7 +11,7 @@ import {
   newRequestText,
   sendTelegram,
 } from '../lib/telegram';
-import { sendLineWebhook } from '../lib/line';
+import { sendLinePush } from '../lib/line';
 import { nowBkk } from '../lib/time';
 import { eqUsername } from '../lib/username';
 import { registerRpc } from '../rpc';
@@ -24,20 +24,21 @@ const str = (v: unknown): string => String(v ?? '').trim();
 /* ============================== NOTIFICATION HOOKS ============================== */
 // Only new requests are announced; status changes (approve/reject/cancel) send nothing.
 notifyHooks.onNewRequest = async (env, req) => {
-  const row = await env.DB.prepare('SELECT line_token FROM settings WHERE id = 1').first<Obj>();
-  const lineUrl = String(row?.line_token ?? '');
+  const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
+  const lineToken = String(row?.line_token ?? '');
+  const lineTo = String(row?.line_to ?? '');
   const cfg = await getNotifyConfig(env);
   if (cfg.onNewRequest) {
     if (cfg.token && cfg.chatId) {
       await sendTelegram(cfg.token, cfg.chatId, newRequestText(req));
     }
-    if (lineUrl) {
-      await sendLineWebhook(lineUrl, {
-        event: 'new_request',
-        message: `📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท`,
-        docNo: req.DocNo, fullName: req.FullName, department: req.Department, purpose: req.Purpose,
-        itemCount: req.ItemCount, totalAmount: req.TotalAmount,
-      });
+    if (lineToken && lineTo) {
+      const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+      await sendLinePush(
+        lineToken,
+        lineTo,
+        `📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
+      );
     }
   }
 };
@@ -45,7 +46,7 @@ notifyHooks.onNewRequest = async (env, req) => {
 /* ============================== SETTINGS ============================== */
 const DEFAULT_SETTINGS = {
   SchoolName: '', Affiliation: '', LogoUrl: '', Address: '', Phone: '', UpdatedAt: '',
-  NotifyEmail: '', TelegramBotToken: '', TelegramChatId: '', LineToken: '',
+  NotifyEmail: '', TelegramBotToken: '', TelegramChatId: '', LineToken: '', LineTo: '',
   NotifyOnNewRequest: 'YES', NotifyOnStatusChange: 'YES', NotifyLowStock: 'YES', BannerUrl: '',
 };
 
@@ -100,23 +101,23 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
   const now = nowBkk();
   const d = {
     school_name: schoolName, affiliation, logo_url: logo.value, address: str(p.Address), phone: str(p.Phone),
-    notify_email: str(p.NotifyEmail), telegram_chat_id: str(p.TelegramChatId), line_token: lineToken,
+    notify_email: str(p.NotifyEmail), telegram_chat_id: str(p.TelegramChatId), line_token: lineToken, line_to: str(p.LineTo),
     notify_on_new_request: flag(p.NotifyOnNewRequest), notify_on_status_change: flag(p.NotifyOnStatusChange),
     notify_low_stock: flag(p.NotifyLowStock), banner_url: banner.value,
   };
   await db.batch([
     db
       .prepare(
-        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, updated_at)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, line_to, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET school_name = excluded.school_name, affiliation = excluded.affiliation, logo_url = excluded.logo_url,
            address = excluded.address, phone = excluded.phone, notify_email = excluded.notify_email, telegram_bot_token = excluded.telegram_bot_token,
-           telegram_chat_id = excluded.telegram_chat_id, line_token = excluded.line_token, notify_on_new_request = excluded.notify_on_new_request,
+           telegram_chat_id = excluded.telegram_chat_id, line_token = excluded.line_token, line_to = excluded.line_to, notify_on_new_request = excluded.notify_on_new_request,
            notify_on_status_change = excluded.notify_on_status_change, notify_low_stock = excluded.notify_low_stock,
            banner_url = excluded.banner_url, updated_at = excluded.updated_at`,
       )
       .bind(
-        d.school_name, d.affiliation, d.logo_url, d.address, d.phone, d.notify_email, token, d.telegram_chat_id, d.line_token,
+        d.school_name, d.affiliation, d.logo_url, d.address, d.phone, d.notify_email, token, d.telegram_chat_id, d.line_token, d.line_to,
         d.notify_on_new_request, d.notify_on_status_change, d.notify_low_stock, d.banner_url, now,
       ),
     logAudit(db, { action: 'UPDATE', entity: 'Settings', entityId: '', detail: 'บันทึกการตั้งค่าระบบ', actor: str(p.actor) }),
@@ -126,17 +127,20 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
 
 registerRpc('apiTestLine', 'admin', async (ctx, args) => {
   const payload = args[0];
-  let url = '';
+  let token = '';
+  let to = '';
   if (isObj(payload)) {
-    url = str(payload.token ?? payload.LineToken);
+    token = str(payload.token ?? payload.LineToken);
+    to = str(payload.to ?? payload.LineTo);
   } else if (typeof payload === 'string') {
-    url = payload.trim();
+    token = payload.trim();
   }
-  const row = await ctx.env.DB.prepare('SELECT school_name, line_token FROM settings WHERE id = 1').first<Obj>();
-  if (!url || isMaskedToken(url)) url = String(row?.line_token ?? '');
-  if (!url) return fail('กรุณากรอก LINE Webhook URL ก่อนทดสอบ');
+  const row = await ctx.env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
+  if (!token || isMaskedToken(token)) token = String(row?.line_token ?? '');
+  if (!to) to = String(row?.line_to ?? '');
+  if (!token || !to) return fail('กรุณากรอก LINE Channel access token และ Group ID ก่อนทดสอบ');
   const msg = `🔔 ทดสอบการเชื่อมต่อ LINE\nระบบ: ${String(row?.school_name || 'ระบบเบิกจ่ายพัสดุ')}\nเวลาทดสอบ: ${nowBkk()}`;
-  const res = await sendLineWebhook(url, { event: 'test', message: msg });
+  const res = await sendLinePush(token, to, msg);
   if (!res.ok) return { ok: false, message: res.message };
   return { ok: true, message: 'ส่งข้อความทดสอบไปยัง LINE สำเร็จแล้ว' };
 });

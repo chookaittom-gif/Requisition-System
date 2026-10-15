@@ -390,23 +390,24 @@ describe('request notifications', () => {
     expect(sent()).toHaveLength(1);
   });
 
-  it('new request posts JSON to the LINE webhook URL when it is https', async () => {
+  it('new request pushes a LINE message when token and group id are set', async () => {
     await setSettings();
-    await env.DB.prepare('UPDATE settings SET line_token = ? WHERE id = 1').bind('https://line-hook.test/abc').run();
+    await env.DB.prepare('UPDATE settings SET line_token = ?, line_to = ? WHERE id = 1').bind('LTOKEN', 'Cgroup1').run();
     await addMat('M1', 'A1', 10, 1);
     await create();
     const [r] = await rows('SELECT * FROM requests');
     await vi.waitFor(() => expect(sent()).toHaveLength(2));
-    const hook = sent().find((s: { url: string }) => s.url === 'https://line-hook.test/abc');
-    expect(hook?.body.event).toBe('new_request');
-    expect(hook?.body.docNo).toBe(r.doc_no);
-    expect(hook?.body.message).toContain('วัตถุประสงค์: ใช้งาน');
-    expect(hook?.body.message).toContain('จำนวน: 1 รายการ | มูลค่ารวม: 20.00 บาท');
+    const push = sent().find((s: { url: string }) => s.url === 'https://api.line.me/v2/bot/message/push');
+    expect(push?.body.to).toBe('Cgroup1');
+    expect(push?.body.messages[0].type).toBe('text');
+    expect(push?.body.messages[0].text).toContain(r.doc_no);
+    expect(push?.body.messages[0].text).toContain('วัตถุประสงค์: ใช้งาน');
+    expect(push?.body.messages[0].text).toContain('จำนวน: 1 รายการ | มูลค่ารวม: 20.00 บาท');
   });
 
-  it('LINE webhook ignores a URL that is not https', async () => {
+  it('LINE push is skipped when the group id is empty', async () => {
     await setSettings();
-    await env.DB.prepare('UPDATE settings SET line_token = ? WHERE id = 1').bind('http://line-hook.test/abc').run();
+    await env.DB.prepare("UPDATE settings SET line_token = 'LTOKEN', line_to = '' WHERE id = 1").run();
     await addMat('M1', 'A1', 10, 1);
     await create();
     await vi.waitFor(() => expect(sent()).toHaveLength(1));
