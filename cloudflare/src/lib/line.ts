@@ -3,12 +3,22 @@ export interface LineResult {
   message?: string;
 }
 
+export type LineMessage = Record<string, unknown>;
+
 /**
- * Push a text message through the LINE Messaging API (LINE Notify has been shut down).
+ * Push text through the LINE Messaging API (LINE Notify has been shut down).
+ * Keeps the original (token, to, text) contract; see sendLineMessages for other message types.
+ */
+export function sendLinePush(token: string, to: string, text: string): Promise<LineResult> {
+  return sendLineMessages(token, to, [{ type: 'text', text }]);
+}
+
+/**
+ * Push message objects (text, flex, ...) through the LINE Messaging API.
  * `token` is the Channel access token and `to` a Group ID or User ID; both are secrets and are never logged.
  * Never throws; returns { ok, message }.
  */
-export async function sendLinePush(token: string, to: string, text: string): Promise<LineResult> {
+export async function sendLineMessages(token: string, to: string, messages: LineMessage[]): Promise<LineResult> {
   const t = String(token || '').trim();
   const dest = String(to || '').trim();
   if (!t) return { ok: false, message: 'กรุณาระบุ LINE Channel access token' };
@@ -18,7 +28,7 @@ export async function sendLinePush(token: string, to: string, text: string): Pro
     const resp = await fetch('https://api.line.me/v2/bot/message/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-      body: JSON.stringify({ to: dest, messages: [{ type: 'text', text }] }),
+      body: JSON.stringify({ to: dest, messages }),
     });
     if (resp.status >= 200 && resp.status < 300) return { ok: true, message: 'ส่งข้อความสำเร็จ' };
 

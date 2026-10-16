@@ -12,7 +12,8 @@ import {
   newRequestText,
   sendTelegram,
 } from '../lib/telegram';
-import { sendLinePush } from '../lib/line';
+import { sendLineMessages, sendLinePush, type LineMessage } from '../lib/line';
+import { approvedRequestFlex, newRequestFlex } from '../lib/lineFlex';
 import { nowBkk } from '../lib/time';
 import { eqUsername } from '../lib/username';
 import { registerRpc } from '../rpc';
@@ -21,6 +22,14 @@ import { notifyHooks } from './requests';
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => String(v ?? '').trim();
+
+/** Send a LINE Flex card; if LINE rejects it, fall back to the plain-text message so the alert is not lost. */
+async function pushLineCard(token: string, to: string, flex: LineMessage, fallbackText: string): Promise<void> {
+  const res = await sendLineMessages(token, to, [flex]);
+  if (res.ok) return;
+  console.error('line flex failed', res.message);
+  await sendLinePush(token, to, fallbackText);
+}
 
 /* ============================== NOTIFICATION HOOKS ============================== */
 // New requests are announced; see onStatusChange below for approvals.
@@ -35,31 +44,34 @@ notifyHooks.onNewRequest = async (env, req) => {
     }
     if (lineToken && lineTo) {
       const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-      await sendLinePush(
+      await pushLineCard(
         lineToken,
         lineTo,
+        newRequestFlex(req),
         `📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
       );
     }
   }
 };
 
-// Approval is announced to Telegram/LINE (same on/off switch as new requests); reject/cancel send nothing.
+// Approval is announced to Telegram/LINE, gated by its own toggle (independent of the new-request one);
+// reject/cancel send nothing.
 notifyHooks.onStatusChange = async (env, req, newStatus) => {
   if (newStatus !== 'APPROVED') return;
   const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
   const lineToken = String(row?.line_token ?? '');
   const lineTo = String(row?.line_to ?? '');
   const cfg = await getNotifyConfig(env);
-  if (!cfg.onNewRequest) return;
+  if (!cfg.onStatusChange) return;
   if (cfg.token && cfg.chatId) {
     await sendTelegram(cfg.token, cfg.chatId, approvedRequestText(req));
   }
   if (lineToken && lineTo) {
     const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-    await sendLinePush(
+    await pushLineCard(
       lineToken,
       lineTo,
+      approvedRequestFlex(req),
       `✅ อนุมัติใบขอเบิกพัสดุแล้ว\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
     );
   }

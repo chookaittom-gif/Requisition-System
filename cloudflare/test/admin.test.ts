@@ -2,7 +2,10 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../src/api/admin';
 import { runLowStockCron } from '../src/cron';
-import { sendTelegram } from '../src/lib/telegram';
+import { notifyHooks } from '../src/api/requests';
+import { sendLineMessages, sendLinePush } from '../src/lib/line';
+import { approvedRequestFlex, newRequestFlex } from '../src/lib/lineFlex';
+import { approvedRequestText, newRequestText, sendTelegram } from '../src/lib/telegram';
 
 const SALT = 'SALT';
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -197,6 +200,90 @@ describe('telegram', () => {
       ok: false,
       message: 'กรุณากรอก Telegram Bot Token และ Chat ID ก่อนทดสอบ',
     });
+  });
+});
+
+describe('line flex', () => {
+  const REQ = {
+    DocNo: 'REQ-001', FullName: 'สมชาย ใจดี', Department: '', Purpose: 'ใช้ในห้องเรียน',
+    ItemCount: 3, TotalAmount: 1234.5,
+  };
+  const lineCalls = () => sent().filter((c: { url: string }) => c.url === 'https://api.line.me/v2/bot/message/push');
+  const tgCalls = () => sent().filter((c: { url: string }) => c.url.startsWith('https://api.telegram.org/'));
+  const withLine = async () => {
+    await setSettings();
+    await env.DB.prepare("UPDATE settings SET line_token = 'LT', line_to = 'Cgroup' WHERE id = 1").run();
+  };
+  const cardText = (msg: any): string => JSON.stringify(msg.contents);
+
+  it('builders: orange new-request card and green approved card with fallbacks', () => {
+    const n = newRequestFlex(REQ);
+    const a = approvedRequestFlex(REQ);
+    expect(n).toMatchObject({ type: 'flex', contents: { type: 'bubble', styles: { header: { backgroundColor: '#F97316' } } } });
+    expect(a).toMatchObject({ type: 'flex', contents: { type: 'bubble', styles: { header: { backgroundColor: '#16A34A' } } } });
+    expect(cardText(n)).toContain('มีใบขอเบิกพัสดุใหม่');
+    expect(cardText(a)).toContain('อนุมัติใบขอเบิกพัสดุแล้ว');
+    for (const m of [n, a] as any[]) {
+      const t = cardText(m);
+      expect(t).toContain('REQ-001');
+      expect(t).toContain('สมชาย ใจดี');
+      expect(t).toContain('ใช้ในห้องเรียน');
+      expect(t).toContain('3 รายการ');
+      expect(t).toContain('1,234.50 บาท');
+      expect(String(m.altText)).toContain('REQ-001');
+      expect(String(m.altText).length).toBeLessThanOrEqual(400);
+    }
+    expect(cardText(n)).toContain('"text":"-"'); // empty Department falls back to "-"
+    expect(String((newRequestFlex({ ...REQ, FullName: 'x'.repeat(900) }) as any).altText).length).toBe(400);
+  });
+
+  it('sendLineMessages posts the given messages; sendLinePush still posts text', async () => {
+    expect(await sendLineMessages('', 'C', [])).toMatchObject({ ok: false });
+    expect(await sendLineMessages('LT', 'C1', [newRequestFlex(REQ)])).toEqual({ ok: true, message: 'ส่งข้อความสำเร็จ' });
+    expect(lineCalls()[0].body.to).toBe('C1');
+    expect(lineCalls()[0].body.messages[0].type).toBe('flex');
+    expect(await sendLinePush('LT', 'C1', 'hello')).toEqual({ ok: true, message: 'ส่งข้อความสำเร็จ' });
+    expect(lineCalls()[1].body.messages).toEqual([{ type: 'text', text: 'hello' }]);
+    fetchSpy.mockImplementationOnce(async () => new Response(JSON.stringify({ message: 'bad' }), { status: 400 }));
+    expect(await sendLineMessages('LT', 'C1', [])).toEqual({ ok: false, message: 'LINE API Error (400): bad' });
+  });
+
+  it('new request: LINE gets a flex card, Telegram keeps the original text', async () => {
+    await withLine();
+    await notifyHooks.onNewRequest!(env as any, REQ);
+    expect(lineCalls()).toHaveLength(1);
+    expect(lineCalls()[0].body.messages[0].type).toBe('flex');
+    expect(tgCalls()).toHaveLength(1);
+    expect(tgCalls()[0].body.text).toBe(newRequestText(REQ));
+  });
+
+  it('approved: LINE gets a flex card, Telegram keeps the original text; other statuses send nothing', async () => {
+    await withLine();
+    await notifyHooks.onStatusChange!(env as any, REQ, 'REJECTED', '');
+    expect(sent()).toHaveLength(0);
+    await notifyHooks.onStatusChange!(env as any, REQ, 'APPROVED', '');
+    expect(lineCalls()).toHaveLength(1);
+    expect(lineCalls()[0].body.messages[0].type).toBe('flex');
+    expect(cardText(lineCalls()[0].body.messages[0])).toContain('อนุมัติใบขอเบิกพัสดุแล้ว');
+    expect(tgCalls()).toHaveLength(1);
+    expect(tgCalls()[0].body.text).toBe(approvedRequestText(REQ));
+  });
+
+  it('flex rejected by LINE: falls back to the original text message', async () => {
+    await withLine();
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetchSpy.mockImplementation(async (u: unknown) =>
+      String(u).includes('api.line.me') && fetchSpy.mock.calls.filter(([x]: [unknown]) => String(x).includes('api.line.me')).length === 1
+        ? new Response(JSON.stringify({ message: 'invalid flex' }), { status: 400 })
+        : new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    await notifyHooks.onNewRequest!(env as any, REQ);
+    expect(lineCalls()).toHaveLength(2);
+    expect(lineCalls()[0].body.messages[0].type).toBe('flex');
+    expect(lineCalls()[1].body.messages[0].type).toBe('text');
+    expect(lineCalls()[1].body.messages[0].text).toContain('มีใบขอเบิกพัสดุใหม่');
+    expect(errSpy).toHaveBeenCalledWith('line flex failed', 'LINE API Error (400): invalid flex');
+    errSpy.mockRestore();
   });
 });
 
@@ -406,8 +493,12 @@ describe('request notifications', () => {
     expect(tg.body.text).toContain(`<code>${r.doc_no}</code>`);
     const push = sent()[3];
     expect(push.url).toBe('https://api.line.me/v2/bot/message/push');
-    expect(push.body.messages[0].text).toContain('✅ อนุมัติใบขอเบิกพัสดุแล้ว');
-    expect(push.body.messages[0].text).toContain('จำนวน: 1 รายการ | มูลค่ารวม: 20.00 บาท');
+    expect(push.body.messages[0].type).toBe('flex');
+    const card = JSON.stringify(push.body.messages[0].contents);
+    expect(card).toContain('✅ อนุมัติใบขอเบิกพัสดุแล้ว');
+    expect(card).toContain(r.doc_no);
+    expect(card).toContain('1 รายการ');
+    expect(card).toContain('20.00 บาท');
   });
 
   it('new request pushes a LINE message when token and group id are set', async () => {
@@ -419,10 +510,12 @@ describe('request notifications', () => {
     await vi.waitFor(() => expect(sent()).toHaveLength(2));
     const push = sent().find((s: { url: string }) => s.url === 'https://api.line.me/v2/bot/message/push');
     expect(push?.body.to).toBe('Cgroup1');
-    expect(push?.body.messages[0].type).toBe('text');
-    expect(push?.body.messages[0].text).toContain(r.doc_no);
-    expect(push?.body.messages[0].text).toContain('วัตถุประสงค์: ใช้งาน');
-    expect(push?.body.messages[0].text).toContain('จำนวน: 1 รายการ | มูลค่ารวม: 20.00 บาท');
+    expect(push?.body.messages[0].type).toBe('flex');
+    const card = JSON.stringify(push?.body.messages[0].contents);
+    expect(card).toContain(r.doc_no);
+    expect(card).toContain('ใช้งาน');
+    expect(card).toContain('1 รายการ');
+    expect(card).toContain('20.00 บาท');
   });
 
   it('LINE push is skipped when the group id is empty', async () => {
@@ -443,5 +536,28 @@ describe('request notifications', () => {
     await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'APPROVED' }]]);
     await new Promise((r2) => setTimeout(r2, 50));
     expect(sent()).toHaveLength(0);
+  });
+
+  it('new-request and approval toggles are independent', async () => {
+    // Approval alert off, new-request alert on: creating sends, approving does not.
+    await setSettings({ notify_on_new_request: 'YES', notify_on_status_change: 'NO' });
+    await addMat('M1', 'A1', 10, 1);
+    await create();
+    await vi.waitFor(() => expect(sent()).toHaveLength(1));
+    const [r] = await rows('SELECT * FROM requests');
+    await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'APPROVED' }]]);
+    await new Promise((r2) => setTimeout(r2, 50));
+    expect(sent()).toHaveLength(1);
+  });
+
+  it('new-request off, approval on: creating sends nothing, approving sends', async () => {
+    await setSettings({ notify_on_new_request: 'NO', notify_on_status_change: 'YES' });
+    await addMat('M1', 'A1', 10, 1);
+    await create();
+    await new Promise((r2) => setTimeout(r2, 50));
+    expect(sent()).toHaveLength(0);
+    const [r] = await rows('SELECT * FROM requests');
+    await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'APPROVED' }]]);
+    await vi.waitFor(() => expect(sent()).toHaveLength(1));
   });
 });

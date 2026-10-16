@@ -4243,6 +4243,9 @@ async function viewSettings(){
               <input type="checkbox" id="fOnNew" ${d.NotifyOnNewRequest!=='NO'?'checked':''} class="w-4 h-4 accent-brand-600"> แจ้งเมื่อมีใบขอเบิกใหม่
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="fOnStatus" ${d.NotifyOnStatusChange!=='NO'?'checked':''} class="w-4 h-4 accent-brand-600"> แจ้งเมื่ออนุมัติแล้ว
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" id="fOnLow" ${d.NotifyLowStock!=='NO'?'checked':''} class="w-4 h-4 accent-brand-600"> แจ้งสต็อกต่ำ (รายวัน)
             </label>
           </div>
@@ -4385,7 +4388,7 @@ async function viewSettings(){
         LineToken: $('#fLineToken')?.value.trim() || '',
         LineTo: $('#fLineTo')?.value.trim() || '',
         NotifyOnNewRequest: $('#fOnNew').checked ? 'YES' : 'NO',
-        NotifyOnStatusChange: d.NotifyOnStatusChange || 'NO',
+        NotifyOnStatusChange: $('#fOnStatus').checked ? 'YES' : 'NO',
         NotifyLowStock: $('#fOnLow').checked ? 'YES' : 'NO'
       });
       hideLoader();
