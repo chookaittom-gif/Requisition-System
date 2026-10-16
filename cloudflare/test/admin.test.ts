@@ -390,6 +390,26 @@ describe('request notifications', () => {
     expect(sent()).toHaveLength(1);
   });
 
+  it('approval sends a short telegram and LINE message', async () => {
+    await setSettings();
+    await env.DB.prepare('UPDATE settings SET line_token = ?, line_to = ? WHERE id = 1').bind('LTOKEN', 'Cgroup1').run();
+    await addMat('M1', 'A1', 10, 1);
+    await create();
+    const [r] = await rows('SELECT * FROM requests');
+    await vi.waitFor(() => expect(sent()).toHaveLength(2));
+    const res = await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'APPROVED' }]]);
+    expect(res.ok).toBe(true);
+    await vi.waitFor(() => expect(sent()).toHaveLength(4));
+    const tg = sent()[2];
+    expect(tg.url).toBe('https://api.telegram.org/bot123456:ABCDEFG/sendMessage');
+    expect(tg.body.text).toContain('✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว</b>');
+    expect(tg.body.text).toContain(`<code>${r.doc_no}</code>`);
+    const push = sent()[3];
+    expect(push.url).toBe('https://api.line.me/v2/bot/message/push');
+    expect(push.body.messages[0].text).toContain('✅ อนุมัติใบขอเบิกพัสดุแล้ว');
+    expect(push.body.messages[0].text).toContain('จำนวน: 1 รายการ | มูลค่ารวม: 20.00 บาท');
+  });
+
   it('new request pushes a LINE message when token and group id are set', async () => {
     await setSettings();
     await env.DB.prepare('UPDATE settings SET line_token = ?, line_to = ? WHERE id = 1').bind('LTOKEN', 'Cgroup1').run();

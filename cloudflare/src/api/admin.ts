@@ -5,6 +5,7 @@ import { logAudit } from '../lib/audit';
 import { genId } from '../lib/ids';
 import { toLegacy } from '../lib/rows';
 import {
+  approvedRequestText,
   getNotifyConfig,
   isMaskedToken,
   maskToken,
@@ -22,7 +23,7 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const str = (v: unknown): string => String(v ?? '').trim();
 
 /* ============================== NOTIFICATION HOOKS ============================== */
-// Only new requests are announced; status changes (approve/reject/cancel) send nothing.
+// New requests are announced; see onStatusChange below for approvals.
 notifyHooks.onNewRequest = async (env, req) => {
   const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
   const lineToken = String(row?.line_token ?? '');
@@ -40,6 +41,27 @@ notifyHooks.onNewRequest = async (env, req) => {
         `📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
       );
     }
+  }
+};
+
+// Approval is announced to Telegram/LINE (same on/off switch as new requests); reject/cancel send nothing.
+notifyHooks.onStatusChange = async (env, req, newStatus) => {
+  if (newStatus !== 'APPROVED') return;
+  const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
+  const lineToken = String(row?.line_token ?? '');
+  const lineTo = String(row?.line_to ?? '');
+  const cfg = await getNotifyConfig(env);
+  if (!cfg.onNewRequest) return;
+  if (cfg.token && cfg.chatId) {
+    await sendTelegram(cfg.token, cfg.chatId, approvedRequestText(req));
+  }
+  if (lineToken && lineTo) {
+    const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+    await sendLinePush(
+      lineToken,
+      lineTo,
+      `✅ อนุมัติใบขอเบิกพัสดุแล้ว\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
+    );
   }
 };
 

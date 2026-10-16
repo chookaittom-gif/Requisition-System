@@ -668,11 +668,25 @@ function notifyNewRequest_(req){
 
 function notifyStatusChange_(req, newStatus, reason){
   const cfg = getNotifyConfig_();
+  // แจ้ง Telegram/LINE เฉพาะเมื่ออนุมัติ (ใช้สวิตช์เดียวกับใบขอเบิกใหม่) ให้ตรงกับฝั่ง Cloudflare
+  if(newStatus === 'APPROVED' && cfg.onNewRequest){
+    const total = Number(req.TotalAmount||0).toLocaleString('th-TH', {minimumFractionDigits:2});
+    if(cfg.botToken && cfg.chatId){
+      sendTelegramNotify_(cfg.botToken, cfg.chatId, `✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว</b>\n` +
+        `📄 <b>เลขที่:</b> <code>${req.DocNo}</code>\n` +
+        `👤 <b>ผู้ขอเบิก:</b> ${req.FullName}\n` +
+        `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${req.Department || '-'}\n` +
+        `📊 <b>จำนวน:</b> ${req.ItemCount} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`);
+    }
+    if(cfg.lineToken && cfg.lineTo){
+      sendLinePush_(cfg.lineToken, cfg.lineTo, '✅ อนุมัติใบขอเบิกพัสดุแล้ว\nเลขที่: ' + req.DocNo + '\nผู้ขอเบิก: ' + req.FullName + '\nแผนก: ' + (req.Department||'-') + '\nจำนวน: ' + req.ItemCount + ' รายการ | มูลค่ารวม: ' + total + ' บาท');
+    }
+  }
   if(!cfg.onStatusChange) return;
   const users = readAll_(SHEETS.USERS);
   const user = users.find(u => String(u.ID) === String(req.UserID));
   const userEmail = (user && user.Email) ? user.Email : '';
-  // ส่งเฉพาะอีเมลถึงผู้ขอเบิก ส่วน Telegram/LINE ไม่แจ้งเมื่อเปลี่ยนสถานะ
+  // อีเมลถึงผู้ขอเบิก (Telegram/LINE แจ้งเฉพาะเมื่ออนุมัติ ด้านบน)
   if(!userEmail) return;
 
   const statusTh = newStatus === 'APPROVED' ? 'อนุมัติแล้ว ✅' : newStatus === 'REJECTED' ? 'ถูกปฏิเสธ ❌' : (newStatus === 'CANCELLED' ? 'ยกเลิกแล้ว ⚪' : newStatus);
@@ -1108,7 +1122,7 @@ function apiSaveMaterials(list){
           });
           materials.push({ ID:id, Code:code });     // กันรหัสซ้ำในรายการเดียวกัน
           if(stock > 0){
-            logStockMovement_(id, code, item.Name, 'IN', stock, 0, stock, '', 'เปิดยอดเริ่มต้น', item.actor||'');
+            logStockMovement_(id, code, item.Name, 'IN', stock, 0, stock, '', 'จัดซื้อ', item.actor||'');
           }
           logAudit_('CREATE', 'Material', id, code, item.actor||'');
         }

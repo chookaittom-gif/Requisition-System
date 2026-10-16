@@ -2125,6 +2125,12 @@ function getCategoryPrefix(catName){
   return 'MAT';
 }
 
+// เรียงหมวดตามหมายเลขหมวด (เช่น [001], [002]) ใช้ใน dropdown หมวดหมู่
+function sortedCategories_(){
+  const key = c => String(c.Code || getCategoryPrefix(c.Name));
+  return [...(S.cache.categories || [])].sort((a, b) => key(a).localeCompare(key(b), 'en', { numeric: true }));
+}
+
 const DEFAULT_CAT_MIN_QTY = {
   DOC: 5,
   HOM: 3,
@@ -2157,31 +2163,19 @@ function generateNextMatCode(catName){
   return `${prefix}-${padded}`;
 }
 
-/* ---------------- MATERIAL DRAFT HELPERS ---------------- */
+/* ---------------- MATERIAL DRAFT HELPERS ----------------
+ * จำเฉพาะข้อมูลร้านค้า/ผู้จำหน่ายเท่านั้น (ไม่จำข้อมูลพัสดุอื่น) */
 const MAT_DRAFT_KEY = () => 'mat_draft_' + (S?.user?.Username || 'default');
+const MAT_DRAFT_FIELDS = ['ShopName', 'ShopAddress', 'ShopPhone', 'ShopTaxId'];
 function saveMatDraft_(){
   if ($('#mID') && $('#mID').value) return; // ไม่บันทึก draft เมื่ออยู่ในโหมดแก้ไขพัสดุเดิม
   const draft = {
     ShopName: $('#mShopName')?.value || '',
     ShopAddress: $('#mShopAddress')?.value || '',
     ShopPhone: $('#mShopPhone')?.value || '',
-    ShopTaxId: $('#mShopTaxId')?.value || '',
-    BudgetSource: $('#mBudgetSource')?.value || '',
-    AcquiredDate: $('#mAcquiredDate')?.value || '',
-    OrderQty: $('#mOrderQty')?.value || '',
-    Code: $('#mCode')?.value || '',
-    Unit: $('#mUnit')?.value || '',
-    Name: $('#mName')?.value || '',
-    Category: $('#mCat')?.value || '',
-    MaterialType: $('#mType')?.value || '',
-    SizeSpec: $('#mSize')?.value || '',
-    StorageLocation: $('#mLoc')?.value || '',
-    UnitPrice: $('#mPrice')?.value || '',
-    StockQty: $('#mStock')?.value || '',
-    MinQty: $('#mMin')?.value || '5',
-    savedAt: Date.now()
+    ShopTaxId: $('#mShopTaxId')?.value || ''
   };
-  const hasContent = Object.entries(draft).some(([k, v]) => k !== 'MinQty' && k !== 'savedAt' && String(v).trim().length > 0);
+  const hasContent = MAT_DRAFT_FIELDS.some(k => String(draft[k]).trim().length > 0);
   if (hasContent) {
     try { localStorage.setItem(MAT_DRAFT_KEY(), JSON.stringify(draft)); }catch(e){}
   } else {
@@ -2191,7 +2185,11 @@ function saveMatDraft_(){
 function getMatDraft_(){
   try {
     const raw = localStorage.getItem(MAT_DRAFT_KEY());
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const saved = JSON.parse(raw) || {};
+    const shopOnly = {};
+    MAT_DRAFT_FIELDS.forEach(k => { shopOnly[k] = saved[k] || ''; });
+    return MAT_DRAFT_FIELDS.some(k => shopOnly[k].trim()) ? shopOnly : null;
   } catch(e) { return null; }
 }
 function clearMatDraft_(){
@@ -2203,7 +2201,7 @@ function matModal(m){
   const isEdit = !!(m && m.ID);
   const pre = m || {};
   const draft = !isEdit ? getMatDraft_() : null;
-  const formVals = isEdit ? m : (draft ? { ...draft, Code: pre.Code || draft.Code } : pre);
+  const formVals = isEdit ? m : { ...pre, ...(draft || {}) };
   const hasDraft = !isEdit && !!draft;
   const defaultLocs = ['สนง.ศ.ลป.', 'สนง.รร.สาธิต'];
   const knownLocs = (S.cache.materials || [])
@@ -2221,7 +2219,7 @@ function matModal(m){
       <div id="matDraftNotice" class="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-xs text-amber-800">
         <div class="flex items-center gap-2">
           <i class="fa-solid fa-file-pen text-amber-600 text-sm"></i>
-          <span class="font-bold">กำลังแสดงข้อมูลแบบร่างที่บันทึกไว้</span>
+          <span class="font-bold">กำลังแสดงข้อมูลร้านค้าที่จำไว้</span>
         </div>
         <button type="button" id="btnClearDraft" class="px-3 py-1 bg-white hover:bg-amber-100 text-amber-700 font-bold border border-amber-300 rounded-xl transition shadow-xs text-xs flex items-center gap-1">
           <i class="fa-solid fa-trash-can text-[10px]"></i> ล้างแบบร่าง
@@ -2292,7 +2290,7 @@ function matModal(m){
           </div>
           <select id="mCat" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
             <option value="">-- เลือกหมวดหมู่ --</option>
-            ${(S.cache.categories || []).map(c => {
+            ${sortedCategories_().map(c => {
               const pfx = c.Code || getCategoryPrefix(c.Name);
               return `<option value="${esc(c.Name)}" ${(formVals.Category === c.Name) ? 'selected' : ''}>${esc(c.Name)}${pfx ? ' [' + esc(pfx) + ']' : ''}</option>`;
             }).join('')}
@@ -2636,7 +2634,7 @@ function matModal(m){
       const select = $('#mCat');
       if (select) {
         select.innerHTML = '<option value="">-- เลือกหมวดหมู่ --</option>' +
-          (S.cache.categories || []).map(c => {
+          sortedCategories_().map(c => {
             const pfx = c.Code || getCategoryPrefix(c.Name);
             return `<option value="${esc(c.Name)}" ${c.Name === formVals.name ? 'selected' : ''}>${esc(c.Name)}${pfx ? ' [' + esc(pfx) + ']' : ''}</option>`;
           }).join('');

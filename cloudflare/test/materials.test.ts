@@ -53,7 +53,7 @@ describe('materials', () => {
     expect(m.material_type).toBe('เครื่องเขียน');
     const mv = await rows('SELECT * FROM stock_movements');
     expect(mv).toHaveLength(1);
-    expect(mv[0]).toMatchObject({ type: 'IN', qty: 5, before_qty: 0, after_qty: 5, note: 'เปิดยอดเริ่มต้น', actor: 'off1', material_id: m.id });
+    expect(mv[0]).toMatchObject({ type: 'IN', qty: 5, before_qty: 0, after_qty: 5, note: 'จัดซื้อ', actor: 'off1', material_id: m.id });
     expect((await rows("SELECT * FROM audit_log WHERE action='CREATE' AND entity='Material'")).length).toBe(1);
   });
 

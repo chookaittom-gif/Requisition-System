@@ -266,7 +266,7 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
           stmts.push(
             db
               .prepare(
-                "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES (?, ?, ?, ?, 'IN', ?, 0, ?, '', 'เปิดยอดเริ่มต้น', ?, ?)",
+                "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES (?, ?, ?, ?, 'IN', ?, 0, ?, '', 'จัดซื้อ', ?, ?)",
               )
               .bind(genId('SM'), newId, code, name, newStock, newStock, actor, now),
           );
