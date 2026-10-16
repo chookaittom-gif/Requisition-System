@@ -2213,7 +2213,7 @@ function matModal(m){
     title: isEdit ? 'แก้ไขข้อมูลพัสดุ' : 'เพิ่มพัสดุใหม่',
     sub: isEdit ? (m.Code + ' • ' + m.Name) : (pre.Code ? ('รหัสจากการสแกน: ' + pre.Code) : 'กรอกข้อมูลพัสดุให้ครบถ้วน'),
     icon: isEdit ? 'fa-pen-to-square' : 'fa-plus',
-    staticBackdrop: false,
+    staticBackdrop: !isEdit, // เพิ่มพัสดุใหม่: คลิกพื้นหลังไม่ปิด ต้องกดกากบาทเท่านั้น
     body: `<form id="frmMat" class="space-y-4">
       ${hasDraft ? `
       <div id="matDraftNotice" class="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-xs text-amber-800">

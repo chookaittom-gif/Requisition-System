@@ -95,7 +95,7 @@ describe('public/index.html static checks', () => {
 
   it('configures staticBackdrop and draft auto-save for materials modal with default minQty 5', () => {
     expect(html).toContain('staticBackdrop = false');
-    expect(html).toContain('staticBackdrop: false');
+    expect(html).toContain('staticBackdrop: !isEdit');
     expect(html).toContain('saveMatDraft_');
     expect(html).toContain('getMatDraft_');
     expect(html).toContain('clearMatDraft_');
