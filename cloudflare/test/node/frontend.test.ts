@@ -110,6 +110,39 @@ describe('public/index.html static checks', () => {
     expect(html).toContain("const btnGenCode = $('#btnGenCode');");
   });
 
+  it('adds a purchase-order tab for admin and officer only, exporting A4 portrait Excel', () => {
+    const menus = (name: string) => {
+      const start = html.indexOf(`  ${name}: [`);
+      return html.slice(start, html.indexOf('],', start));
+    };
+    expect(menus('admin')).toContain("id:'a-po'");
+    expect(menus('officer')).toContain("id:'a-po'");
+    expect(menus('guest')).not.toContain("id:'a-po'");
+    expect(html).toContain("'a-po': viewPurchaseOrder");
+    expect(html).toContain('async function exportPurchaseOrderXlsx');
+    const fn = html.slice(html.indexOf('async function exportPurchaseOrderXlsx'));
+    expect(fn.slice(0, fn.indexOf('VIEW : สต๊อกการ์ด'))).toContain('paperSize: 9');
+    expect(fn.slice(0, fn.indexOf('VIEW : สต๊อกการ์ด'))).toContain("orientation: 'portrait'");
+    expect(fn.slice(0, fn.indexOf('VIEW : สต๊อกการ์ด'))).toContain('fitToWidth: 1');
+    // remembers only reusable fields, never items/qty/price
+    expect(html).toContain("const PO_DRAFT_FIELDS = ['To', 'IssName', 'IssPos']");
+    expect(html).toContain("'po_draft_'");
+  });
+
+  it('purchase-order helpers compute row amounts, totals and Thai date parts', () => {
+    const thM = html.match(/const TH_M\s*=\s*\[[^\]]+\];/)![0];
+    const start = html.indexOf('function poRowAmount');
+    const end = html.indexOf('function poThaiLine');
+    const api = new Function(`${thM}\n${html.slice(start, end)}\nreturn { poRowAmount, poTotal, poThaiParts };`)();
+    expect(api.poRowAmount({ qty: '3', price: '10.5' })).toBe(31.5);
+    expect(api.poRowAmount({ qty: '0', price: '10' })).toBe(0);
+    expect(api.poRowAmount({ qty: '2', price: '' })).toBe(0);
+    expect(api.poTotal([{ qty: '3', price: '0.1' }, { qty: '2', price: '19.99' }])).toBe(40.28);
+    expect(api.poTotal([])).toBe(0);
+    expect(api.poThaiParts('2026-10-16')).toEqual({ d: '16', m: 'ตุลาคม', y: '2569' });
+    expect(api.poThaiParts('')).toEqual({ d: '', m: '', y: '' });
+  });
+
   it('includes shop info, budget source, acquired date, and order qty fields in material modal', () => {
     expect(html).toContain('id="mShopName"');
     expect(html).toContain('id="mShopAddress"');

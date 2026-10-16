@@ -893,6 +893,7 @@ const MENUS = {
     { id:'a-report',   title:'ทะเบียนวัสดุคงเหลือ',    sub:'รายงานประจำปีงบประมาณ',    icon:'fa-file-excel',            color:'#059669' },
     { id:'a-account',  title:'บัญชีพัสดุ',             sub:'ทะเบียนคุมวัสดุ',          icon:'fa-book',                  color:'#4338ca' },
     { id:'a-material', title:'จัดการพัสดุ',            sub:'เพิ่ม/แก้ไข/ซื้อเพิ่ม',     icon:'fa-boxes-packing',         color:'#0d9488' },
+    { id:'a-po',       title:'ใบสั่งซื้อ',             sub:'กรอกและส่งออก Excel',       icon:'fa-file-invoice',          color:'#7c3aed' },
     { id:'a-movement', title:'ประวัติเคลื่อนไหวสต็อก', sub:'IN / OUT / ADJUST',         icon:'fa-right-left',            color:'#0284c7' },
     { id:'a-stockcard',title:'สต๊อกการ์ด (Stock Card)',sub:'บัตรคุมยอดพัสดุรายชิ้น',    icon:'fa-id-card',               color:'#0d9488' },
     { id:'a-request',  title:'จัดการรายการขอเบิก',     sub:'อนุมัติ/ปฏิเสธใบขอเบิก',   icon:'fa-file-circle-check',     color:'#0284c7' },
@@ -909,6 +910,7 @@ const MENUS = {
     { id:'a-report',   title:'ทะเบียนวัสดุคงเหลือ',    sub:'รายงานประจำปีงบประมาณ',    icon:'fa-file-excel',            color:'#059669' },
     { id:'a-account',  title:'บัญชีพัสดุ',             sub:'ทะเบียนคุมวัสดุ',          icon:'fa-book',                  color:'#4338ca' },
     { id:'a-material', title:'จัดการพัสดุ',            sub:'เพิ่ม/แก้ไข/ซื้อเพิ่ม',     icon:'fa-boxes-packing',         color:'#0d9488' },
+    { id:'a-po',       title:'ใบสั่งซื้อ',             sub:'กรอกและส่งออก Excel',       icon:'fa-file-invoice',          color:'#7c3aed' },
     { id:'a-movement', title:'ประวัติเคลื่อนไหวสต็อก', sub:'IN / OUT / ADJUST',         icon:'fa-right-left',            color:'#0284c7' },
     { id:'a-stockcard',title:'สต๊อกการ์ด (Stock Card)',sub:'บัตรคุมยอดพัสดุรายชิ้น',    icon:'fa-id-card',               color:'#0d9488' },
     { id:'a-request',  title:'จัดการรายการขอเบิก',     sub:'อนุมัติ/ปฏิเสธใบขอเบิก',   icon:'fa-file-circle-check',     color:'#0284c7' },
@@ -1926,6 +1928,7 @@ async function go(view, keepCache){
     'a-setting': viewSettings,
     'a-user': viewUsers,
     'a-material': viewMaterials,
+    'a-po': viewPurchaseOrder,
     'a-movement': viewStockMovements,
     'a-stockcard': viewStockCard,
     'a-audit': viewAuditLog,
@@ -5184,6 +5187,366 @@ async function viewStockMovements(){
     el.addEventListener('input', filterMv);
     el.addEventListener('change', filterMv);
   });
+}
+
+/* =================================================================================
+ *  VIEW : ใบสั่งซื้อ (Purchase Order) — กรอกข้อมูลแล้วส่งออก Excel A4 (ไม่บันทึกลงฐานข้อมูล)
+ * ================================================================================= */
+const PO_MIN_ROWS = 16;               // จำนวนแถวตามแบบฟอร์มมาตรฐาน
+const PO_DRAFT_KEY = () => 'po_draft_' + (S?.user?.Username || 'default');
+const PO_DRAFT_FIELDS = ['To', 'IssName', 'IssPos'];   // จำเฉพาะข้อมูลที่ใช้ซ้ำ ไม่จำรายการ/จำนวน/ราคา
+
+function poRowAmount(r){
+  const q = Number(r && r.qty), p = Number(r && r.price);
+  return (q > 0 && p >= 0) ? Math.round(q * p * 100) / 100 : 0;
+}
+function poTotal(rows){
+  return Math.round((rows || []).reduce((s, r) => s + poRowAmount(r), 0) * 100) / 100;
+}
+function poThaiParts(ymd){
+  const p = String(ymd || '').substring(0, 10).split('-');
+  if(p.length < 3) return { d:'', m:'', y:'' };
+  const y = parseInt(p[0], 10) + 543, m = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
+  if(isNaN(y) || isNaN(m) || isNaN(d)) return { d:'', m:'', y:'' };
+  return { d:String(d), m:TH_M[m], y:String(y) };
+}
+function poThaiLine(label, ymd){
+  const t = poThaiParts(ymd);
+  return t.d ? `${label} ${t.d} เดือน ${t.m} พ.ศ. ${t.y}` : `${label}         เดือน                พ.ศ.`;
+}
+function poGetDraft_(){
+  try {
+    const raw = localStorage.getItem(PO_DRAFT_KEY());
+    const saved = raw ? (JSON.parse(raw) || {}) : {};
+    const out = {};
+    PO_DRAFT_FIELDS.forEach(k => { out[k] = String(saved[k] || ''); });
+    return out;
+  } catch(e){ return { To:'', IssName:'', IssPos:'' }; }
+}
+function poSaveDraft_(){
+  const draft = {
+    To: $('#poTo')?.value || '',
+    IssName: $('#poIssName')?.value || '',
+    IssPos: $('#poIssPos')?.value || ''
+  };
+  try { localStorage.setItem(PO_DRAFT_KEY(), JSON.stringify(draft)); }catch(e){}
+}
+
+async function viewPurchaseOrder(){
+  const c = $('#content');
+  c.innerHTML = skCards(2) + skTable(6);
+
+  const resMats = await api('apiGetMaterials');
+  const materials = (resMats && resMats.ok) ? (resMats.data || []) : [];
+  if(materials.length) S.cache.materials = materials;
+  const shopNames = Array.from(new Set(materials.map(m => String(m.ShopName || '').trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, 'th'));
+
+  const draft = poGetDraft_();
+  let rows = Array.from({ length: 5 }, () => ({ qty:'', unit:'', name:'', price:'', note:'' }));
+  const inp = 'w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm';
+  const cell = 'w-full px-2 py-2 rounded-xl border border-slate-200 bg-white text-sm';
+
+  c.innerHTML = `
+    <div class="space-y-5 animate-fadeUp">
+      ${cardWrap('ใบสั่งซื้อ', 'fa-file-invoice', `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">ใบสั่งซื้อเลขที่ / ปี</label>
+            <div class="flex items-center gap-2">
+              <input id="poNo" class="${inp}" placeholder="เลขที่">
+              <span class="font-bold text-slate-400">/</span>
+              <input id="poYear" class="${inp}" value="${currentFiscalYear()}" placeholder="ปี">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">วันที่</label>
+            <input id="poDate" type="date" class="${inp}" value="${todayYMD()}">
+            <p id="poDateTh" class="mt-1 text-xs text-brand-600 font-semibold">${thaiDate(todayYMD())}</p>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold text-slate-600 mb-1">เรียน (ผู้ขาย / ร้านค้า)</label>
+            <input id="poTo" list="poShops" class="${inp}" value="${esc(draft.To)}" placeholder="เช่น บริษัท สวนดุสิต ซัพพลาย จำกัด" autocomplete="off">
+            <datalist id="poShops">${shopNames.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">ตามใบเสนอราคาของท่านที่</label>
+            <input id="poQuoteNo" class="${inp}" placeholder="เลขที่ใบเสนอราคา">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">ลงวันที่</label>
+            <input id="poQuoteDate" type="date" class="${inp}">
+          </div>
+        </div>`)}
+
+      ${cardWrap('รายการสั่งซื้อ', 'fa-list-ol', `
+        <div class="overflow-x-auto -mx-5 px-5">
+          <table class="w-full text-sm tbl min-w-[820px]">
+            <thead>
+              <tr class="bg-slate-50 text-slate-600 text-xs">
+                <th class="px-2 py-3 text-center rounded-l-xl w-12">ที่</th>
+                <th class="px-2 py-3 text-center w-24">จำนวน</th>
+                <th class="px-2 py-3 text-center w-24">หน่วย</th>
+                <th class="px-2 py-3 text-left">รายการ</th>
+                <th class="px-2 py-3 text-center w-28">ราคา/หน่วย</th>
+                <th class="px-2 py-3 text-right w-32">จำนวนเงิน (บาท)</th>
+                <th class="px-2 py-3 text-left w-36">หมายเหตุ</th>
+                <th class="px-2 py-3 rounded-r-xl w-12"></th>
+              </tr>
+            </thead>
+            <tbody id="poBody" class="divide-y divide-slate-100"></tbody>
+            <tfoot>
+              <tr class="bg-slate-50/80 font-bold text-slate-700">
+                <td colspan="5" class="px-3 py-3 text-right">รวม</td>
+                <td id="poTotal" class="px-2 py-3 text-right font-extrabold text-slate-900">0.00</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button type="button" id="btnPoAddRow" class="min-h-[44px] px-4 rounded-2xl bg-brand-50 text-brand-600 font-bold text-sm hover:bg-brand-600 hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-plus"></i> เพิ่มแถว</button>
+          <button type="button" id="btnPoPick" class="min-h-[44px] px-4 rounded-2xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200 transition flex items-center gap-2"><i class="fa-solid fa-magnifying-glass"></i> เลือกจากทะเบียนพัสดุ</button>
+        </div>`)}
+
+      ${cardWrap('ลายเซ็น', 'fa-signature', `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-3">
+            <p class="text-sm font-bold text-slate-700">ผู้รับใบสั่งซื้อ</p>
+            <input id="poRecvName" class="${inp}" placeholder="ชื่อผู้รับใบสั่งซื้อ">
+            <input id="poRecvDate" type="date" class="${inp}">
+          </div>
+          <div class="space-y-3">
+            <p class="text-sm font-bold text-slate-700">ผู้ออกใบสั่งซื้อ</p>
+            <input id="poIssName" class="${inp}" value="${esc(draft.IssName)}" placeholder="ชื่อผู้ออกใบสั่งซื้อ">
+            <input id="poIssPos" class="${inp}" value="${esc(draft.IssPos)}" placeholder="ตำแหน่ง">
+          </div>
+        </div>`)}
+
+      <div class="flex flex-wrap gap-3">
+        <button type="button" id="btnPoExport" class="min-h-[44px] px-5 rounded-2xl bg-teal text-white font-bold text-sm shadow-soft hover:opacity-90 transition flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> ส่งออก Excel (A4)</button>
+        <button type="button" id="btnPoClear" class="min-h-[44px] px-5 rounded-2xl bg-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-300 transition flex items-center gap-2"><i class="fa-solid fa-eraser"></i> ล้างรายการ</button>
+      </div>
+    </div>`;
+
+  const refreshTotals = () => {
+    rows.forEach((r, i) => { const el = $('#poAmt' + i); if(el) el.textContent = poRowAmount(r) ? money(poRowAmount(r)) : '-'; });
+    $('#poTotal').textContent = money(poTotal(rows));
+  };
+  const renderRows = () => {
+    $('#poBody').innerHTML = rows.map((r, i) => `
+      <tr>
+        <td class="px-2 py-2 text-center text-xs text-slate-500">${i + 1}</td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" inputmode="decimal" class="${cell} text-center" value="${esc(r.qty)}"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="unit" class="${cell} text-center" value="${esc(r.unit)}"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="name" class="${cell}" value="${esc(r.name)}"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="price" type="number" min="0" step="0.01" inputmode="decimal" class="${cell} text-right" value="${esc(r.price)}"></td>
+        <td id="poAmt${i}" class="px-2 py-2 text-right font-bold text-slate-700">-</td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="note" class="${cell}" value="${esc(r.note)}"></td>
+        <td class="px-2 py-2 text-center"><button type="button" data-del="${i}" class="w-11 h-11 rounded-xl text-rose2 hover:bg-rose2/10 transition" title="ลบแถว"><i class="fa-solid fa-trash-can"></i></button></td>
+      </tr>`).join('');
+    refreshTotals();
+  };
+  renderRows();
+
+  $('#poBody').addEventListener('input', e => {
+    const t = e.target;
+    if(!t.dataset || t.dataset.i === undefined) return;
+    rows[Number(t.dataset.i)][t.dataset.f] = t.value;
+    refreshTotals();
+  });
+  $('#poBody').addEventListener('click', e => {
+    const b = e.target.closest('[data-del]');
+    if(!b) return;
+    rows.splice(Number(b.dataset.del), 1);
+    if(!rows.length) rows.push({ qty:'', unit:'', name:'', price:'', note:'' });
+    renderRows();
+  });
+  $('#btnPoAddRow').addEventListener('click', () => {
+    rows.push({ qty:'', unit:'', name:'', price:'', note:'' });
+    renderRows();
+  });
+  $('#btnPoClear').addEventListener('click', () => {
+    rows = Array.from({ length: 5 }, () => ({ qty:'', unit:'', name:'', price:'', note:'' }));
+    renderRows();
+  });
+  $('#poDate').addEventListener('change', e => { $('#poDateTh').textContent = thaiDate(e.target.value); });
+  ['poTo', 'poIssName', 'poIssPos'].forEach(id => $('#' + id).addEventListener('input', poSaveDraft_));
+
+  $('#btnPoPick').addEventListener('click', () => {
+    const list = S.cache.materials || [];
+    openModal({
+      title: 'เลือกจากทะเบียนพัสดุ',
+      sub: 'คลิกรายการเพื่อเพิ่มลงใบสั่งซื้อ',
+      icon: 'fa-boxes-stacked',
+      size: 'max-w-xl',
+      body: `<input id="poPickQ" class="${inp}" placeholder="ค้นหารหัส / ชื่อพัสดุ..." autocomplete="off">
+        <div id="poPickList" class="mt-3 max-h-[50vh] overflow-y-auto space-y-2"></div>`
+    });
+    const draw = () => {
+      const q = ($('#poPickQ').value || '').trim().toLowerCase();
+      const hits = list.filter(m => !q || String(m.Code).toLowerCase().includes(q) || String(m.Name).toLowerCase().includes(q)).slice(0, 50);
+      $('#poPickList').innerHTML = hits.length ? hits.map(m => `
+        <button type="button" data-pick="${esc(m.ID)}" class="w-full min-h-[44px] text-left px-3 py-2 rounded-2xl border border-slate-200 hover:border-brand-500 hover:bg-brand-50/40 transition">
+          <span class="text-[11px] font-bold text-brand-600">${esc(m.Code)}</span>
+          <span class="block text-sm font-semibold text-slate-700">${esc(m.Name)}</span>
+          <span class="block text-[11px] text-slate-500">${esc(m.Unit)} • ${money(m.UnitPrice)} บาท</span>
+        </button>`).join('') : '<p class="text-center text-slate-400 py-6 text-sm">ไม่พบรายการ</p>';
+    };
+    draw();
+    $('#poPickQ').addEventListener('input', draw);
+    $('#poPickList').addEventListener('click', e => {
+      const b = e.target.closest('[data-pick]');
+      if(!b) return;
+      const m = list.find(x => String(x.ID) === b.dataset.pick);
+      if(!m) return;
+      const blank = rows.findIndex(r => !r.name && !r.qty && !r.price);
+      const row = { qty:'', unit:m.Unit || '', name:m.Name || '', price:String(m.UnitPrice ?? ''), note:'' };
+      if(blank >= 0) rows[blank] = row; else rows.push(row);
+      closeModal();
+      renderRows();
+    });
+  });
+
+  $('#btnPoExport').addEventListener('click', async () => {
+    const items = rows.filter(r => String(r.name).trim() || r.qty !== '' || r.price !== '');
+    if(!items.length) return toast('warning', 'กรุณากรอกรายการสั่งซื้ออย่างน้อย 1 รายการ');
+    for(let i = 0; i < items.length; i++){
+      const r = items[i];
+      if(!String(r.name).trim()) return toast('warning', `กรุณาระบุชื่อรายการแถวที่ ${i + 1}`);
+      if(!(Number(r.qty) > 0)) return toast('warning', `กรุณาระบุจำนวนแถวที่ ${i + 1} (ต้องมากกว่า 0)`);
+      if(r.price !== '' && !(Number(r.price) >= 0)) return toast('warning', `ราคาแถวที่ ${i + 1} ไม่ถูกต้อง`);
+    }
+    const btn = $('#btnPoExport');
+    btn.disabled = true;
+    showLoader('กำลังสร้างไฟล์ Excel...');
+    try {
+      await exportPurchaseOrderXlsx({
+        no: $('#poNo').value.trim(), year: $('#poYear').value.trim(),
+        date: $('#poDate').value, to: $('#poTo').value.trim(),
+        quoteNo: $('#poQuoteNo').value.trim(), quoteDate: $('#poQuoteDate').value,
+        recvName: $('#poRecvName').value.trim(), recvDate: $('#poRecvDate').value,
+        issName: $('#poIssName').value.trim(), issPos: $('#poIssPos').value.trim(),
+        items
+      });
+    } catch(err) {
+      alertErr(err.message || 'ส่งออกไฟล์ไม่สำเร็จ');
+    } finally {
+      hideLoader();
+      btn.disabled = false;
+    }
+  });
+}
+
+async function exportPurchaseOrderXlsx(d){
+  await ensureExcelJs();
+  const FONT = 'TH Sarabun New';
+  const items = d.items || [];
+  const bodyRows = Math.max(PO_MIN_ROWS, items.length);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('ใบสั่งซื้อ', {
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'portrait',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: bodyRows > PO_MIN_ROWS ? 0 : 1,
+      horizontalCentered: true,
+      margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 }
+    },
+    views: [{ showGridLines: false }]
+  });
+  ws.columns = [{ width: 8 }, { width: 14 }, { width: 38 }, { width: 15 }, { width: 15 }, { width: 16 }];
+
+  const put = (r, c1, c2, value, opt = {}) => {
+    if(c2 > c1) ws.mergeCells(r, c1, r, c2);
+    const cellRef = ws.getCell(r, c1);
+    cellRef.value = value;
+    cellRef.font = { name: FONT, size: opt.size || 14, bold: !!opt.bold, italic: !!opt.italic };
+    cellRef.alignment = { vertical: 'middle', horizontal: opt.align || 'left', wrapText: true };
+    return cellRef;
+  };
+
+  put(1, 1, 6, 'ใบสั่งซื้อ', { size: 20, bold: true, align: 'center' });
+  ws.getRow(1).height = 30;
+  const noText = `ใบสั่งซื้อเลขที่ ${d.no || '..............'} / ${d.year || '..........'}`;
+  put(3, 1, 3, noText);
+  put(3, 4, 6, (S.settings && S.settings.SchoolName) || '', { align: 'right' });
+  put(4, 4, 6, poThaiLine('วันที่', d.date), { align: 'right', bold: true });
+  put(5, 1, 6, 'เรียน  ' + (d.to || ''), { bold: true });
+  const q = poThaiParts(d.quoteDate);
+  put(6, 1, 6, `     ตามใบเสนอราคาของท่านที่ ${d.quoteNo || '..............'}  ลงวันที่ ${q.d ? q.d + ' เดือน ' + q.m + ' พ.ศ. ' + q.y : '........ เดือน ................ พ.ศ. ........'}`);
+  put(7, 1, 6, 'ราคาขายสิ่งของดังรายการต่อไปนี้');
+
+  const HEAD = 8;
+  ['ลำดับที่', 'จำนวนของ', 'รายการ', 'ราคาหน่วยละ', 'จำนวนเงิน (บาท)', 'หมายเหตุ'].forEach((h, i) => {
+    const cellRef = ws.getCell(HEAD, i + 1);
+    cellRef.value = h;
+    cellRef.font = { name: FONT, size: 13, bold: true };
+    cellRef.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cellRef.border = THIN_BORDER;
+    cellRef.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  });
+  ws.getRow(HEAD).height = 30;
+
+  for(let i = 0; i < bodyRows; i++){
+    const r = items[i];
+    const rowNo = HEAD + 1 + i;
+    const amount = r ? poRowAmount(r) : 0;
+    const qty = r ? (String(r.unit || '').trim() ? `${Number(r.qty)} ${String(r.unit).trim()}` : Number(r.qty)) : '';
+    const vals = [
+      r ? i + 1 : '',
+      qty,
+      r ? String(r.name).trim() : '',
+      r && r.price !== '' ? Number(r.price) : '',
+      r && amount ? amount : '',
+      r ? String(r.note || '').trim() : ''
+    ];
+    vals.forEach((v, c) => {
+      const cellRef = ws.getCell(rowNo, c + 1);
+      cellRef.value = v;
+      cellRef.font = { name: FONT, size: 13 };
+      cellRef.border = THIN_BORDER;
+      cellRef.alignment = {
+        vertical: 'middle',
+        horizontal: (c === 0 || c === 1) ? 'center' : (c === 3 || c === 4) ? 'right' : 'left',
+        wrapText: true
+      };
+      if(c === 3 || c === 4) cellRef.numFmt = '#,##0.00';
+    });
+    const lines = r ? Math.max(1, Math.ceil(String(r.name).length / 34), Math.ceil(String(r.note || '').length / 14)) : 1;
+    ws.getRow(rowNo).height = 21 * lines;
+  }
+
+  const TOT = HEAD + bodyRows + 1;
+  for(let c = 1; c <= 6; c++){
+    const cellRef = ws.getCell(TOT, c);
+    cellRef.border = THIN_BORDER;
+    cellRef.font = { name: FONT, size: 13, bold: true };
+  }
+  const totLabel = ws.getCell(TOT, 3);
+  totLabel.value = 'รวม';
+  totLabel.font = { name: FONT, size: 13, bold: true, italic: true };
+  totLabel.alignment = { vertical: 'middle', horizontal: 'center' };
+  const totVal = ws.getCell(TOT, 5);
+  totVal.value = poTotal(items);
+  totVal.numFmt = '#,##0.00';
+  totVal.alignment = { vertical: 'middle', horizontal: 'right' };
+  ws.getRow(TOT).height = 24;
+
+  const SIG = TOT + 2;
+  put(SIG, 1, 3, '(ลงชื่อ).......................................ผู้รับใบสั่งซื้อ', { align: 'center' });
+  put(SIG, 4, 6, '(ลงชื่อ)...........................ผู้ออกใบสั่งซื้อ', { align: 'center' });
+  put(SIG + 1, 1, 3, `( ${d.recvName || '.......................................'} )`, { align: 'center' });
+  put(SIG + 1, 4, 6, `( ${d.issName || '...........................'} )`, { align: 'center' });
+  put(SIG + 2, 1, 3, d.recvDate ? thaiDate(d.recvDate) : '........ / ........ / ........', { align: 'center' });
+  put(SIG + 2, 4, 6, `ตำแหน่ง ${d.issPos || '...........................'}`, { align: 'center' });
+  [SIG, SIG + 1, SIG + 2].forEach(r => { ws.getRow(r).height = 26; });
+
+  ws.pageSetup.printArea = `A1:F${SIG + 2}`;
+  const safe = s => String(s || '').replace(/[\\/:*?"<>|]/g, '-');
+  const fileNo = d.no ? safe(d.no) + (d.year ? '-' + safe(d.year) : '') : 'ร่าง';
+  await saveExcelWorkbook(wb, `ใบสั่งซื้อ_${fileNo}_${todayYMD()}.xlsx`);
 }
 
 /* =================================================================================
