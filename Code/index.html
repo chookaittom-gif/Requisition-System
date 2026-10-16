@@ -846,10 +846,38 @@ async function uploadFile(file, purpose, onProgress){
   return { url: fin.url, driveFileId: fin.driveFileId };
 }
 
+// ย่อรูปพัสดุก่อนอัปโหลด: ด้านยาวสุด ≤ IMG_SHRINK_MAX_PX, WebP (สำรอง JPEG); ล้มเหลว/ไม่เล็กลง → คืนไฟล์เดิม
+const IMG_SHRINK_MAX_PX = 1200;
+const IMG_SHRINK_QUALITY = 0.82;
+async function shrinkImageFile_(file){
+  try{
+    if(!file || !/^image\/(jpeg|png|webp)$/.test(uploadMimeOf_(file))) return file;
+    const bmp = await createImageBitmap(file, { imageOrientation:'from-image' });
+    const scale = Math.min(1, IMG_SHRINK_MAX_PX / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if(bmp.close) bmp.close();
+    const toBlob = t => new Promise(res => cv.toBlob(res, t, IMG_SHRINK_QUALITY));
+    let blob = await toBlob('image/webp');
+    if(!blob || blob.type !== 'image/webp') blob = await toBlob('image/jpeg');
+    if(!blob || blob.size <= 0 || (scale === 1 && blob.size >= file.size)) return file;
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const base = (file.name || 'image').replace(/\.[^.]*$/, '') || 'image';
+    return new File([blob], base + '.' + ext, { type: blob.type });
+  }catch(e){ return file; }
+}
+
 // อัปโหลดไฟล์จาก <input type=file> (ถ้าเลือก) พร้อมแถบความคืบหน้าในหน้าต่างโหลด; คืน url หรือ null ถ้าไม่ได้เลือกไฟล์
 async function uploadPicked_(input, purpose, label){
-  const file = input && input.files && input.files[0];
+  let file = input && input.files && input.files[0];
   if(!file) return null;
+  if(purpose === 'material_image') file = await shrinkImageFile_(file);
   const textEl = document.getElementById('loaderText');
   const prevText = textEl ? textEl.textContent : '';
   try{
