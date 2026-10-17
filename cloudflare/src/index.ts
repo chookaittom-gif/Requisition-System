@@ -4,6 +4,7 @@ import './api/auth';
 import './api/materials';
 import './api/requests';
 import './api/reports';
+import './api/shops';
 import { handleChunk } from './api/uploads';
 import { runLowStockCron } from './cron';
 import { fail, json } from './http';

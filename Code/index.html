@@ -921,6 +921,7 @@ const MENUS = {
     { id:'a-report',   title:'ทะเบียนวัสดุคงเหลือ',    sub:'รายงานประจำปีงบประมาณ',    icon:'fa-file-excel',            color:'#059669' },
     { id:'a-account',  title:'บัญชีพัสดุ',             sub:'ทะเบียนคุมวัสดุ',          icon:'fa-book',                  color:'#4338ca' },
     { id:'a-material', title:'จัดการพัสดุ',            sub:'เพิ่ม/แก้ไข/ซื้อเพิ่ม',     icon:'fa-boxes-packing',         color:'#0d9488' },
+    { id:'a-shop',     title:'จัดการร้านค้า',          sub:'ฐานข้อมูลร้านค้า/ผู้จำหน่าย', icon:'fa-store',                 color:'#0284c7' },
     { id:'a-po',       title:'ใบสั่งซื้อ',             sub:'กรอกและส่งออก Excel',       icon:'fa-file-invoice',          color:'#7c3aed' },
     { id:'a-movement', title:'ประวัติเคลื่อนไหวสต็อก', sub:'IN / OUT / ADJUST',         icon:'fa-right-left',            color:'#0284c7' },
     { id:'a-stockcard',title:'สต๊อกการ์ด (Stock Card)',sub:'บัตรคุมยอดพัสดุรายชิ้น',    icon:'fa-id-card',               color:'#0d9488' },
@@ -938,6 +939,7 @@ const MENUS = {
     { id:'a-report',   title:'ทะเบียนวัสดุคงเหลือ',    sub:'รายงานประจำปีงบประมาณ',    icon:'fa-file-excel',            color:'#059669' },
     { id:'a-account',  title:'บัญชีพัสดุ',             sub:'ทะเบียนคุมวัสดุ',          icon:'fa-book',                  color:'#4338ca' },
     { id:'a-material', title:'จัดการพัสดุ',            sub:'เพิ่ม/แก้ไข/ซื้อเพิ่ม',     icon:'fa-boxes-packing',         color:'#0d9488' },
+    { id:'a-shop',     title:'จัดการร้านค้า',          sub:'ฐานข้อมูลร้านค้า/ผู้จำหน่าย', icon:'fa-store',                 color:'#0284c7' },
     { id:'a-po',       title:'ใบสั่งซื้อ',             sub:'กรอกและส่งออก Excel',       icon:'fa-file-invoice',          color:'#7c3aed' },
     { id:'a-movement', title:'ประวัติเคลื่อนไหวสต็อก', sub:'IN / OUT / ADJUST',         icon:'fa-right-left',            color:'#0284c7' },
     { id:'a-stockcard',title:'สต๊อกการ์ด (Stock Card)',sub:'บัตรคุมยอดพัสดุรายชิ้น',    icon:'fa-id-card',               color:'#0d9488' },
@@ -1956,6 +1958,7 @@ async function go(view, keepCache){
     'a-setting': viewSettings,
     'a-user': viewUsers,
     'a-material': viewMaterials,
+    'a-shop': viewShops,
     'a-po': viewPurchaseOrder,
     'a-movement': viewStockMovements,
     'a-stockcard': viewStockCard,
@@ -2265,21 +2268,23 @@ function matModal(m){
         <div class="grid sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">ชื่อร้านค้า</label>
-            <input id="mShopName" value="${esc(formVals.ShopName || '')}" placeholder="เช่น บริษัท สวนดุสิต ซัพพลาย จำกัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+            <input id="mShopName" value="${esc(formVals.ShopName || '')}" list="shopSuggestions" placeholder="เช่น บริษัท สวนดุสิต ซัพพลาย จำกัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 transition" autocomplete="off">
+            <datalist id="shopSuggestions"></datalist>
+            <p class="mt-1 text-[11px] text-slate-400">เลือกจากรายชื่อร้านค้า หรือพิมพ์ชื่อร้านใหม่</p>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">หมายเลขกำกับภาษี</label>
-            <input id="mShopTaxId" value="${esc(formVals.ShopTaxId || '')}" placeholder="เช่น 01055xxxxxxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+            <input id="mShopTaxId" value="${esc(formVals.ShopTaxId || '')}" placeholder="เช่น 01055xxxxxxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm transition">
           </div>
         </div>
         <div class="grid sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">ที่อยู่ร้านค้า</label>
-            <input id="mShopAddress" value="${esc(formVals.ShopAddress || '')}" placeholder="เลขที่ ถนน ตำบล อำเภอ จังหวัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+            <input id="mShopAddress" value="${esc(formVals.ShopAddress || '')}" placeholder="เลขที่ ถนน ตำบล อำเภอ จังหวัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm transition">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">เบอร์โทรศัพท์ร้านค้า</label>
-            <input id="mShopPhone" value="${esc(formVals.ShopPhone || '')}" placeholder="เช่น 02-xxx-xxxx, 08x-xxx-xxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm">
+            <input id="mShopPhone" value="${esc(formVals.ShopPhone || '')}" placeholder="เช่น 02-xxx-xxxx, 08x-xxx-xxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm transition">
           </div>
         </div>
       </div>
@@ -2431,6 +2436,64 @@ function matModal(m){
   }
 
   $('#mCancel').addEventListener('click', closeModal);
+
+  // Populate shops suggestions and auto-fill
+  const shopInp = $('#mShopName');
+  const shopTaxInp = $('#mShopTaxId');
+  const shopAddrInp = $('#mShopAddress');
+  const shopPhoneInp = $('#mShopPhone');
+  const shopDataList = $('#shopSuggestions');
+
+  const populateShopList = (shops) => {
+    if (!shopDataList || !shops) return;
+    shopDataList.innerHTML = shops.map(s => `<option value="${esc(s.Name)}">${esc(s.TaxId ? 'เลขประจำตัว: ' + s.TaxId : '')}</option>`).join('');
+  };
+
+  if (S.cache.shops && S.cache.shops.length) {
+    populateShopList(S.cache.shops);
+  } else {
+    api('apiGetShops').then(r => {
+      if (r && r.ok) {
+        S.cache.shops = r.data || [];
+        populateShopList(S.cache.shops);
+      }
+    }).catch(()=>{});
+  }
+
+  if (shopInp) {
+    const handleShopSelect = () => {
+      const q = (shopInp.value || '').trim().toLowerCase();
+      if (!q) return;
+      const found = (S.cache.shops || []).find(s => String(s.Name || '').trim().toLowerCase() === q);
+      if (found) {
+        let changed = false;
+        if (shopTaxInp && found.TaxId && shopTaxInp.value !== found.TaxId) {
+          shopTaxInp.value = found.TaxId;
+          changed = true;
+        }
+        if (shopAddrInp && found.Address && shopAddrInp.value !== found.Address) {
+          shopAddrInp.value = found.Address;
+          changed = true;
+        }
+        if (shopPhoneInp && found.Phone && shopPhoneInp.value !== found.Phone) {
+          shopPhoneInp.value = found.Phone;
+          changed = true;
+        }
+        if (changed) {
+          [shopTaxInp, shopAddrInp, shopPhoneInp].forEach(el => {
+            if (el) {
+              el.classList.add('bg-sky-50', 'border-sky-400');
+              setTimeout(() => el.classList.remove('bg-sky-50', 'border-sky-400'), 1500);
+            }
+          });
+        }
+      }
+      if (!isEdit) saveMatDraft_();
+    };
+
+    shopInp.addEventListener('input', handleShopSelect);
+    shopInp.addEventListener('change', handleShopSelect);
+  }
 
   const locInp = $('#mLoc');
   const locBox = $('#locCombobox');
@@ -5261,6 +5324,235 @@ function poSaveDraft_(){
     IssPos: $('#poIssPos')?.value || ''
   };
   try { localStorage.setItem(PO_DRAFT_KEY(), JSON.stringify(draft)); }catch(e){}
+}
+
+/* =================================================================================
+ *  VIEW : SHOPS (จัดการฐานข้อมูลร้านค้า/ผู้จำหน่าย)
+ * ================================================================================= */
+async function viewShops(){
+  const c = $('#content');
+  c.innerHTML = skCards(3) + skTable(6);
+  try{
+    const r = await api('apiGetShops');
+    if(!r || !r.ok) return (c.innerHTML = emptyBox((r && r.message) || 'โหลดรายชื่อร้านค้าไม่สำเร็จ'));
+    S.cache.shops = r.data || [];
+    const shops = S.cache.shops;
+
+    const withTax = shops.filter(s => s.TaxId && s.TaxId.trim()).length;
+    const withPhone = shops.filter(s => s.Phone && s.Phone.trim()).length;
+
+    c.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fadeUp">
+        ${statCardH('fa-store','#0284c7','ร้านค้าทั้งหมด', nf(shops.length),'แห่ง')}
+        ${statCardH('fa-receipt','#059669','มีเลขกำกับภาษี', nf(withTax),'แห่ง')}
+        ${statCardH('fa-phone','#7c3aed','มีเบอร์โทรศัพท์', nf(withPhone),'แห่ง')}
+      </div>
+      <div class="mt-5">
+        <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-soft">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-store text-brand-600"></i> ทะเบียนข้อมูลร้านค้า / ผู้จำหน่าย
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">ใช้เป็นฐานข้อมูลกลางเพื่อดึงข้อมูลอัตโนมัติเมื่อจัดซื้อหรือเพิ่มพัสดุ</p>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button type="button" id="btnAddShop" class="px-4 py-2.5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-soft transition flex items-center gap-2">
+                <i class="fa-solid fa-plus-circle"></i> เพิ่มร้านค้าใหม่
+              </button>
+            </div>
+          </div>
+          <div class="mb-4">
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+              <input id="txtShopSearch" placeholder="ค้นหาชื่อร้านค้า, เลขกำกับภาษี, เบอร์โทร หรือที่อยู่..." class="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+            </div>
+          </div>
+          <div id="shopTableContainer" class="overflow-x-auto">
+            ${renderShopTable_(shops)}
+          </div>
+        </div>
+      </div>`;
+
+    $('#btnAddShop').addEventListener('click', () => shopModal(null));
+
+    const searchInp = $('#txtShopSearch');
+    if (searchInp) {
+      searchInp.addEventListener('input', () => {
+        const q = searchInp.value.trim().toLowerCase();
+        const filtered = (S.cache.shops || []).filter(s =>
+          String(s.Name || '').toLowerCase().includes(q) ||
+          String(s.TaxId || '').toLowerCase().includes(q) ||
+          String(s.Phone || '').toLowerCase().includes(q) ||
+          String(s.Address || '').toLowerCase().includes(q)
+        );
+        $('#shopTableContainer').innerHTML = renderShopTable_(filtered);
+        bindShopRowEvents_();
+      });
+    }
+
+    bindShopRowEvents_();
+  }catch(err){
+    c.innerHTML = emptyBox('โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err));
+  }
+}
+
+function renderShopTable_(list){
+  if (!list.length) {
+    return `<div class="py-12 text-center text-slate-400 text-sm">
+      <i class="fa-solid fa-store-slash text-3xl mb-2 block opacity-40"></i>
+      ยังไม่มีข้อมูลร้านค้าในระบบ
+    </div>`;
+  }
+  return `
+    <table class="w-full text-left text-sm">
+      <thead>
+        <tr class="border-b border-slate-100 text-slate-400 text-xs">
+          <th class="py-3 px-3 font-bold w-12 text-center">#</th>
+          <th class="py-3 px-3 font-bold">ชื่อร้านค้า / ผู้จำหน่าย</th>
+          <th class="py-3 px-3 font-bold">เลขประจำตัวผู้เสียภาษี</th>
+          <th class="py-3 px-3 font-bold">เบอร์โทรศัพท์</th>
+          <th class="py-3 px-3 font-bold">ที่อยู่</th>
+          <th class="py-3 px-3 font-bold text-center w-28">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        ${list.map((s, idx) => `
+          <tr class="hover:bg-slate-50/60 transition group">
+            <td class="py-3 px-3 text-center text-xs text-slate-400">${idx + 1}</td>
+            <td class="py-3 px-3 font-bold text-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 grid place-content-center shrink-0 text-xs">
+                  <i class="fa-solid fa-store"></i>
+                </span>
+                <div>
+                  <div>${esc(s.Name)}</div>
+                  ${s.Note ? `<div class="text-[11px] font-normal text-slate-400">${esc(s.Note)}</div>` : ''}
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-3 font-mono text-xs text-slate-600">${s.TaxId ? esc(s.TaxId) : '<span class="text-slate-300">-</span>'}</td>
+            <td class="py-3 px-3 text-slate-600 text-xs">${s.Phone ? esc(s.Phone) : '<span class="text-slate-300">-</span>'}</td>
+            <td class="py-3 px-3 text-slate-500 text-xs max-w-xs truncate" title="${esc(s.Address || '')}">${s.Address ? esc(s.Address) : '<span class="text-slate-300">-</span>'}</td>
+            <td class="py-3 px-3 text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <button type="button" class="btn-edit-shop w-8 h-8 rounded-xl bg-slate-100 hover:bg-sky-50 text-slate-600 hover:text-sky-600 transition grid place-content-center text-xs" data-id="${esc(s.ID)}" title="แก้ไข">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn-del-shop w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition grid place-content-center text-xs" data-id="${esc(s.ID)}" data-name="${esc(s.Name)}" title="ลบ">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function bindShopRowEvents_(){
+  $$('.btn-edit-shop').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const shop = (S.cache.shops || []).find(s => String(s.ID) === String(id));
+      if (shop) shopModal(shop);
+    });
+  });
+  $$('.btn-del-shop').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const name = btn.dataset.name || 'ร้านค้านี้';
+      const cfm = await confirmDel('คุณต้องการลบร้านค้า "' + name + '" ออกจากระบบใช่หรือไม่?');
+      if (!cfm || !cfm.isConfirmed) return;
+      showLoader('กำลังลบข้อมูลร้านค้า...');
+      try {
+        const res = await api('apiDeleteShop', id);
+        hideLoader();
+        if (res && res.ok) {
+          toast('success', 'ลบร้านค้าเรียบร้อยแล้ว');
+          viewShops();
+        } else {
+          alertErr((res && res.message) || 'ลบร้านค้าไม่สำเร็จ');
+        }
+      } catch(err) {
+        hideLoader();
+        alertErr(err.message || 'เกิดข้อผิดพลาดในการลบร้านค้า');
+      }
+    });
+  });
+}
+
+function shopModal(shop){
+  const isEdit = !!(shop && shop.ID);
+  const s = shop || {};
+  openModal({
+    title: isEdit ? 'แก้ไขข้อมูลร้านค้า' : 'เพิ่มร้านค้าใหม่',
+    sub: isEdit ? esc(s.Name) : 'กรอกรายละเอียดร้านค้า / ผู้จำหน่าย',
+    icon: 'fa-store',
+    body: `
+      <form id="frmShop" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อร้านค้า / ผู้จำหน่าย <span class="text-rose-500">*</span></label>
+          <input id="sName" value="${esc(s.Name || '')}" required placeholder="เช่น บริษัท สวนดุสิต ซัพพลาย จำกัด" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">เลขประจำตัวผู้เสียภาษีอากร</label>
+          <input id="sTaxId" value="${esc(s.TaxId || '')}" placeholder="เช่น 01055xxxxxxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">เบอร์โทรศัพท์</label>
+            <input id="sPhone" value="${esc(s.Phone || '')}" placeholder="เช่น 054-228019, 08x-xxx-xxxx" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">บันทึกย่อ (Note)</label>
+            <input id="sNote" value="${esc(s.Note || '')}" placeholder="เช่น ร้านประจำ, ติดต่อคุณสมใจ" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ที่อยู่ร้านค้า</label>
+          <textarea id="sAddress" rows="2" placeholder="เลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" class="w-full px-3.5 py-2 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition resize-none">${esc(s.Address || '')}</textarea>
+        </div>
+        <input type="hidden" id="sID" value="${isEdit ? esc(s.ID) : ''}">
+      </form>
+    `,
+    foot: `
+      <button type="button" id="sCancel" class="px-5 py-2.5 rounded-2xl bg-slate-200 text-slate-700 font-bold text-sm">ยกเลิก</button>
+      <button type="button" id="sSave" class="px-5 py-2.5 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-soft">
+        <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูล
+      </button>
+    `
+  });
+
+  $('#sCancel').addEventListener('click', closeModal);
+  $('#sSave').addEventListener('click', async () => {
+    const name = ($('#sName')?.value || '').trim();
+    if (!name) return alertErr('กรุณาระบุชื่อร้านค้า');
+    const payload = {
+      ID: $('#sID')?.value || '',
+      action: isEdit ? 'update' : 'create',
+      Name: name,
+      TaxId: ($('#sTaxId')?.value || '').trim(),
+      Phone: ($('#sPhone')?.value || '').trim(),
+      Note: ($('#sNote')?.value || '').trim(),
+      Address: ($('#sAddress')?.value || '').trim()
+    };
+    showLoader('กำลังบันทึกข้อมูลร้านค้า...');
+    try {
+      const res = await api('apiSaveShop', payload);
+      hideLoader();
+      if (res && res.ok) {
+        closeModal();
+        toast('success', isEdit ? 'แก้ไขข้อมูลร้านค้าสำเร็จ' : 'เพิ่มร้านค้าสำเร็จ');
+        viewShops();
+      } else {
+        alertErr((res && res.message) || 'บันทึกข้อมูลไม่สำเร็จ');
+      }
+    } catch(err) {
+      hideLoader();
+      alertErr(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    }
+  });
 }
 
 async function viewPurchaseOrder(){

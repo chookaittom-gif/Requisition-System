@@ -22,7 +22,8 @@ const SHEETS = {
   STOCK_MOVEMENTS:'StockMovements',
   AUDIT_LOG:      'AuditLog',
   CATEGORIES:     'Categories',
-  OPENING_BALANCES:'OpeningBalances'
+  OPENING_BALANCES:'OpeningBalances',
+  SHOPS:          'Shops'
 };
 
 const HEADERS = {
@@ -52,7 +53,8 @@ const HEADERS = {
   ],
   AuditLog: ['ID','Action','Entity','EntityID','Detail','Actor','CreatedAt'],
   Categories: ['ID','Name','Code','CreatedAt'],
-  OpeningBalances: ['ID','MaterialID','FiscalYear','OpeningQty','SetBy','CreatedAt','UpdatedAt']
+  OpeningBalances: ['ID','MaterialID','FiscalYear','OpeningQty','SetBy','CreatedAt','UpdatedAt'],
+  Shops: ['ID','Name','TaxId','Address','Phone','Note','CreatedAt','UpdatedAt']
 };
 
 /* ============================== WEB APP ENTRY ============================== */
@@ -76,6 +78,7 @@ const FN_ACCESS = {
   apiGetTeacherDashboard:'officer', apiUpdateProfile:'officer', apiGetStockCard:'officer',
   apiSaveMaterials:'officer', apiDeleteMaterials:'officer',
   apiPurchaseMaterials:'officer', apiSaveCategory:'officer', apiGetRequests:'officer',
+  apiGetShops:'officer', apiSaveShop:'officer', apiDeleteShop:'officer',
   apiUpdateRequestStatus:'officer', apiDeleteRequests:'officer', apiGetStockMovements:'officer',
   apiGetAdminDashboard:'officer', apiGetInventoryAccount:'officer',
   apiGetInventoryReport:'officer', apiSaveOpeningBalance:'officer', apiExportInventoryReportSheet:'officer',
@@ -120,7 +123,9 @@ function dispatch_(fn, args, token){
       if(Array.isArray(a)) a.forEach(it=>{ if(it && typeof it === 'object') it.actor = sess.username; });
       else if(a && typeof a === 'object') a.actor = sess.username;
     });
+
     if(fn === 'apiDeleteUsers') args[1] = sess.username;
+    if(fn === 'apiDeleteShop') args[1] = sess.username;
     if(fn === 'apiLogout') args[0] = sess.username;
 
     if(fn === 'apiGetMyRequests' && !args[0]) args[0] = sess.id;
@@ -181,7 +186,7 @@ function cellVal_(v){
 }
 
 /* ---------- Cache ข้อมูลชีต (แบ่ง chunk เพราะ CacheService จำกัด ~100KB/key) ---------- */
-const CACHE_SHEETS = ['Materials','Users','Categories','Requests','RequestItems','Purchases','OpeningBalances'];
+const CACHE_SHEETS = ['Materials','Users','Categories','Requests','RequestItems','Purchases','OpeningBalances','Shops'];
 const CACHE_TTL = 300;   // วินาที
 const CHUNK = 30000;     // ตัวอักษรต่อ chunk
 
@@ -397,7 +402,34 @@ function ensureSetup(){
   seedCategoriesIfEmpty_();
   seedMaterialsIfEmpty_();
   seedRequestsIfEmpty_();
+  seedShopsIfEmpty_();
   cache.put('setup_ok', '1', 21600);
+}
+
+function seedShopsIfEmpty_(){
+  const sh = getSheet_(SHEETS.SHOPS);
+  if(sh.getLastRow() >= 2) return;
+  const materials = readAll_(SHEETS.MATERIALS);
+  const seen = new Set();
+  const rows = [];
+  materials.forEach(m => {
+    const name = String(m.ShopName || '').trim();
+    if(!name) return;
+    const key = name.toLowerCase();
+    if(seen.has(key)) return;
+    seen.add(key);
+    rows.push({
+      ID: genId_('SHP'),
+      Name: name,
+      TaxId: String(m.ShopTaxId || '').trim(),
+      Address: String(m.ShopAddress || '').trim(),
+      Phone: String(m.ShopPhone || '').trim(),
+      Note: '',
+      CreatedAt: nowIso_(),
+      UpdatedAt: nowIso_()
+    });
+  });
+  rows.forEach(r => appendRow_(SHEETS.SHOPS, r));
 }
 
 function seedSettingsIfEmpty_(){
@@ -926,6 +958,104 @@ function apiSaveCategory(payload){
   });
 }
 
+/* ============================== SHOPS ============================== */
+function apiGetShops(){
+  try{
+    seedShopsIfEmpty_();
+    const data = readAll_(SHEETS.SHOPS).sort((a,b)=> String(a.Name||'').localeCompare(String(b.Name||''),'th'));
+    return { ok:true, data };
+  }catch(err){ return { ok:false, message:String(err) }; }
+}
+
+function apiSaveShop(payload){
+  return withLock_(()=>{
+    try{
+      const name = String(payload.Name||'').trim();
+      if(!name) return { ok:false, message:'กรุณาระบุชื่อร้านค้า' };
+      const taxId = String(payload.TaxId||'').trim();
+      const address = String(payload.Address||'').trim();
+      const phone = String(payload.Phone||'').trim();
+      const note = String(payload.Note||'').trim();
+
+      const shops = readAll_(SHEETS.SHOPS);
+      if(payload.action === 'delete'){
+        deleteRowById_(SHEETS.SHOPS, payload.ID);
+        logAudit_('DELETE', 'Shop', payload.ID, name, payload.actor||'');
+        return { ok:true, message:'ลบข้อมูลร้านค้าเรียบร้อยแล้ว' };
+      }
+
+      const dupName = shops.find(s => String(s.Name).trim().toLowerCase() === name.toLowerCase() && String(s.ID) !== String(payload.ID));
+      if(dupName) return { ok:false, message:'ชื่อร้านค้า "'+name+'" มีอยู่แล้วในระบบ' };
+
+      if(payload.action === 'update' || (payload.ID && payload.action !== 'create')){
+        updateRowById_(SHEETS.SHOPS, payload.ID, {
+          Name: name,
+          TaxId: taxId,
+          Address: address,
+          Phone: phone,
+          Note: note,
+          UpdatedAt: nowIso_()
+        });
+        logAudit_('UPDATE', 'Shop', payload.ID, name, payload.actor||'');
+        return { ok:true, message:'บันทึกข้อมูลร้านค้าเรียบร้อยแล้ว' };
+      }else{
+        const id = genId_('SHP');
+        appendRow_(SHEETS.SHOPS, {
+          ID: id,
+          Name: name,
+          TaxId: taxId,
+          Address: address,
+          Phone: phone,
+          Note: note,
+          CreatedAt: nowIso_(),
+          UpdatedAt: nowIso_()
+        });
+        logAudit_('CREATE', 'Shop', id, name, payload.actor||'');
+        return { ok:true, message:'เพิ่มร้านค้าเรียบร้อยแล้ว', id: id };
+      }
+    }catch(err){ return { ok:false, message:String(err) }; }
+  });
+}
+
+function apiDeleteShop(id, actor){
+  return withLock_(()=>{
+    try{
+      if(!id) return { ok:false, message:'ไม่พบรหัสร้านค้า' };
+      const shops = readAll_(SHEETS.SHOPS);
+      const target = shops.find(s => String(s.ID) === String(id));
+      const name = target ? target.Name : id;
+      deleteRowById_(SHEETS.SHOPS, id);
+      logAudit_('DELETE', 'Shop', id, name, actor||'');
+      return { ok:true, message:'ลบข้อมูลร้านค้าเรียบร้อยแล้ว' };
+    }catch(err){ return { ok:false, message:String(err) }; }
+  });
+}
+
+function ensureShopExists_(name, taxId, address, phone, actor){
+  try{
+    const cleanName = String(name||'').trim();
+    if(!cleanName) return;
+    const shops = readAll_(SHEETS.SHOPS);
+    const existing = shops.find(s => String(s.Name||'').trim().toLowerCase() === cleanName.toLowerCase());
+    if(!existing){
+      const id = genId_('SHP');
+      appendRow_(SHEETS.SHOPS, {
+        ID: id,
+        Name: cleanName,
+        TaxId: String(taxId||'').trim(),
+        Address: String(address||'').trim(),
+        Phone: String(phone||'').trim(),
+        Note: '',
+        CreatedAt: nowIso_(),
+        UpdatedAt: nowIso_()
+      });
+      logAudit_('CREATE', 'Shop', id, 'สร้างร้านค้าใหม่อัตโนมัติจากพัสดุ: ' + cleanName, actor||'');
+    }
+  }catch(e){
+    console.error('ensureShopExists_ error:', e);
+  }
+}
+
 /* ============================== USERS ============================== */
 function apiGetUsers(){
   try{
@@ -1125,6 +1255,10 @@ function apiSaveMaterials(list){
             logStockMovement_(id, code, item.Name, 'IN', stock, 0, stock, '', 'จัดซื้อ', item.actor||'');
           }
           logAudit_('CREATE', 'Material', id, code, item.actor||'');
+        }
+
+        if(shopName){
+          ensureShopExists_(shopName, shopTaxId, shopAddress, shopPhone, item.actor||'');
         }
       });
       return { ok:true, message:'บันทึกข้อมูลพัสดุเรียบร้อยแล้ว' };

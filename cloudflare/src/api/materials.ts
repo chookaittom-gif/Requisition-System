@@ -5,6 +5,7 @@ import { computeStockState, toLegacy } from '../lib/rows';
 import { movementStmt } from '../lib/stock';
 import { nowBkk, todayBkk } from '../lib/time';
 import { registerRpc, type Ctx } from '../rpc';
+import { ensureShopExists } from './shops';
 
 type Obj = Record<string, unknown>;
 const asObj = (v: unknown): Obj => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Obj) : {});
@@ -278,6 +279,22 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
     }
 
     if (stmts.length) await db.batch(stmts);
+
+    for (const raw of list) {
+      const item = asObj(raw);
+      if (item.action === 'delete') continue;
+      const sName = str(item.ShopName);
+      if (sName) {
+        await ensureShopExists(db, {
+          name: sName,
+          taxId: str(item.ShopTaxId),
+          address: str(item.ShopAddress),
+          phone: str(item.ShopPhone),
+          actor,
+        });
+      }
+    }
+
     return { ok: true, message: 'บันทึกข้อมูลพัสดุเรียบร้อยแล้ว' };
   }),
 );

@@ -8,7 +8,8 @@ export type TableName =
   | 'stock_movements'
   | 'opening_balances'
   | 'audit_log'
-  | 'settings';
+  | 'settings'
+  | 'shops';
 
 type ColumnMap = Record<string, string>; // D1 column -> legacy header
 
@@ -64,6 +65,16 @@ const MAPS: Record<TableName, ColumnMap> = {
     line_token: 'LineToken', line_to: 'LineTo',
     notify_on_new_request: 'NotifyOnNewRequest', notify_on_status_change: 'NotifyOnStatusChange',
     notify_low_stock: 'NotifyLowStock', banner_url: 'BannerUrl',
+  },
+  shops: {
+    id: 'ID',
+    name: 'Name',
+    tax_id: 'TaxId',
+    address: 'Address',
+    phone: 'Phone',
+    note: 'Note',
+    created_at: 'CreatedAt',
+    updated_at: 'UpdatedAt',
   },
 };
 
