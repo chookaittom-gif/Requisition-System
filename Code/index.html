@@ -2197,46 +2197,12 @@ function generateNextMatCode(catName){
   return `${prefix}-${padded}`;
 }
 
-/* ---------------- MATERIAL DRAFT HELPERS ----------------
- * จำเฉพาะข้อมูลร้านค้า/ผู้จำหน่ายเท่านั้น (ไม่จำข้อมูลพัสดุอื่น) */
-const MAT_DRAFT_KEY = () => 'mat_draft_' + (S?.user?.Username || 'default');
-const MAT_DRAFT_FIELDS = ['ShopName', 'ShopAddress', 'ShopPhone', 'ShopTaxId'];
-function saveMatDraft_(){
-  if ($('#mID') && $('#mID').value) return; // ไม่บันทึก draft เมื่ออยู่ในโหมดแก้ไขพัสดุเดิม
-  const draft = {
-    ShopName: $('#mShopName')?.value || '',
-    ShopAddress: $('#mShopAddress')?.value || '',
-    ShopPhone: $('#mShopPhone')?.value || '',
-    ShopTaxId: $('#mShopTaxId')?.value || ''
-  };
-  const hasContent = MAT_DRAFT_FIELDS.some(k => String(draft[k]).trim().length > 0);
-  if (hasContent) {
-    try { localStorage.setItem(MAT_DRAFT_KEY(), JSON.stringify(draft)); }catch(e){}
-  } else {
-    clearMatDraft_();
-  }
-}
-function getMatDraft_(){
-  try {
-    const raw = localStorage.getItem(MAT_DRAFT_KEY());
-    if (!raw) return null;
-    const saved = JSON.parse(raw) || {};
-    const shopOnly = {};
-    MAT_DRAFT_FIELDS.forEach(k => { shopOnly[k] = saved[k] || ''; });
-    return MAT_DRAFT_FIELDS.some(k => shopOnly[k].trim()) ? shopOnly : null;
-  } catch(e) { return null; }
-}
-function clearMatDraft_(){
-  try { localStorage.removeItem(MAT_DRAFT_KEY()); }catch(e){}
-}
-
 /* m = พัสดุเดิม (มี ID → แก้ไข) | { Code } จากการสแกน (ไม่มี ID → เพิ่มใหม่) | null (เพิ่มใหม่ว่างๆ) */
 function matModal(m){
   const isEdit = !!(m && m.ID);
-  const pre = m || {};
-  const draft = !isEdit ? getMatDraft_() : null;
-  const formVals = isEdit ? m : { ...pre, ...(draft || {}) };
-  const hasDraft = !isEdit && !!draft;
+  const formVals = m || {};
+  // ponytail: ล้างเศษ draft ร้านค้าเก่าที่อาจค้างใน localStorage
+  try { localStorage.removeItem('mat_draft_' + (S?.user?.Username || 'default')); }catch(e){}
   const defaultLocs = ['สนง.ศ.ลป.', 'สนง.รร.สาธิต'];
   const knownLocs = (S.cache.materials || [])
     .map(x => String(x.StorageLocation || '').trim())
@@ -2245,20 +2211,10 @@ function matModal(m){
 
   openModal({
     title: isEdit ? 'แก้ไขข้อมูลพัสดุ' : 'เพิ่มพัสดุใหม่',
-    sub: isEdit ? (m.Code + ' • ' + m.Name) : (pre.Code ? ('รหัสจากการสแกน: ' + pre.Code) : 'กรอกข้อมูลพัสดุให้ครบถ้วน'),
+    sub: isEdit ? (m.Code + ' • ' + m.Name) : (formVals.Code ? ('รหัสจากการสแกน: ' + formVals.Code) : 'กรอกข้อมูลพัสดุให้ครบถ้วน'),
     icon: isEdit ? 'fa-pen-to-square' : 'fa-plus',
     staticBackdrop: !isEdit, // เพิ่มพัสดุใหม่: คลิกพื้นหลังไม่ปิด ต้องกดกากบาทเท่านั้น
     body: `<form id="frmMat" class="space-y-4">
-      ${hasDraft ? `
-      <div id="matDraftNotice" class="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-xs text-amber-800">
-        <div class="flex items-center gap-2">
-          <i class="fa-solid fa-file-pen text-amber-600 text-sm"></i>
-          <span class="font-bold">กำลังแสดงข้อมูลร้านค้าที่จำไว้</span>
-        </div>
-        <button type="button" id="btnClearDraft" class="px-3 py-1 bg-white hover:bg-amber-100 text-amber-700 font-bold border border-amber-300 rounded-xl transition shadow-xs text-xs flex items-center gap-1">
-          <i class="fa-solid fa-trash-can text-[10px]"></i> ล้างแบบร่าง
-        </button>
-      </div>` : ''}
 
       <!-- ข้อมูลร้านค้า / ผู้จำหน่าย (อยู่ช่องแรก) -->
       <div class="p-4 rounded-3xl bg-slate-50 border border-slate-200/80 space-y-3">
@@ -2488,7 +2444,6 @@ function matModal(m){
           });
         }
       }
-      if (!isEdit) saveMatDraft_();
     };
 
     shopInp.addEventListener('input', handleShopSelect);
@@ -2558,7 +2513,6 @@ function matModal(m){
 
     locInp.addEventListener('input', () => {
       openLocDropdown();
-      if (!isEdit) saveMatDraft_();
     });
 
     locDropdown.addEventListener('mousedown', (e) => {
@@ -2566,7 +2520,6 @@ function matModal(m){
       if (item && item.dataset.val) {
         locInp.value = item.dataset.val;
         closeLocDropdown();
-        if (!isEdit) saveMatDraft_();
       }
     });
 
@@ -2595,22 +2548,6 @@ function matModal(m){
     });
   }
 
-  if (!isEdit) {
-    const frm = $('#frmMat');
-    if (frm) {
-      frm.addEventListener('input', saveMatDraft_);
-      frm.addEventListener('change', saveMatDraft_);
-    }
-    const btnClearDraft = $('#btnClearDraft');
-    if (btnClearDraft) {
-      btnClearDraft.addEventListener('click', () => {
-        clearMatDraft_();
-        matModal(null);
-        toast('info', 'ล้างข้อมูลแบบร่างเรียบร้อยแล้ว');
-      });
-    }
-  }
-
   const acqDateInp = $('#mAcquiredDate');
   if (acqDateInp) {
     acqDateInp.addEventListener('change', e => {
@@ -2629,7 +2566,6 @@ function matModal(m){
     orderQtyInp.addEventListener('input', () => {
       if (!stockUserEdited || !stockInp.value.trim()) {
         stockInp.value = orderQtyInp.value;
-        saveMatDraft_();
       }
     });
   }
@@ -2653,11 +2589,9 @@ function matModal(m){
     if (nextCode && (force || !codeInp.value.trim() || codeInp.value.trim() === autoGeneratedCode)) {
       codeInp.value = nextCode;
       autoGeneratedCode = nextCode;
-      saveMatDraft_();
     }
     if (minInp && (!minInp.value || minInp.dataset.userEdited !== 'true')) {
       minInp.value = getDefaultMinQtyByCat(cat);
-      saveMatDraft_();
     }
   };
 
@@ -2934,7 +2868,6 @@ function matModal(m){
 
       hideLoader();
       if(!res.ok) return alertErr(res.message);
-      clearMatDraft_();
       closeModal();
       await alertOk(res.message);
       go('a-material', true);

@@ -93,14 +93,12 @@ describe('public/index.html static checks', () => {
     expect(html).not.toContain('https://www.dusit.ac.th/home/wp-content/uploads/2023/07/SDU.png');
   });
 
-  it('configures staticBackdrop and draft auto-save for materials modal with default minQty 5', () => {
+  it('configures staticBackdrop and clean state for materials modal with default minQty 5', () => {
     expect(html).toContain('staticBackdrop = false');
     expect(html).toContain('staticBackdrop: !isEdit');
-    expect(html).toContain('saveMatDraft_');
-    expect(html).toContain('getMatDraft_');
-    expect(html).toContain('clearMatDraft_');
-    expect(html).toContain('mat_draft_');
-    expect(html).toContain('btnClearDraft');
+    expect(html).not.toContain('saveMatDraft_');
+    expect(html).not.toContain('getMatDraft_');
+    expect(html).not.toContain('btnClearDraft');
     expect(html).toContain('formVals.MinQty !== undefined && formVals.MinQty !== \'\' ? formVals.MinQty : 5');
     expect(html).toContain('id="locCombobox"');
     expect(html).toContain('id="locDropdown"');
