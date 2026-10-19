@@ -57,6 +57,25 @@ describe('materials', () => {
     expect((await rows("SELECT * FROM audit_log WHERE action='CREATE' AND entity='Material'")).length).toBe(1);
   });
 
+  it('create material with OrderQty inserts into purchases and zeroes opening_qty', async () => {
+    const res = await create({ Code: 'A-2', OrderQty: 50, StockQty: 50, AcquiredDate: '2026-10-19' });
+    expect(res.ok).toBe(true);
+    const [m] = await rows("SELECT * FROM materials WHERE code = 'A-2'");
+    expect(m.opening_qty).toBe(0);
+    expect(m.order_qty).toBe(50);
+    expect(m.stock_qty).toBe(50);
+    const [p] = await rows("SELECT * FROM purchases WHERE material_id = ?", m.id);
+    expect(p).toMatchObject({
+      code: 'A-2',
+      qty: 50,
+      unit_price: 10,
+      amount: 500,
+      purchase_date: '2026-10-19',
+      note: 'จัดซื้อรับเข้า (สร้างพัสดุ)',
+      actor: 'off1',
+    });
+  });
+
   it('duplicate code rejected with legacy message and nothing written', async () => {
     await create();
     const r = await create({ Name: 'อื่น' });

@@ -1,5 +1,6 @@
 import type { Env } from '../env';
 import { fail } from '../http';
+import { logAudit } from '../lib/audit';
 import { computeStockState, toLegacy } from '../lib/rows';
 import { currentFiscalYear, fiscalYearRange, todayBkk } from '../lib/time';
 import { registerRpc, type Ctx } from '../rpc';
@@ -108,6 +109,31 @@ registerRpc('apiGetStockMovements', 'officer', (ctx, args) =>
 registerRpc('apiGetAuditLog', 'admin', (ctx, args) =>
   safe('apiGetAuditLog', async () => ({ ok: true, data: await auditLog(ctx.env, args[0]) })),
 );
+
+registerRpc('apiClearStockMovements', 'admin', async (ctx) => {
+  try {
+    const db = ctx.env.DB;
+    const row = await db.prepare('SELECT COUNT(*) as count FROM stock_movements').first<{ count: number }>();
+    const count = Number(row?.count || 0);
+
+    const stmts: D1PreparedStatement[] = [db.prepare('DELETE FROM stock_movements')];
+    stmts.push(
+      logAudit(db, {
+        action: 'DELETE',
+        entity: 'StockMovements',
+        entityId: 'ALL',
+        detail: `ล้างประวัติสต็อกทั้งหมด ${count} รายการ`,
+        actor: ctx.session?.username ?? '',
+      }),
+    );
+
+    await db.batch(stmts);
+    return { ok: true, message: `ล้างประวัติเคลื่อนไหวสต็อกเรียบร้อยแล้ว (${count} รายการ)` };
+  } catch (err) {
+    console.error('apiClearStockMovements failed', err);
+    return fail('เกิดข้อผิดพลาดในการล้างประวัติสต็อก');
+  }
+});
 
 /* ============================== DASHBOARDS ============================== */
 type Counters = { approved: number; pending: number; rejected: number };
@@ -352,9 +378,22 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
       .map((row) => {
         const m = toLegacy('materials', row);
         const unitPrice = num(m.UnitPrice);
-        const openingQty = row.ob_qty === null || row.ob_qty === undefined ? num(m.OpeningQty) : num(row.ob_qty);
-        const purchaseQty = num(row.purchased);
+        let openingQty = row.ob_qty === null || row.ob_qty === undefined ? num(m.OpeningQty) : num(row.ob_qty);
+        let purchaseQty = num(row.purchased);
         const usedQty = num(row.used);
+
+        // Self-healing fallback: หากพัสดุได้มาในปีงบนี้ แต่ยังไม่มีใน purchases และไม่มี opening_balances
+        if ((row.ob_qty === null || row.ob_qty === undefined) && purchaseQty === 0) {
+          const acqDate = String(m.AcquiredDate || '').substring(0, 10);
+          if (acqDate >= startDate && acqDate <= endDate) {
+            const autoPurchase = num(m.OrderQty || 0);
+            if (autoPurchase > 0) {
+              purchaseQty = autoPurchase;
+              openingQty = Math.max(0, openingQty - autoPurchase);
+            }
+          }
+        }
+
         const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
         return {
           seq: 0,
@@ -460,7 +499,13 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
     .prepare('SELECT opening_qty FROM opening_balances WHERE material_id = ? AND fiscal_year = ?')
     .bind(id, fiscalYear)
     .first<{ opening_qty: number }>();
-  const fiscalOpeningQty = ob ? num(ob.opening_qty) : num(mat.OpeningQty);
+  let fiscalOpeningQty = ob ? num(ob.opening_qty) : num(mat.OpeningQty);
+  if (!ob && num(mat.OrderQty) > 0) {
+    const acqDate = String(mat.AcquiredDate || '').substring(0, 10);
+    if (acqDate >= fromDate && acqDate <= toDate) {
+      fiscalOpeningQty = Math.max(0, fiscalOpeningQty - num(mat.OrderQty));
+    }
+  }
 
   const { results: moves } = await db
     .prepare('SELECT * FROM stock_movements WHERE material_id = ? ORDER BY created_at ASC, rowid ASC')

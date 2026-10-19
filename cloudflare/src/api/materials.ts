@@ -256,12 +256,14 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
         codeOwner.set(code, id);
       } else {
         const newId = genId('M');
+        const initialOrderQty = orderQty > 0 ? orderQty : 0;
+        const openingQty = Math.max(0, newStock - initialOrderQty);
         stmts.push(
           db
             .prepare(
               'INSERT INTO materials (id, code, name, unit, unit_price, stock_qty, min_qty, opening_qty, category, material_type, size_spec, storage_location, image_url, file_url, shop_name, shop_address, shop_phone, shop_tax_id, budget_source, acquired_date, order_qty, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             )
-            .bind(newId, code, name, unit, unitPrice, newStock, minQty, newStock, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, now),
+            .bind(newId, code, name, unit, unitPrice, newStock, minQty, openingQty, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, now),
         );
         if (newStock > 0) {
           stmts.push(
@@ -270,6 +272,15 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
                 "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES (?, ?, ?, ?, 'IN', ?, 0, ?, '', 'จัดซื้อ', ?, ?)",
               )
               .bind(genId('SM'), newId, code, name, newStock, newStock, actor, now),
+          );
+        }
+        if (initialOrderQty > 0) {
+          stmts.push(
+            db
+              .prepare(
+                'INSERT INTO purchases (id, material_id, code, name, qty, unit_price, amount, purchase_date, note, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              )
+              .bind(genId('P'), newId, code, name, initialOrderQty, unitPrice, initialOrderQty * unitPrice, acquiredDate || todayBkk(), 'จัดซื้อรับเข้า (สร้างพัสดุ)', actor, now),
           );
         }
         stmts.push(logAudit(db, { action: 'CREATE', entity: 'Material', entityId: newId, detail: code, actor }));

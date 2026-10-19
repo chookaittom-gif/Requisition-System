@@ -131,6 +131,19 @@ describe('inventory report', () => {
     expect(byCode(r, 'H-1')).toMatchObject({ UsedQty: 54, RemainQty: 0, Amount: 0 });
   });
 
+  it('self-heals material with OrderQty acquired in FY without purchases rows', async () => {
+    await run(
+      "INSERT INTO materials (id, code, name, unit, unit_price, stock_qty, min_qty, opening_qty, order_qty, acquired_date, category, created_at, updated_at) VALUES (?, ?, ?, 'รีม', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      'M99', 'ว.001', 'กระดาษ A4', 120, 50, 5, 50, 50, '2026-10-19', 'วัสดุสำนักงาน', T, T,
+    );
+    const r = await asOfficer('apiGetInventoryReport', { fiscalYear: 2570, reportDate: '2026-10-19' });
+    const row = byCode(r, 'ว.001');
+    expect(row).toBeDefined();
+    expect(row.OpeningQty).toBe(0);
+    expect(row.PurchaseQty).toBe(50);
+    expect(row.RemainQty).toBe(50);
+  });
+
   it('pending requests are not counted as used', async () => {
     const r = await asOfficer('apiGetInventoryReport', { fiscalYear: 2569, reportDate: '2026-09-30' });
     expect(byCode(r, 'P-1').UsedQty).toBe(5); // R4 pending (100) and R7 rejected excluded

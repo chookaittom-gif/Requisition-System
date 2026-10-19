@@ -87,7 +87,8 @@ const FN_ACCESS = {
   apiGetUsers:'admin', apiGetSettings:'admin', apiSaveSettings:'admin', apiSaveUsers:'admin',
   apiDeleteUsers:'admin', apiGetAuditLog:'admin', apiTestTelegram:'admin', apiTestLine:'admin',
   apiRunSchemaMigration:'admin',
-  apiExportCSV:'admin'
+  apiExportCSV:'admin',
+  apiClearStockMovements:'admin'
 };
 
 function doPost(e){
@@ -1233,11 +1234,13 @@ function apiSaveMaterials(list){
           logAudit_('UPDATE', 'Material', item.ID, code, item.actor||'');
         }else{
           const stock = Number(item.StockQty||0);
+          const initialOrderQty = Number(orderQty > 0 ? orderQty : 0);
+          const openingQty = Math.max(0, stock - initialOrderQty);
           const id = genId_('M');
           appendRow_(SHEETS.MATERIALS, {
             ID: id, Code: code, Name: String(item.Name||'').trim(), Unit: String(item.Unit||'').trim(),
             UnitPrice: Number(item.UnitPrice||0), StockQty: stock, MinQty: Number(item.MinQty||0),
-            OpeningQty: stock, Category: String(item.Category||'').trim(),
+            OpeningQty: openingQty, Category: String(item.Category||'').trim(),
             MaterialType: materialType,
             SizeSpec: sizeSpec,
             StorageLocation: storageLoc,
@@ -1253,6 +1256,15 @@ function apiSaveMaterials(list){
           materials.push({ ID:id, Code:code });     // กันรหัสซ้ำในรายการเดียวกัน
           if(stock > 0){
             logStockMovement_(id, code, item.Name, 'IN', stock, 0, stock, '', 'จัดซื้อ', item.actor||'');
+          }
+          if(initialOrderQty > 0){
+            appendRow_(SHEETS.PURCHASES, {
+              ID: genId_('P'), MaterialID: id, Code: code, Name: String(item.Name||'').trim(),
+              Qty: initialOrderQty, UnitPrice: Number(item.UnitPrice||0),
+              Amount: initialOrderQty * Number(item.UnitPrice||0),
+              PurchaseDate: acquiredDate || todayStr_(), Note: 'จัดซื้อรับเข้า (สร้างพัสดุ)',
+              Actor: item.actor||'', CreatedAt: nowIso_()
+            });
           }
           logAudit_('CREATE', 'Material', id, code, item.actor||'');
         }
@@ -1549,6 +1561,23 @@ function apiGetStockMovements(filter){
   }catch(err){ return { ok:false, message:String(err) }; }
 }
 
+function apiClearStockMovements(){
+  return withLock_(()=>{
+    try{
+      const sh = getSheet_(SHEETS.STOCK_MOVEMENTS);
+      const lastRow = sh.getLastRow();
+      let deletedCount = 0;
+      if(lastRow >= 2){
+        deletedCount = lastRow - 1;
+        sh.deleteRows(2, deletedCount);
+        cacheClear_(SHEETS.STOCK_MOVEMENTS);
+      }
+      logAudit_('DELETE', 'StockMovements', 'ALL', 'ล้างประวัติสต็อกทั้งหมด ' + deletedCount + ' รายการ', '');
+      return { ok:true, message:'ล้างประวัติเคลื่อนไหวสต็อกเรียบร้อยแล้ว (' + deletedCount + ' รายการ)' };
+    }catch(err){ return { ok:false, message:String(err) }; }
+  });
+}
+
 /* ============================== AUDIT LOG ============================== */
 function apiGetAuditLog(filter){
   try{
@@ -1683,7 +1712,21 @@ function apiGetInventoryAccount(filter){
       let purchaseList = purchases.filter(p=> String(p.MaterialID)===String(m.ID));
       if(from) purchaseList = purchaseList.filter(p=> (p.PurchaseDate||'').substring(0,10) >= from);
       if(to)   purchaseList = purchaseList.filter(p=> (p.PurchaseDate||'').substring(0,10) <= to);
-      const purchaseQty = purchaseList.reduce((s,p)=> s+Number(p.Qty||0), 0);
+      let purchaseQty = purchaseList.reduce((s,p)=> s+Number(p.Qty||0), 0);
+
+      // Self-healing fallback: หากพัสดุได้มาในช่วงนี้ แต่ยังไม่มีใน Purchases
+      if (purchaseList.length === 0) {
+        const acqDate = String(m.AcquiredDate || '').substring(0, 10);
+        const inFrom = !from || acqDate >= from;
+        const inTo = !to || acqDate <= to;
+        if (inFrom && inTo) {
+          const autoPurchase = Number(m.OrderQty || 0);
+          if (autoPurchase > 0) {
+            purchaseQty = autoPurchase;
+            openingQty = Math.max(0, openingQty - autoPurchase);
+          }
+        }
+      }
 
       let usedList = items.filter(it=> String(it.MaterialID)===String(m.ID) && approvedReqIds.has(it.RequestID));
       if(from || to){
@@ -1866,7 +1909,7 @@ function apiGetInventoryReport(filter) {
         String(o.MaterialID) === String(m.ID) &&
         String(o.FiscalYear) === String(fiscalYear)
       );
-      const openingQty = ob ? Number(ob.OpeningQty || 0) : Number(m.OpeningQty || 0);
+      let openingQty = ob ? Number(ob.OpeningQty || 0) : Number(m.OpeningQty || 0);
 
       // 2) จำนวนรับเข้า: การจัดซื้อในช่วงปีงบประมาณถึงวันที่รายงาน
       const matPurchases = purchases.filter(p => {
@@ -1874,7 +1917,19 @@ function apiGetInventoryReport(filter) {
         const pDate = String(p.PurchaseDate || '').substring(0, 10);
         return pDate >= startDate && pDate <= endDate;
       });
-      const purchaseQty = matPurchases.reduce((s, p) => s + Number(p.Qty || 0), 0);
+      let purchaseQty = matPurchases.reduce((s, p) => s + Number(p.Qty || 0), 0);
+
+      // Self-healing fallback: หากพัสดุได้มาในปีงบนี้ แต่ยังไม่มีใน Purchases และไม่มี OpeningBalances
+      if (!ob && matPurchases.length === 0) {
+        const acqDate = String(m.AcquiredDate || '').substring(0, 10);
+        if (acqDate >= startDate && acqDate <= endDate) {
+          const autoPurchase = Number(m.OrderQty || 0);
+          if (autoPurchase > 0) {
+            purchaseQty = autoPurchase;
+            openingQty = Math.max(0, openingQty - autoPurchase);
+          }
+        }
+      }
 
       // 3) จำนวนเบิก: จากใบขอเบิกที่อนุมัติแล้ว และอยู่ในช่วงปีงบประมาณถึงวันที่รายงาน
       const matUsedItems = reqItems.filter(it => {

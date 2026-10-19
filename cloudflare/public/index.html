@@ -2313,7 +2313,7 @@ function matModal(m){
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนที่สั่งซื้อ / รับเข้า</label>
           <input id="mOrderQty" type="number" min="0" step="1" value="${formVals.OrderQty !== undefined ? formVals.OrderQty : ''}" placeholder="เช่น 100" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
-          ${!isEdit ? `<p class="mt-1 text-[11px] text-brand-600 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> ยอดคงเหลือจะตั้งต้นเท่ากับจำนวนนี้ให้อัตโนมัติ</p>` : ''}
+          ${!isEdit ? `<p class="mt-1 text-[11px] text-brand-600 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> ยอดคงเหลือจะตั้งต้นเท่ากับจำนวนนี้ให้อัตโนมัติ (ลงบันทึกเป็นจำนวนรับ)</p>` : ''}
         </div>
       </div>
 
@@ -2353,7 +2353,7 @@ function matModal(m){
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนคงเหลือ <span class="text-rose2">*</span></label>
           <input id="mStock" type="number" min="0" step="1" value="${formVals.StockQty !== undefined ? formVals.StockQty : ''}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
-          ${!isEdit ? `<p class="mt-1 text-[11px] text-slate-400">แก้ไขได้หากมียอดยกยอดมา</p>` : ''}
+          ${!isEdit ? `<p class="mt-1 text-[11px] text-slate-400">กรณีมีของเดิมยกยอดมาจากปีก่อน สามารถปรับยอดคงเหลือให้มากกว่าจำนวนรับได้</p>` : ''}
         </div>
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จุดสั่งซื้อ (ใกล้หมด)</label>
@@ -5163,6 +5163,13 @@ async function viewStockMovements(){
   const outCount = S.cache.movements.filter(x=>x.Type==='OUT').length;
   const adjCount = S.cache.movements.filter(x=>x.Type==='ADJUST').length;
 
+  const isAdmin = S?.user?.Role === 'admin';
+  const clearBtnHtml = isAdmin ? `
+    <button type="button" id="btnOpenClearMv" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose2 bg-rose2/10 hover:bg-rose2/20 border border-rose2/30 flex items-center gap-1.5 transition active:scale-95" title="ล้างประวัติการเคลื่อนไหวสต็อกทั้งหมด">
+      <i class="fa-solid fa-trash-can"></i> ล้างประวัติสต็อก
+    </button>
+  ` : '';
+
   c.innerHTML = `
     <div class="grid grid-cols-3 gap-4 animate-fadeUp">
       ${statCardH('fa-arrow-down','#26A69A','รับเข้า (IN)', nf(inCount),'รายการ')}
@@ -5186,7 +5193,7 @@ async function viewStockMovements(){
           <input id="mvTo" type="date" class="px-4 py-2.5 rounded-2xl border border-slate-200 text-sm">
         </div>
         <div id="mvList">${renderRows(S.cache.movements)}</div>
-      `)}
+      `, clearBtnHtml)}
     </div>`;
 
   const filterMv = ()=>{
@@ -5216,6 +5223,75 @@ async function viewStockMovements(){
     el.addEventListener('input', filterMv);
     el.addEventListener('change', filterMv);
   });
+
+  const btnOpenClear = $('#btnOpenClearMv');
+  if(btnOpenClear){
+    btnOpenClear.addEventListener('click', ()=>{
+      openModal({
+        title: 'ยืนยันการล้างประวัติสต็อก',
+        sub: 'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น',
+        icon: 'fa-triangle-exclamation text-rose2',
+        size: 'max-w-md',
+        staticBackdrop: true,
+        body: `
+          <div class="space-y-4">
+            <div class="p-3.5 rounded-2xl bg-rose2/10 border border-rose2/20 text-rose2 text-xs leading-relaxed">
+              <i class="fa-solid fa-circle-exclamation mr-1"></i>
+              <strong>คำเตือน:</strong> การล้างประวัติจะลบรายการความเคลื่อนไหวสต็อก (รับเข้า, เบิกออก, ปรับยอด) ทั้งหมดออกจากฐานข้อมูลอย่างถาวร ไม่สามารถกู้คืนได้
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">
+                พิมพ์คำว่า <span class="font-extrabold text-rose2 select-all">DELETE</span> เพื่อยืนยัน:
+              </label>
+              <input id="txtConfirmDeleteMv" type="text" autocomplete="off" placeholder="พิมพ์คำว่า DELETE ที่นี่"
+                     class="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm focus:border-rose2 focus:ring-1 focus:ring-rose2 outline-none">
+            </div>
+          </div>
+        `,
+        foot: `
+          <button type="button" class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button type="button" id="btnExecuteClearMv" disabled
+                  class="px-5 py-2.5 rounded-2xl text-sm font-bold text-white bg-rose2 opacity-50 cursor-not-allowed flex items-center gap-2 transition shadow-soft">
+            <i class="fa-solid fa-trash-can"></i> <span id="lblClearAction">ล้างประวัติถาวร</span>
+          </button>
+        `
+      });
+
+      const inp = $('#txtConfirmDeleteMv');
+      const btnExec = $('#btnExecuteClearMv');
+      const lblAction = $('#lblClearAction');
+      if(!inp || !btnExec) return;
+
+      inp.addEventListener('input', ()=>{
+        const match = inp.value.trim() === 'DELETE';
+        btnExec.disabled = !match;
+        if(match){
+          btnExec.classList.remove('opacity-50', 'cursor-not-allowed');
+          btnExec.classList.add('hover:brightness-110', 'active:scale-95');
+        } else {
+          btnExec.classList.add('opacity-50', 'cursor-not-allowed');
+          btnExec.classList.remove('hover:brightness-110', 'active:scale-95');
+        }
+      });
+
+      btnExec.addEventListener('click', async ()=>{
+        if(btnExec.disabled) return;
+        btnExec.disabled = true;
+        inp.disabled = true;
+        lblAction.textContent = 'กำลังล้างประวัติ...';
+        btnExec.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>กำลังล้างประวัติ...</span>';
+
+        const res = await api('apiClearStockMovements');
+        closeModal();
+        if(res && res.ok){
+          toast('success', res.message || 'ล้างประวัติเรียบร้อยแล้ว');
+          viewStockMovements();
+        } else {
+          alertErr((res && res.message) || 'ไม่สามารถล้างประวัติสต็อกได้');
+        }
+      });
+    });
+  }
 }
 
 /* =================================================================================
