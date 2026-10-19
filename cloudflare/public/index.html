@@ -2892,6 +2892,9 @@ async function viewLowStock(){
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   const key='low';
   const outN = r.data.filter(m=>m.StockState==='OUT').length;
+  const poBtn = r.data.length
+    ? btn('btnLowToPo','fa-file-invoice','ส่งไปทำใบสั่งซื้อ','bg-brand-600 text-white hover:bg-brand-700 shadow-soft')
+    : '';
 
   c.innerHTML = `
     <div class="grid grid-cols-2 gap-4 animate-fadeUp">
@@ -2900,10 +2903,17 @@ async function viewLowStock(){
     </div>
     <div class="mt-5">
       ${cardWrap('รายการพัสดุที่หมด/ใกล้หมด','fa-bell', `<div>${renderLow(r.data, key)}</div>`,
-        viewToggle(key) + btn('btnPrintLow','fa-print','พิมพ์รายงาน','bg-slate-800 text-white hover:bg-slate-700'))}
+        viewToggle(key) + btn('btnPrintLow','fa-print','พิมพ์รายงาน','bg-slate-800 text-white hover:bg-slate-700') + poBtn)}
     </div>`;
 
   $('#btnPrintLow').addEventListener('click', ()=> printLowStock(r.data));
+  const btnToPo = $('#btnLowToPo');
+  if(btnToPo){
+    btnToPo.addEventListener('click', () => {
+      S.poPendingLowPick = true;
+      go('a-po');
+    });
+  }
 }
 
 function renderLow(list, key){
@@ -5641,6 +5651,7 @@ async function viewPurchaseOrder(){
         <div class="mt-4 flex flex-wrap gap-2">
           <button type="button" id="btnPoAddRow" class="min-h-[44px] px-4 rounded-2xl bg-brand-50 text-brand-600 font-bold text-sm hover:bg-brand-600 hover:text-white transition flex items-center gap-2"><i class="fa-solid fa-plus"></i> เพิ่มแถว</button>
           <button type="button" id="btnPoPick" class="min-h-[44px] px-4 rounded-2xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200 transition flex items-center gap-2"><i class="fa-solid fa-magnifying-glass"></i> เลือกจากทะเบียนพัสดุ</button>
+          <button type="button" id="btnPoPullLow" class="min-h-[44px] px-4 rounded-2xl bg-amber-50 text-amber-800 border border-amber-300 font-bold text-sm hover:bg-amber-100 transition flex items-center gap-2 shadow-sm"><i class="fa-solid fa-triangle-exclamation text-amber-600"></i> ดึงพัสดุหมด/ใกล้หมด</button>
         </div>`)}
 
       ${cardWrap('ลายเซ็น', 'fa-signature', `
@@ -5742,6 +5753,288 @@ async function viewPurchaseOrder(){
     });
   });
 
+  $('#btnPoPullLow').addEventListener('click', openPoLowStockPicker);
+
+  async function openPoLowStockPicker(){
+    showLoader('กำลังโหลดรายการพัสดุหมด/ใกล้หมด...');
+    let lowList = [];
+    try {
+      const res = await api('apiGetLowStock');
+      if(res && res.ok && Array.isArray(res.data)){
+        lowList = res.data;
+      }
+    } catch(e){}
+    hideLoader();
+
+    if(!lowList.length){
+      return toast('info', 'ไม่มีรายการพัสดุที่หมดหรือใกล้หมดในขณะนี้');
+    }
+
+    const getSuggestedQty = (m) => {
+      const orderQty = Number(m.OrderQty || 0);
+      if(orderQty > 0) return orderQty;
+      const stock = Number(m.StockQty || 0);
+      const min = Number(m.MinQty || 0);
+      const diff = min - stock;
+      return diff > 0 ? diff : (min > 0 ? min : 1);
+    };
+
+    const shopSet = new Set();
+    lowList.forEach(m => {
+      if(m.ShopName && m.ShopName.trim()) shopSet.add(m.ShopName.trim());
+    });
+    const shops = Array.from(shopSet).sort((a,b) => a.localeCompare(b, 'th'));
+
+    const selState = {};
+    lowList.forEach(m => {
+      selState[m.ID] = {
+        checked: true,
+        qty: getSuggestedQty(m),
+        material: m
+      };
+    });
+
+    let currentShopFilter = '';
+    let currentStatusFilter = '';
+    let searchQuery = '';
+
+    openModal({
+      title: 'ดึงรายการพัสดุหมด/ใกล้หมด',
+      sub: 'เลือกรายการเพื่อเพิ่มลงในตารางใบสั่งซื้อ',
+      icon: 'fa-triangle-exclamation',
+      size: 'max-w-2xl',
+      body: `
+        <div class="space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+            <div class="sm:col-span-6">
+              <input id="poLowQ" class="${inp}" placeholder="ค้นหารหัส / ชื่อพัสดุ..." autocomplete="off">
+            </div>
+            <div class="sm:col-span-3">
+              <select id="poLowStatus" class="${inp}">
+                <option value="">ทุกสถานะ</option>
+                <option value="OUT">หมดสต็อก</option>
+                <option value="LOW">ใกล้หมด</option>
+              </select>
+            </div>
+            <div class="sm:col-span-3">
+              <select id="poLowShop" class="${inp}">
+                <option value="">ทุกร้านค้า</option>
+                ${shops.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between py-1 px-1 text-xs">
+            <div class="flex items-center gap-2">
+              <button type="button" id="btnPoLowSelectAll" class="text-brand-600 hover:text-brand-700 font-bold py-1 px-2 rounded-lg hover:bg-brand-50 transition">เลือกทั้งหมด</button>
+              <span class="text-slate-300">|</span>
+              <button type="button" id="btnPoLowDeselectAll" class="text-slate-500 hover:text-slate-700 font-semibold py-1 px-2 rounded-lg hover:bg-slate-100 transition">ยกเลิกทั้งหมด</button>
+            </div>
+            <div id="poLowSummary" class="font-bold text-slate-700"></div>
+          </div>
+
+          <div id="poLowList" class="max-h-[50vh] overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-2xl p-2 bg-slate-50/50"></div>
+
+          <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+            <button type="button" id="btnPoLowCancel" class="min-h-[44px] px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition">ยกเลิก</button>
+            <button type="button" id="btnPoLowConfirm" class="min-h-[44px] px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-soft transition flex items-center gap-2">
+              <i class="fa-solid fa-plus"></i> <span id="btnPoLowConfirmTxt">เพิ่มลงใบสั่งซื้อ</span>
+            </button>
+          </div>
+        </div>
+      `
+    });
+
+    const updateSummary = () => {
+      let count = 0;
+      let estTotal = 0;
+      Object.keys(selState).forEach(id => {
+        const item = selState[id];
+        if(item.checked){
+          count++;
+          const price = Number(item.material.UnitPrice || 0);
+          estTotal += (item.qty * price);
+        }
+      });
+      const summaryEl = $('#poLowSummary');
+      if(summaryEl){
+        summaryEl.innerHTML = `<span class="text-brand-600 font-extrabold">${count}</span> รายการ <span class="text-slate-400 font-normal">|</span> ประมาณ <span class="text-emerald-700 font-extrabold">${money(estTotal)}</span> บาท`;
+      }
+      const confirmTxt = $('#btnPoLowConfirmTxt');
+      if(confirmTxt){
+        confirmTxt.textContent = `เพิ่มลงใบสั่งซื้อ (${count} รายการ)`;
+      }
+      const confirmBtn = $('#btnPoLowConfirm');
+      if(confirmBtn){
+        confirmBtn.disabled = count === 0;
+        confirmBtn.classList.toggle('opacity-50', count === 0);
+        confirmBtn.classList.toggle('cursor-not-allowed', count === 0);
+      }
+    };
+
+    const drawList = () => {
+      const q = (searchQuery || '').trim().toLowerCase();
+      const filtered = lowList.filter(m => {
+        if(currentStatusFilter && m.StockState !== currentStatusFilter) return false;
+        if(currentShopFilter && String(m.ShopName || '').trim() !== currentShopFilter) return false;
+        if(q){
+          const matchCode = String(m.Code || '').toLowerCase().includes(q);
+          const matchName = String(m.Name || '').toLowerCase().includes(q);
+          const matchShop = String(m.ShopName || '').toLowerCase().includes(q);
+          if(!matchCode && !matchName && !matchShop) return false;
+        }
+        return true;
+      });
+
+      const listEl = $('#poLowList');
+      if(!listEl) return;
+
+      if(!filtered.length){
+        listEl.innerHTML = `<p class="text-center text-slate-400 py-8 text-sm">ไม่พบรายการพัสดุที่ตรงกับเงื่อนไข</p>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(m => {
+        const st = selState[m.ID] || { checked: true, qty: getSuggestedQty(m) };
+        const isOut = m.StockState === 'OUT';
+        const price = Number(m.UnitPrice || 0);
+
+        return `
+          <div class="p-3 bg-white rounded-xl border border-slate-200/80 hover:border-brand-300 transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${st.checked ? 'ring-1 ring-brand-500/30 bg-brand-50/10' : 'opacity-70'}">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <input type="checkbox" data-id="${esc(m.ID)}" class="po-low-chk mt-1 w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer" ${st.checked ? 'checked' : ''}>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-bold text-brand-600">${esc(m.Code)}</span>
+                  ${badge(m.StockState)}
+                  ${m.ShopName ? `<span class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium truncate max-w-[150px]"><i class="fa-solid fa-store text-[10px] mr-1 text-slate-400"></i>${esc(m.ShopName)}</span>` : ''}
+                </div>
+                <p class="font-bold text-sm text-slate-800 truncate mt-0.5">${esc(m.Name)}</p>
+                <div class="text-xs text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
+                  <span>คงเหลือ: <strong class="${isOut ? 'text-red2' : 'text-orange2'}">${nf(m.StockQty)}</strong> / ${nf(m.MinQty)} ${esc(m.Unit)}</span>
+                  <span>ราคา/หน่วย: <strong>${money(price)}</strong> บาท</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+              <label class="text-xs font-bold text-slate-600">สั่ง:</label>
+              <input type="number" min="1" step="any" data-qty-id="${esc(m.ID)}" value="${esc(st.qty)}" class="po-low-qty w-20 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-center font-bold text-slate-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none">
+              <span class="text-xs text-slate-500 w-8">${esc(m.Unit)}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    drawList();
+    updateSummary();
+
+    $('#poLowQ')?.addEventListener('input', e => {
+      searchQuery = e.target.value;
+      drawList();
+    });
+    $('#poLowStatus')?.addEventListener('change', e => {
+      currentStatusFilter = e.target.value;
+      drawList();
+    });
+    $('#poLowShop')?.addEventListener('change', e => {
+      currentShopFilter = e.target.value;
+      drawList();
+    });
+
+    $('#btnPoLowSelectAll')?.addEventListener('click', () => {
+      Object.keys(selState).forEach(id => { selState[id].checked = true; });
+      drawList();
+      updateSummary();
+    });
+    $('#btnPoLowDeselectAll')?.addEventListener('click', () => {
+      Object.keys(selState).forEach(id => { selState[id].checked = false; });
+      drawList();
+      updateSummary();
+    });
+
+    $('#poLowList')?.addEventListener('change', e => {
+      const chk = e.target.closest('.po-low-chk');
+      if(chk){
+        const id = chk.dataset.id;
+        if(selState[id]){
+          selState[id].checked = chk.checked;
+          updateSummary();
+          const card = chk.closest('div.p-3');
+          if(card){
+            card.classList.toggle('ring-1', chk.checked);
+            card.classList.toggle('ring-brand-500/30', chk.checked);
+            card.classList.toggle('bg-brand-50/10', chk.checked);
+            card.classList.toggle('opacity-70', !chk.checked);
+          }
+        }
+      }
+    });
+
+    $('#poLowList')?.addEventListener('input', e => {
+      const inpQty = e.target.closest('.po-low-qty');
+      if(inpQty){
+        const id = inpQty.dataset.qtyId;
+        if(selState[id]){
+          const val = parseFloat(inpQty.value || 0);
+          selState[id].qty = val > 0 ? val : 1;
+          updateSummary();
+        }
+      }
+    });
+
+    $('#btnPoLowCancel')?.addEventListener('click', closeModal);
+
+    $('#btnPoLowConfirm')?.addEventListener('click', () => {
+      const selected = Object.values(selState).filter(s => s.checked && s.qty > 0);
+      if(!selected.length){
+        return toast('warning', 'กรุณาเลือกรายการพัสดุอย่างน้อย 1 รายการ');
+      }
+
+      const selectedShops = new Set();
+      selected.forEach(s => {
+        if(s.material.ShopName && s.material.ShopName.trim()){
+          selectedShops.add(s.material.ShopName.trim());
+        }
+      });
+
+      const poToInput = $('#poTo');
+      if(selectedShops.size === 1 && poToInput && !poToInput.value.trim()){
+        const shopName = Array.from(selectedShops)[0];
+        poToInput.value = shopName;
+        poSaveDraft_();
+      }
+
+      selected.forEach(s => {
+        const m = s.material;
+        const newRow = {
+          qty: String(s.qty),
+          unit: m.Unit || '',
+          name: m.Name || '',
+          price: m.UnitPrice !== undefined ? String(m.UnitPrice) : '',
+          note: m.StockState === 'OUT' ? 'หมดสต็อก' : 'ใกล้หมด'
+        };
+
+        const blankIdx = rows.findIndex(r => !r.name && !r.qty && !r.price);
+        if(blankIdx >= 0){
+          rows[blankIdx] = newRow;
+        } else {
+          rows.push(newRow);
+        }
+      });
+
+      closeModal();
+      renderRows();
+
+      if(selectedShops.size === 1 && poToInput && poToInput.value){
+        toast('success', `เพิ่ม ${selected.length} รายการลงใบสั่งซื้อเรียบร้อย (เติมชื่อผู้ขาย: ${Array.from(selectedShops)[0]})`);
+      } else {
+        toast('success', `เพิ่ม ${selected.length} รายการลงใบสั่งซื้อเรียบร้อย`);
+      }
+    });
+  }
+
   $('#btnPoExport').addEventListener('click', async () => {
     const items = rows.filter(r => String(r.name).trim() || r.qty !== '' || r.price !== '');
     if(!items.length) return toast('warning', 'กรุณากรอกรายการสั่งซื้ออย่างน้อย 1 รายการ');
@@ -5770,6 +6063,11 @@ async function viewPurchaseOrder(){
       btn.disabled = false;
     }
   });
+
+  if(S.poPendingLowPick){
+    delete S.poPendingLowPick;
+    setTimeout(() => openPoLowStockPicker(), 50);
+  }
 }
 
 async function exportPurchaseOrderXlsx(d){

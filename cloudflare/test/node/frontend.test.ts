@@ -125,6 +125,9 @@ describe('public/index.html static checks', () => {
     // remembers only reusable fields, never items/qty/price
     expect(html).toContain("const PO_DRAFT_FIELDS = ['To', 'IssName', 'IssPos']");
     expect(html).toContain("'po_draft_'");
+    expect(html).toContain('id="btnPoPullLow"');
+    expect(html).toContain('openPoLowStockPicker');
+    expect(html).toContain('btnLowToPo');
   });
 
   it('purchase-order helpers compute row amounts, totals and Thai date parts', () => {
