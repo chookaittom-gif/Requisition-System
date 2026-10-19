@@ -3,4 +3,4 @@ param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
     $ArgsList
 )
-& "$PSScriptRoot\deploy-all.ps1" @ArgsList
+& "$PSScriptRoot\deploy-cloudflare.ps1" @ArgsList
