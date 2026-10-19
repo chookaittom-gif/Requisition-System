@@ -166,11 +166,12 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
 
     const chartByItem = byName.map((r) => ({ label: r.name, value: num(r.qty) }));
     const chartTop10 = chartByItem.slice().sort((a, b) => b.value - a.value).slice(0, 10);
+    const invAcc = await inventoryAccount(ctx, { fiscalYear: currentFiscalYear() });
     return {
       ok: true,
       summary: {
         totalMaterials: materials.length,
-        remainValue: materials.reduce((s, m) => s + num(m.StockQty) * num(m.UnitPrice), 0),
+        remainValue: invAcc.summary.remainValue,
         usedValue: num(used?.value),
         usedQty: num(used?.qty),
         lowStock: materials.filter((m) => m.StockState !== 'OK').length,
@@ -381,18 +382,6 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
         let openingQty = row.ob_qty === null || row.ob_qty === undefined ? num(m.OpeningQty) : num(row.ob_qty);
         let purchaseQty = num(row.purchased);
         const usedQty = num(row.used);
-
-        // Self-healing fallback: หากพัสดุได้มาในปีงบนี้ แต่ยังไม่มีใน purchases และไม่มี opening_balances
-        if ((row.ob_qty === null || row.ob_qty === undefined) && purchaseQty === 0) {
-          const acqDate = String(m.AcquiredDate || '').substring(0, 10);
-          if (acqDate >= startDate && acqDate <= endDate) {
-            const autoPurchase = num(m.OrderQty || 0);
-            if (autoPurchase > 0) {
-              purchaseQty = autoPurchase;
-              openingQty = Math.max(0, openingQty - autoPurchase);
-            }
-          }
-        }
 
         const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
         return {

@@ -131,7 +131,7 @@ describe('inventory report', () => {
     expect(byCode(r, 'H-1')).toMatchObject({ UsedQty: 54, RemainQty: 0, Amount: 0 });
   });
 
-  it('self-heals material with OrderQty acquired in FY without purchases rows', async () => {
+  it('without purchases rows, PurchaseQty is 0 and OpeningQty comes from opening_qty', async () => {
     await run(
       "INSERT INTO materials (id, code, name, unit, unit_price, stock_qty, min_qty, opening_qty, order_qty, acquired_date, category, created_at, updated_at) VALUES (?, ?, ?, 'รีม', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       'M99', 'ว.001', 'กระดาษ A4', 120, 50, 5, 50, 50, '2026-10-19', 'วัสดุสำนักงาน', T, T,
@@ -139,8 +139,8 @@ describe('inventory report', () => {
     const r = await asOfficer('apiGetInventoryReport', { fiscalYear: 2570, reportDate: '2026-10-19' });
     const row = byCode(r, 'ว.001');
     expect(row).toBeDefined();
-    expect(row.OpeningQty).toBe(0);
-    expect(row.PurchaseQty).toBe(50);
+    expect(row.OpeningQty).toBe(50);
+    expect(row.PurchaseQty).toBe(0);
     expect(row.RemainQty).toBe(50);
   });
 
@@ -223,10 +223,10 @@ describe('stock card', () => {
 });
 
 describe('dashboards', () => {
-  it('admin dashboard remainValue = sum(stock_qty x unit_price)', async () => {
+  it('admin dashboard remainValue matches inventory account remainValue for current fiscal year', async () => {
     const r = await asOfficer('apiGetAdminDashboard');
     expect(r.ok).toBe(true);
-    expect(r.summary).toEqual({ totalMaterials: 3, remainValue: 960, usedValue: 5670, usedQty: 68, lowStock: 1 });
+    expect(r.summary).toEqual({ totalMaterials: 3, remainValue: 240, usedValue: 5670, usedQty: 68, lowStock: 1 });
     expect(r.counters).toEqual({ approved: 5, pending: 1, rejected: 1 });
     expect(r.chartStatus).toEqual([
       { label: 'อนุมัติแล้ว', value: 5 },
