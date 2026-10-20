@@ -1,0 +1,24 @@
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# real data, raw notes, local tool configs — never commit
+*.xls
+*.xlsx
+*.pdf
+/*.txt
+/docs/*.txt
+.clasp.json
+.claspignore
+.claude/
+.cursor/
+.gemini/
+.grok/
+.kiro/
+.windsurf/
+.adal/
+.mcp.json
+opencode.json
+node_modules/
+.wrangler/
+.dev.vars
+.claude/settings.local.json

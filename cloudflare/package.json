@@ -1,0 +1,24 @@
+{
+  "name": "supply-requisition-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:smoke:local": "wrangler d1 execute DB --local --file tests/schema-smoke.sql",
+    "db:negative:local": "node tests/run-negative.mjs",
+    "test": "vitest run && vitest run -c vitest.node.config.ts",
+    "test:node": "vitest run -c vitest.node.config.ts",
+    "typecheck": "tsc --noEmit",
+    "seed:build": "node scripts/seed-legacy.mjs",
+    "dev": "wrangler dev",
+    "deploy:all": "powershell -ExecutionPolicy Bypass -File ../deploy-all.ps1"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.0",
+    "@cloudflare/workers-types": "^5.20261012.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.129.0",
+    "xlsx": "^0.18.5"
+  }
+}
