@@ -1,7 +1,7 @@
 ---
 id: 1
 title: "Dual-stack GAS and Cloudflare master-detail auto-fill pattern"
-status: open
+status: superseded
 type: internal
 skill: [gas-best-practices]
 proposes_skill: []
@@ -11,8 +11,8 @@ area: "architecture and schema sync"
 date: 2026-10-17
 session_context: "Adding Shops entity with auto-fill in Material Modal across GAS and Cloudflare D1"
 parked_until: ""
-resolved: ""
-resolution: ""
+resolved: "2026-10-20"
+resolution: "GAS runtime files and deployment scripts were completely removed in commit aeec64b; project transitioned to single-stack Cloudflare Workers + D1."
 reference: ""
 commands_verified: "run: npm test (183 passed)"
 ---
