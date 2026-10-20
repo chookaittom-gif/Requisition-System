@@ -988,6 +988,14 @@ function thaiDate(ymd, mode){
   if(mode==='short') return `${d} ${TH_MS[m]} ${String(y).slice(-2)}`;
   return `${d} ${TH_M[m]} ${y}`;
 }
+function thaiDateTime(s){
+  if(!s) return '-';
+  const [d, t] = String(s).replace('T', ' ').split(' ');
+  const dt = thaiDate(d);
+  if(dt === '-' || dt === d) return s;
+  const time = (t || '').substring(0, 8);
+  return time ? `${dt.replace(/(\d{4})$/, 'พ.ศ. $1')} เวลา ${time} น.` : `${dt.replace(/(\d{4})$/, 'พ.ศ. $1')}`;
+}
 function todayYMD(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -3910,7 +3918,7 @@ async function viewAuditLog(){
         </tr></thead>
         <tbody class="divide-y divide-slate-100">${list.map(x=>`
           <tr class="hover:bg-brand-50/40 transition">
-            <td class="px-3 py-3 text-xs whitespace-nowrap text-slate-500">${esc(String(x.CreatedAt||'').replace('T',' ').substring(0,19))}</td>
+            <td class="px-3 py-3 text-xs whitespace-nowrap text-slate-500">${esc(thaiDateTime(x.CreatedAt))}</td>
             <td class="px-3 py-3 text-center">${actionBadge(x.Action)}</td>
             <td class="px-3 py-3 font-semibold text-slate-700">${esc(x.Entity||'-')}</td>
             <td class="px-3 py-3 text-xs text-slate-500">${esc(x.EntityID||'-')}</td>
@@ -5185,7 +5193,7 @@ async function viewStockMovements(){
         <tbody class="divide-y divide-slate-100">
           ${list.map(m=>`
             <tr class="hover:bg-brand-50/40 transition">
-              <td class="px-3 py-3 text-xs whitespace-nowrap text-slate-500">${esc(String(m.CreatedAt||'').replace('T',' ').substring(0,19))}</td>
+              <td class="px-3 py-3 text-xs whitespace-nowrap text-slate-500">${esc(thaiDateTime(m.CreatedAt))}</td>
               <td class="px-3 py-3 font-bold text-brand-600">${esc(m.Code)}</td>
               <td class="px-3 py-3 font-semibold text-slate-700">${esc(m.Name)}</td>
               <td class="px-3 py-3 text-center">${typeBadge(m.Type)}</td>

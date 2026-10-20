@@ -268,6 +268,23 @@ describe('upload helpers (executed from the page source)', () => {
     ]);
   });
 
+  it('formats thaiDateTime correctly for audit log and stock movements', () => {
+    expect(html).toContain('esc(thaiDateTime(x.CreatedAt))');
+    expect(html).toContain('esc(thaiDateTime(m.CreatedAt))');
+    const thM = html.match(/const TH_M\s*=\s*\[[^\]]+\];/)![0];
+    const thMs = html.match(/const TH_MS\s*=\s*\[[^\]]+\];/)![0];
+    const start = html.indexOf('function thaiDate(');
+    const end = html.indexOf('function todayYMD(');
+    const { thaiDateTime } = new Function(`${thM}\n${thMs}\n${html.slice(start, end)}\nreturn { thaiDateTime };`)();
+    expect(thaiDateTime('2026-10-19 11:25:57')).toBe('19 ตุลาคม พ.ศ. 2569 เวลา 11:25:57 น.');
+    expect(thaiDateTime('2026-10-20T09:58:34')).toBe('20 ตุลาคม พ.ศ. 2569 เวลา 09:58:34 น.');
+    expect(thaiDateTime('2026-10-19 11:25:57.123Z')).toBe('19 ตุลาคม พ.ศ. 2569 เวลา 11:25:57 น.');
+    expect(thaiDateTime('2026-10-19')).toBe('19 ตุลาคม พ.ศ. 2569');
+    expect(thaiDateTime('')).toBe('-');
+    expect(thaiDateTime(null)).toBe('-');
+    expect(thaiDateTime('invalid-date')).toBe('invalid-date');
+  });
+
   it('308 with Range bytes=0-N proceeds without querying the proxy', async () => {
     const calls: string[] = [];
     const size = 5242880 + 100;
