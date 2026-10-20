@@ -1,5 +1,6 @@
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+/graphify-out/
 
 # real data, raw notes, local tool configs — never commit
 *.xls
