@@ -180,6 +180,22 @@ tailwind.config = {
 
 
 
+  /* Modal Backdrop Shake Effect */
+  @keyframes modal-shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+  .animate-shake {
+    animation: modal-shake 0.35s cubic-bezier(.36,.07,.19,.97) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shake {
+      animation: none;
+      outline: 2px solid #ef4444;
+    }
+  }
+
 </style>
 </head>
 
@@ -1109,10 +1125,16 @@ $('#modal').addEventListener('click', e => {
   if(e.target.id==='modal'){
     if($('#modal').dataset.static === 'true'){
       const box = $('#modalBox');
+      const btnClose = $('#modalClose');
       if(box){
-        box.classList.remove('animate-pop');
-        box.classList.add('scale-[1.01]', 'transition-transform', 'duration-100');
-        setTimeout(() => box.classList.remove('scale-[1.01]'), 120);
+        box.classList.remove('animate-pop', 'animate-shake');
+        void box.offsetWidth;
+        box.classList.add('animate-shake');
+        setTimeout(() => box.classList.remove('animate-shake'), 360);
+      }
+      if(btnClose){
+        btnClose.classList.add('ring-4', 'ring-white', 'scale-125', 'transition-all', 'duration-200');
+        setTimeout(() => btnClose.classList.remove('ring-4', 'ring-white', 'scale-125'), 360);
       }
       return;
     }
@@ -3443,6 +3465,7 @@ async function openOpeningBalanceModal(r){
     sub: 'กำหนดยอดยกมารายปี โดยไม่กระทบยอดเดิมของปีก่อนหน้า',
     icon: 'fa-calendar-check',
     size: 'max-w-2xl',
+    staticBackdrop: true,
     body: `
       <form id="frmOB" class="space-y-4">
         <div>
