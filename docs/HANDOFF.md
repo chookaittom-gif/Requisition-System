@@ -1,6 +1,9 @@
 # Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-20)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
+**Repository:** https://github.com/chookaittom-gif/Requisition-System
+**Branch:** `main`
+**Latest Deployment:** GitHub Actions Run [#39448716793](https://github.com/chookaittom-gif/Requisition-System/actions/runs/39448716793) (Success)
 
 ---
 
@@ -20,27 +23,33 @@
 
 ## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-20)
 
-### 1. `3136499` format audit log and stock movement datetime in Thai B.E.
-- **ฟังก์ชันแปลงวันที่เวลาไทย:** เพิ่ม `thaiDateTime(s)` ใน `cloudflare/public/index.html` (บรรทัด ~991)
-  - แปลงวันที่ ค.ศ. เป็น พ.ศ. ภาษาไทยเต็มรูปแบบ พร้อมระบุเวลา เช่น `19 ตุลาคม พ.ศ. 2569 เวลา 11:25:57 น.`
-  - รองรับทั้ง ISO format (`T`), space format (`YYYY-MM-DD HH:mm:ss`), fractional seconds (`.123Z`) และ date-only
-- **UI Integration:**
-  - นำไปใช้ในคอลัมน์เวลาของ **Audit Log** (`viewAuditLog`)
-  - นำไปใช้ในคอลัมน์เวลาของ **ประวัติความเคลื่อนไหวพัสดุ** (`viewStockMovements`)
+### 1. `555a6e4` feat(ui): lock material, shop, and user modals with static backdrop and shake animation
+- **Modal UX Hardening:**
+  - กำหนดค่า `staticBackdrop: true` ให้กับทุก Modal ฟอร์มหลัก:
+    - **Modal ข้อมูลพัสดุ (`matModal`)**: ล็อกทั้งโหมดเพิ่มพัสดุใหม่และแก้ไขพัสดุ
+    - **Modal ข้อมูลร้านค้า (`shopModal`)**: ล็อกฟอร์มเพิ่ม/แก้ไขร้านค้า
+    - **Modal ข้อมูลผู้ใช้งาน (`userModal`)**: ล็อกฟอร์มเพิ่ม/แก้ไขผู้ใช้งาน
+  - เมื่อคลิกพื้นหลังสีเทาด้านนอก Modal จะไม่ปิด เพื่อป้องกันข้อมูลที่กำลังพิมพ์สูญหาย (Data Loss Prevention)
+  - ตัวกล่อง Modal จะแสดงแอนิเมชันสั่นเตือน (`animate-shake`) และปุ่มกากบาท `(X)` ขยายพร้อมวงแหวนสีขาวไฮไลต์ดึงดูดสายตา
 - **Automated Tests:**
-  - เพิ่ม Unit Test ใน `cloudflare/test/node/frontend.test.ts` ครอบคลุม 7 test cases ผ่าน 100%
+  - อัปเดต Assertion ใน `cloudflare/test/node/frontend.test.ts` ให้สอดคล้องกับ `staticBackdrop: true`
 
-### 2. `f960af5` feat(ui): add static backdrop and shake animation to opening balance modal
-- **Modal UX Enhancement:**
-  - เพิ่ม CSS `@keyframes modal-shake` และคลาส `.animate-shake` พร้อมคำนึงถึง Accessibility (`prefers-reduced-motion`)
-  - กำหนดค่า `staticBackdrop: true` ในฟังก์ชัน `openOpeningBalanceModal(r)` เพื่อป้องกันไม่ให้ผู้ใช้คลิกโดนฉากหลังสีเทาด้านนอกแล้วหน้าต่างปิดกะทันหันขณะกำลังกรอกยอดยกมา
-  - เมื่อคลิกฉากหลัง ตัวกล่อง Modal จะแสดงแอนิเมชันสั่นเตือน (shake effect) และปุ่มปิดกากบาท (`#modalClose`) จะมีวงแหวนสีขาวไฮไลต์เพื่อนำสายตาผู้ใช้
-- **Automated Tests:**
-  - เพิ่ม Assertion ตรวจสอบ CSS และการตั้งค่า Static Backdrop ใน `cloudflare/test/node/frontend.test.ts`
+### 2. การตรวจเช็กความไม่สอดคล้องของตัวเลขคงคลัง (135.00 บาท)
+- **ปัญหาที่พบ:** ยอดในแท็บ "จัดการพัสดุ" แสดง 17,581.00 บาท แต่แท็บ "ทะเบียนพัสดุคงเหลือ" และ "บัญชีพัสดุ" แสดง 17,446.00 บาท
+- **การวิเคราะห์ Root Cause:**
+  - ไม่ใช่บั๊กของการคำนวณในโค้ด แต่เกิดจากข้อมูลของ **"ปากกาเคมี 2 หัว ตราม้า สีน้ำเงิน"** (รหัส `8851552201016` ราคา 13.50 บาท)
+  - สต็อกจริงในตาราง `materials` ระบุไว้ **34 หน่วย** (มูลค่า 459.00 บาท)
+  - แต่ในงวดบัญชีปี 2570 มีประวัติการจัดซื้อในตาราง `purchases` เพียง **24 หน่วย** และยอดยกมาเป็น **0** (มูลค่า 324.00 บาท)
+  - ผลต่าง: 10 หน่วย × 13.50 บาท = 135.00 บาท พอดีเป๊ะ
+- **แนวทางแก้ไขที่เลือก:** ปรับแก้ "จำนวนคงเหลือ" ในหน้าจัดการพัสดุให้เป็น 24 หน่วย เพื่อให้ยอดสอดคล้องกับประวัติการซื้อจริง
 
-### 3. `76c696a` chore: record skill observations and sync agent configs
-- บันทึกบทเรียน `0003-headless-cli-prompts-and-windows-rtk-fallbacks.md` ลงใน `skill-observations/`
-- ซิงค์คำสั่งและบริบทใน `.github/copilot-instructions.md`
+### 3. Knowledge Graph Indexing & Token Optimization
+- รันสกัดความสัมพันธ์โค้ด AST ด้วย `graphify-windows` ได้กราฟความรู้ 322 โหนด 649 เส้นเชื่อม 23 ชุมชนโค้ด ใน `graphify-out/` โดยไม่ใช้ LLM token
+- เพิ่ม `/graphify-out/` ลงใน `.gitignore` เพื่อไม่ให้ไฟล์ดัชนีปะปนใน Git
+- สามารถสืบค้นบริบทผ่าน GraphRAG ด้วยงบประมาณ token ต่ำได้ทันที:
+  ```bash
+  python -m graphify query "<คำถาม>" --budget 1500
+  ```
 
 ---
 
@@ -50,25 +59,26 @@
   - Worker Tests: **155 passed** (10 test files)
   - Node Tests: **36 passed** (2 test files)
   - **รวมทั้งสิ้น: 191 passed (100% PASS)**
+- **TypeScript Typecheck:** 0 errors
 - **Git State:**
   - Branch: `main`
   - สถานะ: Up to date with `origin/main`
-  - Commit ล่าสุด: `3136499 format audit log and stock movement datetime in Thai B.E.`
+- **Cloudflare Live Deployment:**
+  - Deploy ผ่าน GitHub Actions Run [#39448716793](https://github.com/chookaittom-gif/Requisition-System/actions/runs/39448716793) สมบูรณ์
 
 ---
 
 ## 4. โครงสร้างไฟล์และจุดแก้ไขสำคัญ (Key Code Anchors)
 
 - `cloudflare/public/index.html`:
-  - CSS Modal Shake Animation: บรรทัด ~180
-  - จัดการ Event คลิกฉากหลัง Modal Backdrop: บรรทัด ~1125
-  - ฟังก์ชัน `thaiDateTime(s)`: บรรทัด ~991
-  - Modal ยอดยกมา `openOpeningBalanceModal(r)`: บรรทัด ~3440
-  - ตารางประวัติ Audit Log `viewAuditLog()`: บรรทัด ~3910
-  - ตารางประวัติความเคลื่อนไหวพัสดุ `viewStockMovements()`: บรรทัด ~5185
+  - CSS Modal Shake Animation: บรรทัด ~189
+  - จัดการ Event คลิกฉากหลัง Modal Backdrop: บรรทัด ~1132
+  - ฟังก์ชัน `matModal(m)`: บรรทัด ~2247 (`staticBackdrop: true`)
+  - ฟังก์ชัน `userModal(u)`: บรรทัด ~4693 (`staticBackdrop: true`)
+  - ฟังก์ชัน `shopModal(shop)`: บรรทัด ~5550 (`staticBackdrop: true`)
+  - Modal ยอดยกมา `openOpeningBalanceModal(r)`: บรรทัด ~3471 (`staticBackdrop: true`)
 - `cloudflare/test/node/frontend.test.ts`:
-  - Static Check สำหรับ Modal Shake: บรรทัด ~96
-  - Unit Test สำหรับ `thaiDateTime`: บรรทัด ~270
+  - Static Check สำหรับ Modal Shake & staticBackdrop: บรรทัด ~96
 - สคริปต์ Deploy:
   - `deploy.ps1` / `deploy.cmd` -> เรียก `deploy-cloudflare.ps1`
 
@@ -76,8 +86,8 @@
 
 ## 5. Suggested Skills สำหรับรอบถัดไป (Recommended Skills for Next Agent)
 
-1. **`task-observer`**: สำหรับตรวจจับและบันทึก Observation/Learnings จากการทำงานเพื่อปรับปรุงระบบอัตโนมัติ
-2. **`ui-ux-pro-max`**: สำหรับการปรับแต่ง UI/UX, Design Token, Micro-interactions หรือการจัดระเบียบหน้าจอให้เป็นไปตามมาตรฐาน
-3. **`graft`**: สำหรับสืบค้นโครงสร้างโค้ด Call Graph และ Dependency สัมพันธ์ผ่าน `graft ask` หรือ `graft callers` ก่อนแก้โค้ด
-4. **`ponytail`**: ยึดหลัก Minimal Change, ไม่สร้าง Abstraction ฟุ่มเฟือย, แก้ไขตรงจุด Root Cause เท่านั้น
-5. **`gas-best-practices`**: หากต้องอ้างอิง Business Logic เดิม หรือตรวจสอบ Data Flow ระหว่างระบบพัสดุ
+1. **`caveman` (lite)**: รักษารูปแบบการตอบที่กระชับ ตรงประเด็น ประหยัด token
+2. **`rtk`**: ใช้เป็น prefix รันคำสั่งเชลล์บน Windows (เช่น `rtk git status`, `rtk rg`) เพื่อกรอง output
+3. **`task-observer`**: ตรวจสอบ friction และบันทึกข้อสังเกตลง `skill-observations/`
+4. **`graphify-windows` / `graft`**: สืบค้นสถาปัตยกรรมและจุดอ้างอิงโค้ดผ่าน Knowledge Graph
+5. **`ponytail`**: ยึดหลัก Minimal Change, ไม่สร้าง Abstraction ฟุ่มเฟือย, แก้ไขตรงจุด Root Cause เท่านั้น

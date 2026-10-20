@@ -129,7 +129,7 @@ Keep the final report proportional to the task:
 - If the active tool supports subagents, delegate independent exploration or review when useful without asking for routine permission. Use no more than **2 additional agents concurrently by default**; increase only when explicitly authorized or clearly required by project instructions and task complexity.
 - Define each agent's task, read/write permissions, and deliverable. Prefer read-only exploration/review; assign one owner per file and never allow concurrent edits to the same file.
 - The primary agent remains responsible for checking evidence, integrating changes, running tests, and reporting the outcome. Delegation does not expand approved scope or bypass approval boundaries.
-- Before an interrupted session ends, record the approved scope, evidence, changed files, checks/results, blockers, risks, and next steps in a project-appropriate handoff note.
+- Before an interrupted session ends, record the approved scope, evidence, changed files, checks/results, blockers, risks, and next steps in a project-appropriate handoff note. Always write and overwrite this note at `docs/HANDOFF.md` (never at repository root or OS temp directories) so that cross-machine and multi-session continuity is preserved in Git.
 - Do not include secrets or temporary task details in permanent instructions.
 
 ## Learn from corrections
