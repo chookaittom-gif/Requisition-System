@@ -1,9 +1,9 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-20)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-27)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** GitHub Actions Run [#39448716793](https://github.com/chookaittom-gif/Requisition-System/actions/runs/39448716793) (Success)
+**Latest Deployment:** GitHub Actions Run [#40507700735](https://github.com/chookaittom-gif/Requisition-System/actions/runs/40507700735) (Success)
 
 ---
 
@@ -21,7 +21,27 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-20)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-27)
+
+### 1. `83b1b7f` feat(materials): Move opening balance management to materials tab and sync with opening_balances
+- **ปรับปรุง UX การจัดการยอดยกมา (Opening Balance Reorganization):**
+  - **แท็บทะเบียนวัสดุคงเหลือ:** นำปุ่ม `#btnManageOB` ออกจาก Toolbar รายงาน โดยคงคอลัมน์ "ยอดยกมา" แสดงผลแบบ Read-only ตามปกติ
+  - **แท็บจัดการพัสดุ:**
+    - เพิ่มคอลัมน์ "ยอดยกมา" ในตารางรายการพัสดุ (`renderMats`)
+    - เพิ่มปุ่มไอคอนปฏิทิน (`data-ob-mat`) ในคอลัมน์จัดการของทั้ง Table view และ Grid view
+    - เพิ่ม Modal `openMaterialOpeningBalanceModal(m)` ปรับยอดยกมารายพัสดุโดยเฉพาะ
+    - เพิ่มช่องกรอก `#mOpeningQty` ในฟอร์มพัสดุ (`matModal`) พร้อมคำนวณยอดคงเหลืออัตโนมัติ (`OrderQty + OpeningQty`)
+- **Backend API & Sync:**
+  - อัปเดต `cloudflare/src/api/materials.ts` ให้รองรับ `OpeningQty` ใน `apiSaveMaterials` ทั้ง create และ update
+  - ทำการ Upsert บันทึกยอดยกมาลงตาราง `opening_balances` ตามปีงบประมาณของพัสดุโดยอัตโนมัติ
+- **Automated Tests:**
+  - เพิ่ม Unit Test ใน `cloudflare/test/materials.test.ts` ตรวจสอบการบันทึก `OpeningQty`
+  - เพิ่ม Static Check Test ใน `cloudflare/test/node/frontend.test.ts`
+  - ผลการทดสอบ: **193 tests passed (100% PASS)**
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-20)
 
 ### 1. `555a6e4` feat(ui): lock material, shop, and user modals with static backdrop and shake animation
 - **Modal UX Hardening:**
@@ -58,7 +78,7 @@
 - **Test Suite Results (Vitest):**
   - Worker Tests: **155 passed** (10 test files)
   - Node Tests: **36 passed** (2 test files)
-  - **รวมทั้งสิ้น: 191 passed (100% PASS)**
+  - **รวมทั้งสิ้น: 193 passed (100% PASS)**
 - **TypeScript Typecheck:** 0 errors
 - **Git State:**
   - Branch: `main`
