@@ -3,7 +3,7 @@
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** GitHub Actions Run [#40526392049](https://github.com/chookaittom-gif/Requisition-System/actions/runs/40526392049) (Success)
+**Latest Deployment:** GitHub Actions Run [#40530564871](https://github.com/chookaittom-gif/Requisition-System/actions/runs/40530564871) (Success)
 
 ---
 
