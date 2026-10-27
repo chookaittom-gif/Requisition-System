@@ -48,6 +48,10 @@
   - เปลี่ยนหัวข้อเป็นการแจ้งเตือน `(Telegram + LINE)`
   - เพิ่ม Checkbox สวิตช์เปิด-ปิดช่องทาง Telegram และ LINE อิสระจากกัน
 
+### 4. refactor(settings): Remove legacy Google Sheets schema migration card
+- ลบกล่องและปุ่ม "อัปเดตโครงสร้างชีต (Schema Migration)" ออกจากหน้าตั้งค่าระบบ
+- เนื่องจากระบบย้ายมาใช้ Cloudflare D1 Database ซึ่งจัดการ Migration ผ่าน CI/CD (`wrangler d1 migrations apply`) แทนการปรับแก้ชีตแล้ว
+
 ---
 
 ## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-27 Earlier Session)

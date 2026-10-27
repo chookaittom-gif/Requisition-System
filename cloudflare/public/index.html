@@ -4389,17 +4389,7 @@ async function viewSettings(){
         </div>
       </div>
 
-      <div class="mt-4 p-4 rounded-3xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div>
-          <p class="font-bold text-sm text-emerald-900"><i class="fa-solid fa-database mr-1"></i> อัปเดตโครงสร้างชีต (Schema Migration)</p>
-          <p class="text-xs text-emerald-700">ตรวจสอบและเพิ่มคอลัมน์ใหม่ (ชนิดวัสดุ, ขนาด/ลักษณะ, สถานที่จัดเก็บ) และชีตยอดยกมารายปี โดยไม่กระทบข้อมูลเดิม</p>
-        </div>
-        <button type="button" id="btnMigrateSchema" class="px-4 py-2.5 rounded-2xl bg-emerald-600 text-white text-xs font-bold hover:brightness-110 whitespace-nowrap active:scale-95 transition">
-          <i class="fa-solid fa-arrows-rotate"></i> ตรวจสอบ/อัปเดตชีต
-        </button>
-      </div>
-
-      <div class="text-xs text-slate-400"><i class="fa-regular fa-clock"></i> อัปเดตล่าสุด: ${thaiDate(d.UpdatedAt)}</div>
+      <div class="text-xs text-slate-400 mt-4"><i class="fa-regular fa-clock"></i> อัปเดตล่าสุด: ${thaiDate(d.UpdatedAt)}</div>
 
       <button type="submit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-light text-white font-bold shadow-soft hover:brightness-110 active:scale-[.99] transition">
         <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
@@ -4427,29 +4417,6 @@ async function viewSettings(){
     $('#bannerPreview').classList.remove('hidden');
     $('#bannerPreviewFallback').classList.add('hidden');
   });
-
-  const btnMig = $('#btnMigrateSchema');
-  if(btnMig){
-    btnMig.addEventListener('click', async ()=>{
-      const cf = await Swal.fire({
-        icon: 'question',
-        title: 'อัปเดตโครงสร้างชีต?',
-        text: 'ระบบจะตรวจสอบคอลัมน์และสร้างชีตยอดยกมา โดยไม่ลบหรือแก้ไขข้อมูลเดิม',
-        showCancelButton: true,
-        confirmButtonText: 'ดำเนินการ',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#059669',
-        reverseButtons: true
-      });
-      if(!cf.isConfirmed) return;
-
-      showLoader('กำลังอัปเดตโครงสร้างชีต...');
-      const res = await api('apiRunSchemaMigration');
-      hideLoader();
-      if(!res.ok) return alertErr(res.message);
-      await alertOk(res.message);
-    });
-  }
 
   const btnTgToggle = $('#toggleTgToken');
   if(btnTgToggle){
