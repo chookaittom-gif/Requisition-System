@@ -415,12 +415,28 @@ registerRpc('apiSaveOpeningBalance', 'officer', (ctx, args) =>
     const exists = await db.prepare('SELECT 1 AS x FROM materials WHERE id = ?').bind(materialId).first();
     if (!exists) throw new UserError('ไม่พบพัสดุที่ระบุ');
     const now = nowBkk();
+    const { results: moves } = await db
+      .prepare('SELECT type, qty, after_qty FROM stock_movements WHERE material_id = ? ORDER BY created_at ASC, rowid ASC')
+      .bind(materialId)
+      .all<{ type: string; qty: number; after_qty: number }>();
+
+    let calcStock = openingQty;
+    for (const m of moves) {
+      const q = Number(m.qty || 0);
+      if (m.type === 'IN') calcStock += q;
+      else if (m.type === 'OUT') calcStock -= q;
+      else if (m.type === 'ADJUST') calcStock = Number(m.after_qty || 0);
+    }
+
     await db.batch([
       db
         .prepare(
           'INSERT INTO opening_balances (id, material_id, fiscal_year, opening_qty, set_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(material_id, fiscal_year) DO UPDATE SET opening_qty = excluded.opening_qty, set_by = excluded.set_by, updated_at = excluded.updated_at',
         )
         .bind(genId('OB'), materialId, fiscalYear, openingQty, actor, now, now),
+      db
+        .prepare('UPDATE materials SET stock_qty = ?, opening_qty = ?, updated_at = ? WHERE id = ?')
+        .bind(Math.max(0, calcStock), openingQty, now, materialId),
       logAudit(db, {
         action: 'UPDATE',
         entity: 'OpeningBalance',

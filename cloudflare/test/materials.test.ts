@@ -298,5 +298,22 @@ describe('category code', () => {
     const docCat = list3.data.find((c: any) => c.Name === 'หมวดงานเอกสารและกระดาษ');
     expect(docCat.Code).toBe('DOC');
   });
+
+  it('apiSaveOpeningBalance syncs stock_qty and opening_qty in materials table', async () => {
+    await create({ Code: 'OB-SYNC-1', StockQty: 0 });
+    const [m] = await rows("SELECT id, stock_qty, opening_qty FROM materials WHERE code = 'OB-SYNC-1'");
+    expect(m.stock_qty).toBe(0);
+
+    const res = await rpc('apiSaveOpeningBalance', [{
+      MaterialID: m.id,
+      FiscalYear: 2570,
+      OpeningQty: 2,
+    }]);
+    expect(res.ok).toBe(true);
+
+    const [updated] = await rows("SELECT stock_qty, opening_qty FROM materials WHERE id = ?", m.id);
+    expect(updated.stock_qty).toBe(2);
+    expect(updated.opening_qty).toBe(2);
+  });
 });
 

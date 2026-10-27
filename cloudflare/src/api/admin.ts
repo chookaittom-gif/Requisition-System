@@ -39,10 +39,10 @@ notifyHooks.onNewRequest = async (env, req) => {
   const lineTo = String(row?.line_to ?? '');
   const cfg = await getNotifyConfig(env);
   if (cfg.onNewRequest) {
-    if (cfg.token && cfg.chatId) {
+    if (cfg.notifyTelegram && cfg.token && cfg.chatId) {
       await sendTelegram(cfg.token, cfg.chatId, newRequestText(req));
     }
-    if (lineToken && lineTo) {
+    if (cfg.notifyLine && lineToken && lineTo) {
       const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
       await pushLineCard(
         lineToken,
@@ -63,10 +63,10 @@ notifyHooks.onStatusChange = async (env, req, newStatus) => {
   const lineTo = String(row?.line_to ?? '');
   const cfg = await getNotifyConfig(env);
   if (!cfg.onStatusChange) return;
-  if (cfg.token && cfg.chatId) {
+  if (cfg.notifyTelegram && cfg.token && cfg.chatId) {
     await sendTelegram(cfg.token, cfg.chatId, approvedRequestText(req));
   }
-  if (lineToken && lineTo) {
+  if (cfg.notifyLine && lineToken && lineTo) {
     const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
     await pushLineCard(
       lineToken,
@@ -82,6 +82,7 @@ const DEFAULT_SETTINGS = {
   SchoolName: '', Affiliation: '', LogoUrl: '', Address: '', Phone: '', UpdatedAt: '',
   NotifyEmail: '', TelegramBotToken: '', TelegramChatId: '', LineToken: '', LineTo: '',
   NotifyOnNewRequest: 'YES', NotifyOnStatusChange: 'YES', NotifyLowStock: 'YES', BannerUrl: '',
+  NotifyTelegram: 'YES', NotifyLine: 'YES',
 };
 
 async function readSettings(env: Env): Promise<{ legacy: Obj; token: string; lineToken: string }> {
@@ -138,21 +139,22 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
     notify_email: str(p.NotifyEmail), telegram_chat_id: str(p.TelegramChatId), line_token: lineToken, line_to: str(p.LineTo),
     notify_on_new_request: flag(p.NotifyOnNewRequest), notify_on_status_change: flag(p.NotifyOnStatusChange),
     notify_low_stock: flag(p.NotifyLowStock), banner_url: banner.value,
+    notify_telegram: flag(p.NotifyTelegram), notify_line: flag(p.NotifyLine),
   };
   await db.batch([
     db
       .prepare(
-        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, line_to, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, updated_at)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, line_to, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, notify_telegram, notify_line, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET school_name = excluded.school_name, affiliation = excluded.affiliation, logo_url = excluded.logo_url,
            address = excluded.address, phone = excluded.phone, notify_email = excluded.notify_email, telegram_bot_token = excluded.telegram_bot_token,
            telegram_chat_id = excluded.telegram_chat_id, line_token = excluded.line_token, line_to = excluded.line_to, notify_on_new_request = excluded.notify_on_new_request,
            notify_on_status_change = excluded.notify_on_status_change, notify_low_stock = excluded.notify_low_stock,
-           banner_url = excluded.banner_url, updated_at = excluded.updated_at`,
+           banner_url = excluded.banner_url, notify_telegram = excluded.notify_telegram, notify_line = excluded.notify_line, updated_at = excluded.updated_at`,
       )
       .bind(
         d.school_name, d.affiliation, d.logo_url, d.address, d.phone, d.notify_email, token, d.telegram_chat_id, d.line_token, d.line_to,
-        d.notify_on_new_request, d.notify_on_status_change, d.notify_low_stock, d.banner_url, now,
+        d.notify_on_new_request, d.notify_on_status_change, d.notify_low_stock, d.banner_url, d.notify_telegram, d.notify_line, now,
       ),
     logAudit(db, { action: 'UPDATE', entity: 'Settings', entityId: '', detail: 'บันทึกการตั้งค่าระบบ', actor: str(p.actor) }),
   ]);

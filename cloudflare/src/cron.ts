@@ -7,7 +7,7 @@ import type { Ctx } from './rpc';
 export async function runLowStockCron(env: Env): Promise<void> {
   try {
     const cfg = await getNotifyConfig(env);
-    if (!cfg.onLowStock || !cfg.token || !cfg.chatId) return;
+    if (!cfg.notifyTelegram || !cfg.onLowStock || !cfg.token || !cfg.chatId) return;
     const low = (await listMaterials({ env } as Ctx)).filter((m) => m.StockState !== 'OK');
     if (!low.length) return;
     const res = await sendTelegram(cfg.token, cfg.chatId, lowStockText(low));

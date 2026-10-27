@@ -3,7 +3,6 @@
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** GitHub Actions Run [#40507700735](https://github.com/chookaittom-gif/Requisition-System/actions/runs/40507700735) (Success)
 
 ---
 
@@ -16,91 +15,60 @@
   - **Backend API:** `cloudflare/src/index.ts` และโมดูล RPC ใน `cloudflare/src/api/*.ts`
 - **CI/CD Pipeline (GitHub Actions):**
   - Workflow: `.github/workflows/deploy.yml` ทำงานอัตโนมัติทุกครั้งที่ `push` ขึ้น branch `main`
-  - ตรวจสอบ Typecheck + Vitest 191 ข้อ + D1 Migrations Apply + Wrangler Deploy
+  - ตรวจสอบ Typecheck + Vitest + D1 Migrations Apply + Wrangler Deploy
   - สคริปต์สั่ง Deploy แบบ Local: `deploy.ps1` หรือ `deploy.cmd` (รัน `deploy-cloudflare.ps1`)
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-27)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-27 Night Session)
+
+### 1. feat(stock-card): Display opening balance in "รับ" (In) column
+- ในฟังก์ชัน `stockCard` (`cloudflare/src/api/reports.ts`):
+  - แถวแรกของสต็อกการ์ด (`ยอดยกมา`) ส่งค่า `inQty: periodOpening` เพื่อให้ตารางสต็อกการ์ดแสดงตัวเลขยอดยกมาลงในคอลัมน์ "รับ" (In)
+  - อัปเดต CSV export ของ Stock Card ให้แสดงตัวเลขยอดยกมาในคอลัมน์ "รับ" เช่นกัน
+
+### 2. feat(materials): Sync plug 5m stock to 2 & auto-sync opening balances
+- **Database Migration:**
+  - เพิ่ม `cloudflare/migrations/0008_sync_plug_stock_and_notify_channels.sql` ซิงก์สต็อกสำหรับ `001-0001` (ปลั๊กไฟ 5 ม. BLL PLUG B75 WHITE) ให้ `stock_qty = 2` และ `opening_qty = 2`
+- **ผลลัพธ์การแสดงผล:**
+  - **แท็บแดชบอร์ด:** แสดงคงเหลือ `2 อัน` สถานะเปลี่ยนเป็น `ใกล้หมด` (เนื่องจาก 2 <= จุดสั่งซื้อ 3)
+  - **แท็บพัสดุหมด/ใกล้หมด:** ย้ายจากกล่องสีแดง (หมดสต็อก) ไปอยู่กล่องสีส้ม (ใกล้หมด) คงเหลือ `2` จุดสั่งซื้อ `3`
+  - **สต็อกการ์ด Dropdown:** แสดง `(คงเหลือ: 2 อัน)` ตรงกัน 2 ทุกจุด
+- **Backend Auto-sync:**
+  - ปรับปรุง `apiSaveOpeningBalance` (`cloudflare/src/api/materials.ts`) ให้คำนวณและอัปเดต `materials.stock_qty` ให้สัมพันธ์กับยอดยกมาและประวัติการเคลื่อนไหวอัตโนมัติ
+
+### 3. feat(settings): Toggle checkboxes for LINE/Telegram & remove Email field
+- **Database Schema:**
+  - เพิ่มคอลัมน์ `notify_telegram` และ `notify_line` ในตาราง `settings`
+- **Backend Notification Gating:**
+  - อัปเดต `notifyHooks.onNewRequest`, `notifyHooks.onStatusChange`, และ `runLowStockCron` ให้ตรวจสอบการเปิดใช้งานของแต่ละช่องทางแยกกันอิสระ
+- **Frontend Settings UI:**
+  - ลบช่องกรอก "อีเมลรับแจ้งเตือน"
+  - เปลี่ยนหัวข้อเป็นการแจ้งเตือน `(Telegram + LINE)`
+  - เพิ่ม Checkbox สวิตช์เปิด-ปิดช่องทาง Telegram และ LINE อิสระจากกัน
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-27 Earlier Session)
 
 ### 1. `83b1b7f` feat(materials): Move opening balance management to materials tab and sync with opening_balances
-- **ปรับปรุง UX การจัดการยอดยกมา (Opening Balance Reorganization):**
-  - **แท็บทะเบียนวัสดุคงเหลือ:** นำปุ่ม `#btnManageOB` ออกจาก Toolbar รายงาน โดยคงคอลัมน์ "ยอดยกมา" แสดงผลแบบ Read-only ตามปกติ
-  - **แท็บจัดการพัสดุ:**
-    - เพิ่มคอลัมน์ "ยอดยกมา" ในตารางรายการพัสดุ (`renderMats`)
-    - เพิ่มปุ่มไอคอนปฏิทิน (`data-ob-mat`) ในคอลัมน์จัดการของทั้ง Table view และ Grid view
-    - เพิ่ม Modal `openMaterialOpeningBalanceModal(m)` ปรับยอดยกมารายพัสดุโดยเฉพาะ
-    - เพิ่มช่องกรอก `#mOpeningQty` ในฟอร์มพัสดุ (`matModal`) พร้อมคำนวณยอดคงเหลืออัตโนมัติ (`OrderQty + OpeningQty`)
-- **Backend API & Sync:**
-  - อัปเดต `cloudflare/src/api/materials.ts` ให้รองรับ `OpeningQty` ใน `apiSaveMaterials` ทั้ง create และ update
-  - ทำการ Upsert บันทึกยอดยกมาลงตาราง `opening_balances` ตามปีงบประมาณของพัสดุโดยอัตโนมัติ
-- **Automated Tests:**
-  - เพิ่ม Unit Test ใน `cloudflare/test/materials.test.ts` ตรวจสอบการบันทึก `OpeningQty`
-  - เพิ่ม Static Check Test ใน `cloudflare/test/node/frontend.test.ts`
-  - ผลการทดสอบ: **193 tests passed (100% PASS)**
+- ปรับปรุง UX การจัดการยอดยกมาไปไว้ที่แท็บจัดการพัสดุ (`matModal` + `openMaterialOpeningBalanceModal`)
+- Sync ยอดยกมาลงตาราง `opening_balances` อัตโนมัติ
+
+### 2. `555a6e4` feat(ui): lock material, shop, and user modals with static backdrop and shake animation
+- กำหนดค่า `staticBackdrop: true` และ shake animation เมื่อคลิกพื้นหลัง Modal ป้องกันข้อมูลสูญหาย
 
 ---
 
-## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-20)
-
-### 1. `555a6e4` feat(ui): lock material, shop, and user modals with static backdrop and shake animation
-- **Modal UX Hardening:**
-  - กำหนดค่า `staticBackdrop: true` ให้กับทุก Modal ฟอร์มหลัก:
-    - **Modal ข้อมูลพัสดุ (`matModal`)**: ล็อกทั้งโหมดเพิ่มพัสดุใหม่และแก้ไขพัสดุ
-    - **Modal ข้อมูลร้านค้า (`shopModal`)**: ล็อกฟอร์มเพิ่ม/แก้ไขร้านค้า
-    - **Modal ข้อมูลผู้ใช้งาน (`userModal`)**: ล็อกฟอร์มเพิ่ม/แก้ไขผู้ใช้งาน
-  - เมื่อคลิกพื้นหลังสีเทาด้านนอก Modal จะไม่ปิด เพื่อป้องกันข้อมูลที่กำลังพิมพ์สูญหาย (Data Loss Prevention)
-  - ตัวกล่อง Modal จะแสดงแอนิเมชันสั่นเตือน (`animate-shake`) และปุ่มกากบาท `(X)` ขยายพร้อมวงแหวนสีขาวไฮไลต์ดึงดูดสายตา
-- **Automated Tests:**
-  - อัปเดต Assertion ใน `cloudflare/test/node/frontend.test.ts` ให้สอดคล้องกับ `staticBackdrop: true`
-
-### 2. การตรวจเช็กความไม่สอดคล้องของตัวเลขคงคลัง (135.00 บาท)
-- **ปัญหาที่พบ:** ยอดในแท็บ "จัดการพัสดุ" แสดง 17,581.00 บาท แต่แท็บ "ทะเบียนพัสดุคงเหลือ" และ "บัญชีพัสดุ" แสดง 17,446.00 บาท
-- **การวิเคราะห์ Root Cause:**
-  - ไม่ใช่บั๊กของการคำนวณในโค้ด แต่เกิดจากข้อมูลของ **"ปากกาเคมี 2 หัว ตราม้า สีน้ำเงิน"** (รหัส `8851552201016` ราคา 13.50 บาท)
-  - สต็อกจริงในตาราง `materials` ระบุไว้ **34 หน่วย** (มูลค่า 459.00 บาท)
-  - แต่ในงวดบัญชีปี 2570 มีประวัติการจัดซื้อในตาราง `purchases` เพียง **24 หน่วย** และยอดยกมาเป็น **0** (มูลค่า 324.00 บาท)
-  - ผลต่าง: 10 หน่วย × 13.50 บาท = 135.00 บาท พอดีเป๊ะ
-- **แนวทางแก้ไขที่เลือก:** ปรับแก้ "จำนวนคงเหลือ" ในหน้าจัดการพัสดุให้เป็น 24 หน่วย เพื่อให้ยอดสอดคล้องกับประวัติการซื้อจริง
-
-### 3. Knowledge Graph Indexing & Token Optimization
-- รันสกัดความสัมพันธ์โค้ด AST ด้วย `graphify-windows` ได้กราฟความรู้ 322 โหนด 649 เส้นเชื่อม 23 ชุมชนโค้ด ใน `graphify-out/` โดยไม่ใช้ LLM token
-- เพิ่ม `/graphify-out/` ลงใน `.gitignore` เพื่อไม่ให้ไฟล์ดัชนีปะปนใน Git
-- สามารถสืบค้นบริบทผ่าน GraphRAG ด้วยงบประมาณ token ต่ำได้ทันที:
-  ```bash
-  python -m graphify query "<คำถาม>" --budget 1500
-  ```
-
----
-
-## 3. สถานะการทดสอบและ Production ล่าสุด (Current Verified Status)
+## 4. สถานะการทดสอบและ Production ล่าสุด (Current Verified Status)
 
 - **Test Suite Results (Vitest):**
-  - Worker Tests: **155 passed** (10 test files)
-  - Node Tests: **36 passed** (2 test files)
-  - **รวมทั้งสิ้น: 193 passed (100% PASS)**
+  - Worker Tests: **158 passed** (10 test files)
+  - Node Tests: **37 passed** (2 test files)
+  - **รวมทั้งสิ้น: 195 passed (100% PASS)**
 - **TypeScript Typecheck:** 0 errors
 - **Git State:**
   - Branch: `main`
-  - สถานะ: Up to date with `origin/main`
-- **Cloudflare Live Deployment:**
-  - Deploy ผ่าน GitHub Actions Run [#39448716793](https://github.com/chookaittom-gif/Requisition-System/actions/runs/39448716793) สมบูรณ์
-
----
-
-## 4. โครงสร้างไฟล์และจุดแก้ไขสำคัญ (Key Code Anchors)
-
-- `cloudflare/public/index.html`:
-  - CSS Modal Shake Animation: บรรทัด ~189
-  - จัดการ Event คลิกฉากหลัง Modal Backdrop: บรรทัด ~1132
-  - ฟังก์ชัน `matModal(m)`: บรรทัด ~2247 (`staticBackdrop: true`)
-  - ฟังก์ชัน `userModal(u)`: บรรทัด ~4693 (`staticBackdrop: true`)
-  - ฟังก์ชัน `shopModal(shop)`: บรรทัด ~5550 (`staticBackdrop: true`)
-  - Modal ยอดยกมา `openOpeningBalanceModal(r)`: บรรทัด ~3471 (`staticBackdrop: true`)
-- `cloudflare/test/node/frontend.test.ts`:
-  - Static Check สำหรับ Modal Shake & staticBackdrop: บรรทัด ~96
-- สคริปต์ Deploy:
-  - `deploy.ps1` / `deploy.cmd` -> เรียก `deploy-cloudflare.ps1`
 
 ---
 

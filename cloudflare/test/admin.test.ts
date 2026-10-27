@@ -130,12 +130,14 @@ describe('settings', () => {
 
   it('saving a new token replaces it and normalizes flags', async () => {
     await setSettings();
-    const res = await rpc('apiSaveSettings', [validSettings({ TelegramBotToken: ' 999:ZZZZ ', NotifyLowStock: 'no' })]);
+    const res = await rpc('apiSaveSettings', [validSettings({ TelegramBotToken: ' 999:ZZZZ ', NotifyLowStock: 'no', NotifyTelegram: 'NO', NotifyLine: 'YES' })]);
     expect(res.ok).toBe(true);
     expect(res.data.TelegramBotToken).toBe('••••ZZZZ');
+    expect(res.data.NotifyTelegram).toBe('NO');
+    expect(res.data.NotifyLine).toBe('YES');
     expect(await storedToken()).toBe('999:ZZZZ');
     const [r] = await rows('SELECT * FROM settings');
-    expect(r).toMatchObject({ school_name: 'โรงเรียน', notify_on_status_change: 'NO', notify_low_stock: 'NO', notify_on_new_request: 'YES' });
+    expect(r).toMatchObject({ school_name: 'โรงเรียน', notify_on_status_change: 'NO', notify_low_stock: 'NO', notify_on_new_request: 'YES', notify_telegram: 'NO', notify_line: 'YES' });
     expect((await rows("SELECT * FROM audit_log WHERE entity='Settings'")).length).toBe(1);
   });
 
@@ -284,6 +286,19 @@ describe('line flex', () => {
     expect(lineCalls()[1].body.messages[0].text).toContain('มีใบขอเบิกพัสดุใหม่');
     expect(errSpy).toHaveBeenCalledWith('line flex failed', 'LINE API Error (400): invalid flex');
     errSpy.mockRestore();
+  });
+
+  it('channel toggles independently mute telegram or line', async () => {
+    await withLine();
+    await env.DB.prepare("UPDATE settings SET notify_telegram = 'NO', notify_line = 'YES' WHERE id = 1").run();
+    await notifyHooks.onNewRequest!(env as any, REQ);
+    expect(tgCalls()).toHaveLength(0);
+    expect(lineCalls()).toHaveLength(1);
+
+    await env.DB.prepare("UPDATE settings SET notify_telegram = 'YES', notify_line = 'NO' WHERE id = 1").run();
+    await notifyHooks.onNewRequest!(env as any, REQ);
+    expect(tgCalls()).toHaveLength(1);
+    expect(lineCalls()).toHaveLength(1);
   });
 });
 

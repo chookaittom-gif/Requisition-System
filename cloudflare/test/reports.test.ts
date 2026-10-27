@@ -202,7 +202,7 @@ describe('stock card', () => {
     expect(d.dateRange).toEqual({ from: '2026-01-01', to: '2026-09-30' });
     expect(d.fiscalYear).toBe(2569);
     expect(d.entries.map((e: any) => [e.description, e.inQty, e.outQty, e.balance, e.date])).toEqual([
-      ['ยอดยกมา', 0, 0, 20, '2026-01-01'],
+      ['ยอดยกมา', 20, 0, 20, '2026-01-01'],
       ['จ่ายตามใบขอเบิก (REF)', 0, 5, 15, '2026-01-10'],
       ['ซื้อเพิ่ม', 5, 0, 20, '2026-02-01'],
       ['ปรับปรุงยอดสต็อก', 0, 2, 18, '2026-03-01'],
@@ -343,6 +343,6 @@ describe('csv export', () => {
     expect(await head('stock_card', { materialId: 'M1', fiscalYear: 2569 })).toBe('วันที่,รายการ,รับ,จ่าย,คงเหลือ,ผู้ลงชื่อ/ผู้ทำ,เอกสารอ้างอิง');
     const card = await asAdmin('apiExportCSV', 'stock_card', { materialId: 'M1', fiscalYear: 2569 });
     expect(card.filename).toMatch(/^stock_card_P-1_\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(decode(card.base64).split('\n')[1]).toBe('1 ตุลาคม 2568,ยอดยกมา,,,5,-,');
+    expect(decode(card.base64).split('\n')[1]).toBe('1 ตุลาคม 2568,ยอดยกมา,5,,5,-,');
   });
 });

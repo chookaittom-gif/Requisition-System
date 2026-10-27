@@ -67,6 +67,8 @@ export interface NotifyConfig {
   onNewRequest: boolean;
   onStatusChange: boolean;
   onLowStock: boolean;
+  notifyTelegram: boolean;
+  notifyLine: boolean;
   schoolName: string;
 }
 
@@ -79,6 +81,8 @@ export async function getNotifyConfig(env: Env): Promise<NotifyConfig> {
     onNewRequest: s?.notify_on_new_request === 'YES',
     onStatusChange: s?.notify_on_status_change === 'YES',
     onLowStock: s?.notify_low_stock === 'YES',
+    notifyTelegram: s?.notify_telegram !== 'NO',
+    notifyLine: s?.notify_line !== 'NO',
     schoolName: s?.school_name || 'ระบบเบิกจ่ายพัสดุ',
   };
 }

@@ -534,7 +534,7 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
   }
 
   const entries: CardEntry[] = [
-    { date: fromDate, dateTh: thaiDateFull(fromDate), description: 'ยอดยกมา', inQty: 0, outQty: 0, balance: periodOpening, actor: '-', refDoc: '' },
+    { date: fromDate, dateTh: thaiDateFull(fromDate), description: 'ยอดยกมา', inQty: periodOpening, outQty: 0, balance: periodOpening, actor: '-', refDoc: '' },
   ];
   for (const m of period) {
     const d = String(m.created_at || '').substring(0, 10);
