@@ -10,10 +10,11 @@ import {
   isMaskedToken,
   maskToken,
   newRequestText,
+  rejectedRequestText,
   sendTelegram,
 } from '../lib/telegram';
 import { sendLineMessages, sendLinePush, type LineMessage } from '../lib/line';
-import { approvedRequestFlex, newRequestFlex } from '../lib/lineFlex';
+import { approvedRequestFlex, newRequestFlex, rejectedRequestFlex } from '../lib/lineFlex';
 import { nowBkk } from '../lib/time';
 import { eqUsername } from '../lib/username';
 import { registerRpc } from '../rpc';
@@ -54,26 +55,41 @@ notifyHooks.onNewRequest = async (env, req) => {
   }
 };
 
-// Approval is announced to Telegram/LINE, gated by its own toggle (independent of the new-request one);
-// reject/cancel send nothing.
-notifyHooks.onStatusChange = async (env, req, newStatus) => {
-  if (newStatus !== 'APPROVED') return;
+// Approval/rejection is announced to Telegram/LINE, gated by its own toggle (independent of the new-request one);
+// cancel sends nothing.
+notifyHooks.onStatusChange = async (env, req, newStatus, rejectReason) => {
+  if (newStatus !== 'APPROVED' && newStatus !== 'REJECTED') return;
   const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
   const lineToken = String(row?.line_token ?? '');
   const lineTo = String(row?.line_to ?? '');
   const cfg = await getNotifyConfig(env);
   if (!cfg.onStatusChange) return;
-  if (cfg.notifyTelegram && cfg.token && cfg.chatId) {
-    await sendTelegram(cfg.token, cfg.chatId, approvedRequestText(req));
-  }
-  if (cfg.notifyLine && lineToken && lineTo) {
-    const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-    await pushLineCard(
-      lineToken,
-      lineTo,
-      approvedRequestFlex(req),
-      `✅ อนุมัติใบขอเบิกพัสดุแล้ว\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
-    );
+
+  const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  if (newStatus === 'APPROVED') {
+    if (cfg.notifyTelegram && cfg.token && cfg.chatId) {
+      await sendTelegram(cfg.token, cfg.chatId, approvedRequestText(req));
+    }
+    if (cfg.notifyLine && lineToken && lineTo) {
+      await pushLineCard(
+        lineToken,
+        lineTo,
+        approvedRequestFlex(req),
+        `✅ อนุมัติใบขอเบิกพัสดุแล้ว\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
+      );
+    }
+  } else if (newStatus === 'REJECTED') {
+    if (cfg.notifyTelegram && cfg.token && cfg.chatId) {
+      await sendTelegram(cfg.token, cfg.chatId, rejectedRequestText(req, rejectReason));
+    }
+    if (cfg.notifyLine && lineToken && lineTo) {
+      await pushLineCard(
+        lineToken,
+        lineTo,
+        rejectedRequestFlex(req, rejectReason),
+        `❌ ไม่อนุมัติใบขอเบิกพัสดุ\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nเหตุผล: ${rejectReason || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
+      );
+    }
   }
 };
 

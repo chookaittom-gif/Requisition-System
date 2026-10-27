@@ -114,6 +114,19 @@ export function approvedRequestText(req: Obj): string {
   );
 }
 
+/** Rejected-request Telegram text. */
+export function rejectedRequestText(req: Obj, reason?: string): string {
+  const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  return (
+    `❌ <b>ไม่อนุมัติใบขอเบิกพัสดุ</b>\n` +
+    `📄 <b>เลขที่:</b> <code>${esc(req.DocNo)}</code>\n` +
+    `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}\n` +
+    `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${esc(req.Department || '-')}\n` +
+    `❗ <b>เหตุผล:</b> ${esc(reason || req.RejectReason || '-')}\n` +
+    `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`
+  );
+}
+
 /** Legacy notifyLowStock_ Telegram text. `low` = materials whose StockState is not OK. */
 export function lowStockText(low: Obj[]): string {
   const outCount = low.filter((m) => m.StockState === 'OUT').length;

@@ -21,7 +21,18 @@ function row(label: string, value: string): Obj {
   };
 }
 
-function card(title: string, headerColor: string, altText: string, req: Obj): LineMessage {
+function card(title: string, headerColor: string, altText: string, req: Obj, extra?: Obj): LineMessage {
+  const contents = [
+    row('เลขที่', textOf(req.DocNo)),
+    row('ผู้ขอเบิก', textOf(req.FullName)),
+    row('หลักสูตร / ฝ่ายงาน / โครงการ', textOf(req.Department)),
+  ];
+  if (extra) contents.push(extra);
+  else contents.push(row('วัตถุประสงค์', textOf(req.Purpose)));
+  contents.push(
+    row('จำนวน', `${textOf(req.ItemCount)} รายการ`),
+    row('มูลค่ารวม', `${money(req.TotalAmount)} บาท`),
+  );
   return {
     type: 'flex',
     altText: altText.slice(0, ALT_MAX),
@@ -36,14 +47,7 @@ function card(title: string, headerColor: string, altText: string, req: Obj): Li
       body: {
         type: 'box',
         layout: 'vertical',
-        contents: [
-          row('เลขที่', textOf(req.DocNo)),
-          row('ผู้ขอเบิก', textOf(req.FullName)),
-          row('หลักสูตร / ฝ่ายงาน / โครงการ', textOf(req.Department)),
-          row('วัตถุประสงค์', textOf(req.Purpose)),
-          row('จำนวน', `${textOf(req.ItemCount)} รายการ`),
-          row('มูลค่ารวม', `${money(req.TotalAmount)} บาท`),
-        ],
+        contents,
       },
     },
   };
@@ -57,4 +61,16 @@ export function newRequestFlex(req: Obj): LineMessage {
 /** Approved-request LINE Flex card (green). */
 export function approvedRequestFlex(req: Obj): LineMessage {
   return card('✅ อนุมัติใบขอเบิกพัสดุแล้ว', '#16A34A', `✅ อนุมัติแล้ว ${textOf(req.DocNo)} – ${textOf(req.FullName)}`, req);
+}
+
+/** Rejected-request LINE Flex card (rose / red). */
+export function rejectedRequestFlex(req: Obj, reason?: string): LineMessage {
+  const r = reason || textOf(req.RejectReason) || '-';
+  return card(
+    '❌ ไม่อนุมัติใบขอเบิกพัสดุ',
+    '#E11D48',
+    `❌ ไม่อนุมัติ ${textOf(req.DocNo)} – ${textOf(req.FullName)}`,
+    req,
+    row('เหตุผลที่ไม่อนุมัติ', r),
+  );
 }

@@ -52,6 +52,11 @@
 - ลบกล่องและปุ่ม "อัปเดตโครงสร้างชีต (Schema Migration)" ออกจากหน้าตั้งค่าระบบ
 - เนื่องจากระบบย้ายมาใช้ Cloudflare D1 Database ซึ่งจัดการ Migration ผ่าน CI/CD (`wrangler d1 migrations apply`) แทนการปรับแก้ชีตแล้ว
 
+### 5. feat(notifications): Add rejected request notification for Telegram and LINE
+- เพิ่มการแจ้งเตือนกรณี "ไม่อนุมัติ/ปฏิเสธคำขอ (REJECTED)" ทั้ง Telegram (`rejectedRequestText`) และ LINE (`rejectedRequestFlex`)
+- ระบุเหตุผลที่ไม่อนุมัติ (RejectReason) พร้อมข้อมูลใบขอเบิก
+- ปรับข้อความ Checkbox ในหน้าตั้งค่าระบบเป็น "แจ้งเมื่ออนุมัติ / ไม่อนุมัติ"
+
 ---
 
 ## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-27 Earlier Session)
