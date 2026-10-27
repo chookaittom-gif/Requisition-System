@@ -194,6 +194,24 @@ describe('categories and opening balance', () => {
     expect(ob[0]).toMatchObject({ opening_qty: 9, fiscal_year: 2569, set_by: 'off1' });
     expect(await rpc('apiSaveOpeningBalance', [{ MaterialID: '', FiscalYear: 2569 }])).toEqual({ ok: false, message: 'กรุณาระบุรหัสพัสดุและปีงบประมาณ' });
   });
+
+  it('saves OpeningQty to materials and opening_balances on create and update', async () => {
+    const res = await create({ Code: 'OB-TEST-1', StockQty: 15, OrderQty: 10, OpeningQty: 5, AcquiredDate: '2026-05-15' });
+    expect(res.ok).toBe(true);
+    const [m] = await rows("SELECT * FROM materials WHERE code = 'OB-TEST-1'");
+    expect(m.opening_qty).toBe(5);
+    const [ob] = await rows("SELECT * FROM opening_balances WHERE material_id = ?", m.id);
+    expect(ob).toMatchObject({ opening_qty: 5, fiscal_year: 2569 });
+
+    const updateRes = await rpc('apiSaveMaterials', [
+      [{ action: 'update', ID: m.id, Code: 'OB-TEST-1', Name: m.name, Unit: m.unit, UnitPrice: m.unit_price, StockQty: 20, OpeningQty: 8, AcquiredDate: '2026-05-15' }],
+    ]);
+    expect(updateRes.ok).toBe(true);
+    const [m2] = await rows("SELECT * FROM materials WHERE id = ?", m.id);
+    expect(m2.opening_qty).toBe(8);
+    const [ob2] = await rows("SELECT * FROM opening_balances WHERE material_id = ?", m.id);
+    expect(ob2.opening_qty).toBe(8);
+  });
 });
 
 describe('movementStmt guard', () => {

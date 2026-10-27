@@ -2169,6 +2169,7 @@ function matTable(rows){
           <td class="px-3 py-3 font-semibold text-slate-700">${esc(m.Name)}</td>
           <td class="px-3 py-3 text-center text-slate-500">${esc(m.Unit)}</td>
           <td class="px-3 py-3 text-right">${money(m.UnitPrice)}</td>
+            <td class="px-3 py-3 text-center font-bold text-amber-700 bg-amber-50/20">${nf(m.OpeningQty || 0)}</td>
           <td class="px-3 py-3 text-center font-bold">${nf(m.StockQty!==undefined?m.StockQty:m.RemainQty)}</td>
           <td class="px-3 py-3 text-right font-semibold text-teal">${money((m.StockQty!==undefined?m.StockQty:m.RemainQty)*m.UnitPrice)}</td>
           <td class="px-3 py-3 text-center">${badge(m.StockState)}</td>
@@ -2233,6 +2234,69 @@ function generateNextMatCode(catName){
 }
 
 /* m = พัสดุเดิม (มี ID → แก้ไข) | { Code } จากการสแกน (ไม่มี ID → เพิ่มใหม่) | null (เพิ่มใหม่ว่างๆ) */
+
+/**
+ * Modal บันทึกยอดยกมาต้นปีรายพัสดุ (จากแท็บจัดการพัสดุ)
+ */
+async function openMaterialOpeningBalanceModal(m){
+  const currentFY = currentFiscalYear();
+  const currentOb = m.OpeningQty || 0;
+
+  openModal({
+    title: 'บันทึกยอดยกมาต้นปี',
+    sub: `${esc(m.Code ? m.Code + ' • ' : '')}${esc(m.Name)}`,
+    icon: 'fa-calendar-check',
+    size: 'max-w-lg',
+    staticBackdrop: true,
+    body: `
+      <form id="frmMatOB" class="space-y-4">
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">ปีงบประมาณ (พ.ศ.)</label>
+          <input id="matObFY" type="number" min="2560" max="2600" value="${currentFY}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 font-bold">
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">ยอดยกมาต้นปี (จำนวน) <span class="text-rose2">*</span></label>
+          <div class="relative">
+            <input id="matObQty" type="number" min="0" step="1" value="${currentOb}" required placeholder="0" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 font-extrabold text-lg text-amber-700">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">${esc(m.Unit || 'หน่วย')}</span>
+          </div>
+        </div>
+        <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/60 text-xs text-amber-900 space-y-1">
+          <p class="font-bold"><i class="fa-solid fa-circle-info mr-1"></i> ปัจจุบันในคลัง: ${nf(m.StockQty)} ${esc(m.Unit)}</p>
+          <p class="text-slate-600">ยอดยกมานี้จะถูกบันทึกสำหรับปีงบประมาณที่ระบุ และนำไปแสดงในทะเบียนวัสดุคงเหลือและบัญชีพัสดุ</p>
+        </div>
+      </form>
+    `,
+    foot: `
+      <button type="button" id="mCancelMatOB" class="px-5 py-2.5 rounded-2xl bg-slate-200 text-slate-700 font-bold text-sm">ปิด</button>
+      <button type="button" id="mSaveMatOB" class="px-5 py-2.5 rounded-2xl bg-emerald-600 text-white font-bold text-sm shadow-soft hover:brightness-110">
+        <i class="fa-solid fa-floppy-disk"></i> บันทึกยอดยกมา
+      </button>
+    `
+  });
+
+  $('#mCancelMatOB').addEventListener('click', closeModal);
+  $('#mSaveMatOB').addEventListener('click', async ()=>{
+    const fy = $('#matObFY').value;
+    const qty = parseFloat($('#matObQty').value || 0);
+    if(!fy) return toast('warning', 'กรุณาระบุปีงบประมาณ');
+
+    showLoader('กำลังบันทึกยอดยกมา...');
+    const res = await api('apiSaveOpeningBalance', {
+      MaterialID: m.ID,
+      FiscalYear: fy,
+      OpeningQty: qty,
+      actor: S.user.Username
+    });
+    hideLoader();
+    if(!res.ok) return alertErr(res.message);
+    m.OpeningQty = qty;
+    closeModal();
+    await alertOk(res.message);
+    viewMaterials();
+  });
+}
+
 function matModal(m){
   const isEdit = !!(m && m.ID);
   const formVals = m || {};
@@ -2331,7 +2395,7 @@ function matModal(m){
         </div>
       </div>
 
-      <div class="grid sm:grid-cols-2 gap-4">
+      <div class="grid sm:grid-cols-3 gap-4">
         <div>
           <label class="block text-sm font-bold text-slate-700 mb-1.5">แหล่งงบประมาณ</label>
           <select id="mBudgetSource" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
@@ -2345,6 +2409,11 @@ function matModal(m){
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนที่สั่งซื้อ / รับเข้า</label>
           <input id="mOrderQty" type="number" min="0" step="1" value="${formVals.OrderQty !== undefined ? formVals.OrderQty : ''}" placeholder="เช่น 100" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
           ${!isEdit ? `<p class="mt-1 text-[11px] text-brand-600 font-medium"><i class="fa-solid fa-circle-info mr-1"></i> ยอดคงเหลือจะตั้งต้นเท่ากับจำนวนนี้ให้อัตโนมัติ (ลงบันทึกเป็นจำนวนรับ)</p>` : ''}
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">ยอดยกมาต้นปี</label>
+          <input id="mOpeningQty" type="number" min="0" step="1" value="${formVals.OpeningQty !== undefined ? formVals.OpeningQty : (isEdit ? (m.OpeningQty || 0) : 0)}" placeholder="0" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 font-bold text-amber-700">
+          <p class="mt-1 text-[11px] text-slate-400">ยอดยกมาต้นปีงบประมาณ</p>
         </div>
       </div>
 
@@ -2593,6 +2662,7 @@ function matModal(m){
 
   const orderQtyInp = $('#mOrderQty');
   const stockInp = $('#mStock');
+  const openingQtyInp = $('#mOpeningQty');
   if (!isEdit && orderQtyInp && stockInp) {
     let stockUserEdited = !!(stockInp.value && stockInp.value !== orderQtyInp.value);
     stockInp.addEventListener('input', () => {
@@ -2600,9 +2670,23 @@ function matModal(m){
     });
     orderQtyInp.addEventListener('input', () => {
       if (!stockUserEdited || !stockInp.value.trim()) {
-        stockInp.value = orderQtyInp.value;
+        const op = parseFloat(openingQtyInp?.value) || 0;
+        if (op > 0) {
+          stockInp.value = (parseFloat(orderQtyInp.value) || 0) + op;
+        } else {
+          stockInp.value = orderQtyInp.value;
+        }
       }
     });
+    if (openingQtyInp) {
+      openingQtyInp.addEventListener('input', () => {
+        if (!stockUserEdited || !stockInp.value.trim()) {
+          const ord = parseFloat(orderQtyInp.value) || 0;
+          const op = parseFloat(openingQtyInp.value) || 0;
+          stockInp.value = ord + op;
+        }
+      });
+    }
   }
 
   const selCat = $('#mCat');
@@ -2895,7 +2979,7 @@ function matModal(m){
         BudgetSource: $('#mBudgetSource')?.value.trim() || '',
         AcquiredDate: $('#mAcquiredDate')?.value.trim() || '',
         OrderQty: parseFloat($('#mOrderQty')?.value || 0),
-        OpeningQty: isEdit ? m.OpeningQty : parseFloat($('#mStock').value || 0),
+        OpeningQty: parseFloat($('#mOpeningQty')?.value || 0),
         ImageUrl: newImageUrl || (isEdit ? (m.ImageUrl || '') : ''),
         FileUrl: newFileUrl || (isEdit ? (m.FileUrl || '') : ''),
         actor: S.user.Username
@@ -3287,10 +3371,7 @@ async function viewInventoryReport(){
               <button type="button" id="btnExportExcel" class="px-4 py-2 rounded-2xl bg-emerald-700 text-white text-sm font-bold hover:brightness-110 active:scale-95 transition">
                 <i class="fa-solid fa-file-excel"></i> ส่งออก Excel (.xlsx)
               </button>
-              <button type="button" id="btnManageOB" class="px-4 py-2 rounded-2xl bg-brand-50 text-brand-700 text-sm font-bold hover:bg-brand-100 transition">
-                <i class="fa-solid fa-calendar-check"></i> บันทึกยอดยกมาต้นปี
-              </button>
-            </div>
+              </div>
             <div class="text-xs text-slate-500">
               หน่วยงาน: <b>${esc(rep.schoolName)}</b> · ปีงบประมาณ <b>${rep.fiscalYear}</b>
             </div>
@@ -3443,7 +3524,7 @@ async function viewInventoryReport(){
     $('#btnPrintReport').addEventListener('click', ()=> printInventoryReport(S.cache.reportLast || r));
 
     // Event: จัดการยอดยกมา
-    $('#btnManageOB').addEventListener('click', ()=> openOpeningBalanceModal(S.cache.reportLast || r));
+    if ($('#btnManageOB')) $('#btnManageOB').addEventListener('click', ()=> openOpeningBalanceModal(S.cache.reportLast || r));
   };
 
   const initRes = await api('apiGetInventoryReport', { fiscalYear: currentFY });
@@ -4966,6 +5047,7 @@ function renderMats(list, key){
           <div class="flex gap-1.5">${imgBtn(m)}${fileBtn(m)}</div>
         </div>
         <div class="mt-3 flex gap-2">
+          <button data-ob-mat="${esc(m.ID)}" class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white transition" title="บันทึกยอดยกมาต้นปี"><i class="fa-solid fa-calendar-check"></i></button>
           <button data-sc-mat="${esc(m.ID)}" class="w-9 h-9 rounded-xl bg-teal/15 text-teal hover:bg-teal hover:text-white transition" title="สต๊อกการ์ด (Stock Card)">
             <i class="fa-solid fa-id-card"></i>
           </button>
@@ -4998,6 +5080,7 @@ function renderMats(list, key){
           <th class="px-3 py-3 text-center">ภาพ</th>
           <th class="px-3 py-3 text-center">ไฟล์แนบ</th>
           <th class="px-3 py-3 text-right">ราคาต่อหน่วย (บาท)</th>
+          <th class="px-3 py-3 text-center bg-amber-50/60 text-amber-900 font-bold">ยอดยกมา</th>
           <th class="px-3 py-3 text-center">จำนวนที่สั่งซื้อ</th>
           <th class="px-3 py-3 text-center">จำนวนคงเหลือ</th>
           <th class="px-3 py-3 text-center">จุดสั่งซื้อ</th>
@@ -5020,12 +5103,14 @@ function renderMats(list, key){
             <td class="px-3 py-3 text-center">${imgBtn(m)}</td>
             <td class="px-3 py-3 text-center">${fileBtn(m)}</td>
             <td class="px-3 py-3 text-right">${money(m.UnitPrice)}</td>
+            <td class="px-3 py-3 text-center font-bold text-amber-700 bg-amber-50/20">${nf(m.OpeningQty || 0)}</td>
             <td class="px-3 py-3 text-center text-slate-600 font-semibold">${m.OrderQty ? nf(m.OrderQty) : '-'}</td>
             <td class="px-3 py-3 text-center font-extrabold ${m.StockState==='OK' ? 'text-slate-800' : 'text-red2'}">${nf(m.StockQty)}</td>
             <td class="px-3 py-3 text-center text-slate-500 font-medium">${nf(m.MinQty)}</td>
             <td class="px-3 py-3 text-center">${badge(m.StockState)}</td>
             <td class="px-3 py-3">
               <div class="flex items-center justify-center gap-1.5">
+                <button data-ob-mat="${esc(m.ID)}" class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white transition" title="บันทึกยอดยกมาต้นปี"><i class="fa-solid fa-calendar-check"></i></button>
                 <button data-sc-mat="${esc(m.ID)}" class="w-9 h-9 rounded-xl bg-teal/15 text-teal hover:bg-teal hover:text-white transition" title="สต๊อกการ์ด (Stock Card)">
                   <i class="fa-solid fa-id-card"></i>
                 </button>
@@ -5058,6 +5143,13 @@ function bindMatEvents(){
     b.addEventListener('click', ()=>{
       S.selectedStockCardMatId = b.dataset.scMat;
       go('a-stockcard');
+    });
+  });
+
+  $$('[data-ob-mat]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const m = (S.cache.materials || []).find(x => String(x.ID) === String(b.dataset.obMat));
+      if(m) openMaterialOpeningBalanceModal(m);
     });
   });
 

@@ -3,7 +3,7 @@ import { logAudit } from '../lib/audit';
 import { genId } from '../lib/ids';
 import { computeStockState, toLegacy } from '../lib/rows';
 import { movementStmt } from '../lib/stock';
-import { nowBkk, todayBkk } from '../lib/time';
+import { currentFiscalYear, nowBkk, todayBkk } from '../lib/time';
 import { registerRpc, type Ctx } from '../rpc';
 import { ensureShopExists } from './shops';
 
@@ -13,6 +13,15 @@ const str = (v: unknown): string => String(v ?? '').trim();
 
 class ValidationError extends Error {}
 class UserError extends Error {}
+
+function fiscalYearOfDate(dateStr?: string): number {
+  if (dateStr && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    const y = Number(dateStr.slice(0, 4));
+    const m = Number(dateStr.slice(5, 7));
+    return y + 543 + (m >= 10 ? 1 : 0);
+  }
+  return currentFiscalYear();
+}
 
 const NUM_MSG = 'ตัวเลขต้องเป็นจำนวนที่ไม่ติดลบ';
 
@@ -222,6 +231,8 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
       const budgetSource = str(item.BudgetSource || 'งบประมาณแผ่นดิน');
       const acquiredDate = str(item.AcquiredDate);
       const orderQty = num(item.OrderQty || 0, 'จำนวนที่สั่งซื้อ');
+      const openingSent = item.OpeningQty !== undefined && item.OpeningQty !== null && item.OpeningQty !== '';
+      const openingQtyVal = openingSent ? num(item.OpeningQty, 'ยอดยกมา') : null;
 
       if (item.action === 'update') {
         const cur = byId.get(id);
@@ -243,11 +254,21 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
         stmts.push(
           db
             .prepare(
-              'UPDATE materials SET code = ?, name = ?, unit = ?, unit_price = ?, stock_qty = COALESCE(?, stock_qty), min_qty = ?, category = ?, material_type = ?, size_spec = ?, storage_location = ?, image_url = ?, file_url = ?, shop_name = ?, shop_address = ?, shop_phone = ?, shop_tax_id = ?, budget_source = ?, acquired_date = ?, order_qty = ?, updated_at = ? WHERE id = ?',
+              'UPDATE materials SET code = ?, name = ?, unit = ?, unit_price = ?, stock_qty = COALESCE(?, stock_qty), min_qty = ?, opening_qty = COALESCE(?, opening_qty), category = ?, material_type = ?, size_spec = ?, storage_location = ?, image_url = ?, file_url = ?, shop_name = ?, shop_address = ?, shop_phone = ?, shop_tax_id = ?, budget_source = ?, acquired_date = ?, order_qty = ?, updated_at = ? WHERE id = ?',
             )
-            .bind(code, name, unit, unitPrice, stockSent ? newStock : null, minQty, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, id),
+            .bind(code, name, unit, unitPrice, stockSent ? newStock : null, minQty, openingQtyVal, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, id),
           logAudit(db, { action: 'UPDATE', entity: 'Material', entityId: id, detail: code, actor }),
         );
+        if (openingSent && openingQtyVal !== null) {
+          const fy = fiscalYearOfDate(acquiredDate);
+          stmts.push(
+            db
+              .prepare(
+                'INSERT INTO opening_balances (id, material_id, fiscal_year, opening_qty, set_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(material_id, fiscal_year) DO UPDATE SET opening_qty = excluded.opening_qty, set_by = excluded.set_by, updated_at = excluded.updated_at',
+              )
+              .bind(genId('OB'), id, fy, openingQtyVal, actor, now, now),
+          );
+        }
         if (cur.code !== code) {
           if (codeOwner.get(cur.code) === id) codeOwner.delete(cur.code);
           cur.code = code;
@@ -257,7 +278,7 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
       } else {
         const newId = genId('M');
         const initialOrderQty = orderQty > 0 ? orderQty : 0;
-        const openingQty = Math.max(0, newStock - initialOrderQty);
+        const openingQty = openingSent && openingQtyVal !== null ? openingQtyVal : Math.max(0, newStock - initialOrderQty);
         stmts.push(
           db
             .prepare(
@@ -265,6 +286,16 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
             )
             .bind(newId, code, name, unit, unitPrice, newStock, minQty, openingQty, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, now),
         );
+        if (openingSent && openingQtyVal !== null) {
+          const fy = fiscalYearOfDate(acquiredDate);
+          stmts.push(
+            db
+              .prepare(
+                'INSERT INTO opening_balances (id, material_id, fiscal_year, opening_qty, set_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(material_id, fiscal_year) DO UPDATE SET opening_qty = excluded.opening_qty, set_by = excluded.set_by, updated_at = excluded.updated_at',
+              )
+              .bind(genId('OB'), newId, fy, openingQty, actor, now, now),
+          );
+        }
         if (newStock > 0) {
           stmts.push(
             db

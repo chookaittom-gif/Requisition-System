@@ -167,6 +167,14 @@ describe('public/index.html static checks', () => {
     expect(html).toContain('คงเหลือ / สั่งซื้อ');
   });
 
+  it('moves opening balance management to materials tab and keeps inventory report column read-only', () => {
+    expect(html).not.toContain('id="btnManageOB"');
+    expect(html).toContain('id="mOpeningQty"');
+    expect(html).toContain('<th class="px-3 py-3 text-center bg-amber-50/60 text-amber-900 font-bold">ยอดยกมา</th>');
+    expect(html).toContain('data-ob-mat');
+    expect(html).toContain('openMaterialOpeningBalanceModal');
+  });
+
   it('includes LINE notification setting and test button', () => {
     expect(html).toContain('id="fLineToken"');
     expect(html).toContain('id="toggleLineToken"');
