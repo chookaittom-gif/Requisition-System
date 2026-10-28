@@ -19,10 +19,14 @@
 3. **Session Continuity & Handoff:**
    - หากต้องส่งต่องาน ให้บันทึกความคืบหน้าที่ `docs/HANDOFF.md` เสมอ
 
+4. **Inventory & Lot Value Consistency:**
+   - การคำนวณมูลค่าคงเหลือคงคลังทุกหน้า (แดชบอร์ด, บัญชีพัสดุ, จัดการพัสดุ, ทะเบียนพัสดุคงเหลือ) ต้องอิงผลรวมมูลค่าตามล็อตจริง (`material_lots`) เสมอ
+   - การคำนวณสถานะเตือนใกล้หมด/หมด ต้องอิงสต็อกคงเหลือปัจจุบัน (`StockQty <= MinQty`) ให้สอดคล้องกันทุกมุมมอง
+
 ## Project Context
-- **เทคโนโลยี:** Google Apps Script (HTMLService, SpreadsheetApp, LockService), JavaScript, CSS
-- **ทางเข้าหลัก:** `Index.html`, โค้ดฝั่ง Server `.gs`
-- **การ Deploy:** ทดสอบผ่าน Test Deployment / Clasp ก่อน Deploy Production เสมอ
+- **เทคโนโลยี:** Cloudflare Workers (TypeScript, RPC), Cloudflare D1 (SQLite), Single-Page Frontend (Vanilla JS, Tailwind), Google Apps Script (Legacy/Sync)
+- **ทางเข้าหลัก:** `cloudflare/public/index.html`, Backend `cloudflare/src/api/*.ts`
+- **การ Deploy:** ทดสอบผ่าน `npm test` และ Deploy ผ่าน GitHub Actions หรือ `deploy.ps1`
 
 <!-- graft:start -->
 ## Graft — repo context graph
