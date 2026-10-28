@@ -3,7 +3,7 @@
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** Version pending deployment (Commit sync-inventory-values) — Live at https://supply-requisition.chookait-tom.workers.dev
+**Latest Deployment:** Commit `8af584a` (GitHub Run `40680835670`) — Live at https://supply-requisition.chookait-tom.workers.dev
 
 ---
 
