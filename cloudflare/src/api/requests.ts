@@ -112,6 +112,66 @@ export async function applyRequestStock(
         .bind(direction, it.qty, now, materialId, requestId, txn),
     );
   }
+
+  if (direction === -1) {
+    for (const it of items) {
+      const materialId = it.material_id as string;
+      const { results: lots } = await db
+        .prepare(
+          "SELECT id, unit_price, remaining_qty FROM material_lots WHERE material_id = ? AND status = 'ACTIVE' AND remaining_qty > 0 ORDER BY created_at ASC, rowid ASC",
+        )
+        .bind(materialId)
+        .all<{ id: string; unit_price: number; remaining_qty: number }>();
+
+      if (lots.length > 0) {
+        let needed = it.qty;
+        let firstLotDepleted = false;
+        let activePriceAfter: number | null = null;
+
+        for (let i = 0; i < lots.length; i++) {
+          const lot = lots[i];
+          if (needed <= 0) {
+            if (activePriceAfter === null) activePriceAfter = lot.unit_price;
+            break;
+          }
+          if (lot.remaining_qty <= needed) {
+            stmts.push(
+              db.prepare("UPDATE material_lots SET remaining_qty = 0, status = 'DEPLETED' WHERE id = ?").bind(lot.id),
+            );
+            needed -= lot.remaining_qty;
+            if (i === 0) firstLotDepleted = true;
+          } else {
+            stmts.push(
+              db.prepare('UPDATE material_lots SET remaining_qty = remaining_qty - ? WHERE id = ?').bind(needed, lot.id),
+            );
+            activePriceAfter = lot.unit_price;
+            needed = 0;
+            break;
+          }
+        }
+
+        if (firstLotDepleted) {
+          const targetPrice = activePriceAfter !== null ? activePriceAfter : lots[lots.length - 1].unit_price;
+          stmts.push(db.prepare('UPDATE materials SET unit_price = ? WHERE id = ?').bind(targetPrice, materialId));
+        }
+      }
+    }
+  } else {
+    for (const it of items) {
+      const materialId = it.material_id as string;
+      const lastLot = await db
+        .prepare('SELECT id FROM material_lots WHERE material_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
+        .bind(materialId)
+        .first<{ id: string }>();
+      if (lastLot) {
+        stmts.push(
+          db
+            .prepare("UPDATE material_lots SET remaining_qty = remaining_qty + ?, status = 'ACTIVE' WHERE id = ?")
+            .bind(it.qty, lastLot.id),
+        );
+      }
+    }
+  }
   stmts.push(...extraStmts);
 
   try {

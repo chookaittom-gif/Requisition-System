@@ -1,9 +1,8 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-27)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-28)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** GitHub Actions Run [#40530564871](https://github.com/chookaittom-gif/Requisition-System/actions/runs/40530564871) (Success)
 
 ---
 
@@ -21,7 +20,25 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-27 Night Session)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-28 FIFO Lot Inventory & UI Workflow)
+
+### 1. feat(inventory): FIFO Lot tracking for material price changes
+- **Database Migration:**
+  - สร้าง `cloudflare/migrations/0009_material_lots.sql` เพิ่มตาราง `material_lots` บันทึกล็อตต้นทุนราคาพัสดุ (`unit_price`, `initial_qty`, `remaining_qty`, `status`) พร้อม backfill สต็อกเดิมทั้งหมดอัตโนมัติ
+- **Backend FIFO Deduction & Price Transition:**
+  - `cloudflare/src/api/materials.ts`: ปรับ `apiPurchaseMaterials` ให้รับ `UnitPrice` ที่จัดซื้อจริง หากราคาต่างจากเดิมจะบันทึกเป็นล็อตราคาใหม่ และหากสต็อกเดิมเป็น 0 จะอัปเดตราคาพัสดุทันที
+  - `cloudflare/src/api/requests.ts`: ใน `applyRequestStock` เมื่ออนุมัติใบขอเบิก จะตัดจ่ายสต็อกตามลำดับ FIFO (ตัดล็อตราคาเก่าให้หมดก่อน) เมื่อล็อตเก่าหมดเกลี้ยง (`status = 'DEPLETED'`) ระบบจะอัปเดตราคาหลัก (`materials.unit_price`) สลับเป็นราคาของล็อตใหม่อัตโนมัติ
+  - `cloudflare/src/api/reports.ts`: คำนวณมูลค่าคงคลังคงเหลือจริงตามผลรวมของทุกล็อตที่ยังคงเหลือ
+- **Frontend UI Enhancements:**
+  - `cloudflare/public/index.html`:
+    - เพิ่มช่อง "ราคาต่อหน่วย (บาท)" ในฟอร์มจัดซื้อพัสดุเพิ่ม พร้อมดึงราคาเดิมเป็น Default และแสดงกล่องข้อความแจ้งเตือนอัตโนมัติเมื่อราคาเปลี่ยนแปลง
+    - ในตารางรายการพัสดุ แสดงราคาของล็อตปัจจุบันที่กำลังตัดจ่าย และแสดง Badge `[ล็อตถัดไป xx.xx บ.]` สีฟ้า เมื่อมีล็อตใหม่รอจ่ายอยู่
+- **Testing:**
+  - เพิ่ม Vitest 2 เคสใน `cloudflare/test/materials.test.ts` ทดสอบการซื้อต่างราคา การออกล็อต และการตัดสต็อกแบบ FIFO ข้ามล็อตจนสลับราคาพัสดุอัตโนมัติ (ผ่าน 100%)
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-27 Night Session)
 
 ### 1. feat(stock-card): Display opening balance in "รับ" (In) column
 - ในฟังก์ชัน `stockCard` (`cloudflare/src/api/reports.ts`):
@@ -73,9 +90,9 @@
 ## 4. สถานะการทดสอบและ Production ล่าสุด (Current Verified Status)
 
 - **Test Suite Results (Vitest):**
-  - Worker Tests: **158 passed** (10 test files)
+  - Worker Tests: **160 passed** (10 test files)
   - Node Tests: **37 passed** (2 test files)
-  - **รวมทั้งสิ้น: 195 passed (100% PASS)**
+  - **รวมทั้งสิ้น: 197 passed (100% PASS)**
 - **TypeScript Typecheck:** 0 errors
 - **Git State:**
   - Branch: `main`

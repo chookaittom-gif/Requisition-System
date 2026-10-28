@@ -26,6 +26,9 @@ beforeEach(async () => {
     env.DB.prepare('DELETE FROM audit_log'),
     env.DB.prepare('DELETE FROM stock_movements'),
     env.DB.prepare('DELETE FROM purchases'),
+    env.DB.prepare('DELETE FROM material_lots'),
+    env.DB.prepare('DELETE FROM requests'),
+    env.DB.prepare('DELETE FROM request_items'),
     env.DB.prepare('DELETE FROM opening_balances'),
     env.DB.prepare('DELETE FROM materials'),
     env.DB.prepare('DELETE FROM categories'),
@@ -169,6 +172,52 @@ describe('purchases', () => {
     await create();
     const [m] = await rows('SELECT id FROM materials');
     expect(await rpc('apiPurchaseMaterials', [[{ MaterialID: m.id, Qty: -1 }]])).toMatchObject({ ok: false, code: 'VALIDATION' });
+  });
+
+  it('purchase with different unit price creates new lot and surfaces NextLotPrice', async () => {
+    await create({ StockQty: 2, UnitPrice: 350 });
+    const [m] = await rows('SELECT id FROM materials');
+    await rpc('apiPurchaseMaterials', [[{ MaterialID: m.id, Qty: 5, UnitPrice: 380 }]]);
+    const lots = await rows('SELECT * FROM material_lots WHERE material_id = ? ORDER BY created_at ASC, rowid ASC', m.id);
+    expect(lots.length).toBe(2);
+    expect(lots[0]).toMatchObject({ unit_price: 350, remaining_qty: 2, status: 'ACTIVE' });
+    expect(lots[1]).toMatchObject({ unit_price: 380, remaining_qty: 5, status: 'ACTIVE' });
+
+    const getRes = await rpc('apiGetMaterials', []);
+    const mat = getRes.data.find((x: any) => x.ID === m.id);
+    expect(mat.UnitPrice).toBe(350);
+    expect(mat.NextLotPrice).toBe(380);
+    expect(mat.NextLotQty).toBe(5);
+  });
+
+  it('requisition approval uses FIFO to deplete old lot and switches material unit_price to new lot price', async () => {
+    await create({ StockQty: 2, UnitPrice: 350 });
+    const [m] = await rows('SELECT id FROM materials');
+    await rpc('apiPurchaseMaterials', [[{ MaterialID: m.id, Qty: 5, UnitPrice: 380 }]]);
+
+    await rpc('apiCreateRequest', [{
+      FullName: 'ครูสมศรี',
+      Department: 'วิชาการ',
+      Purpose: 'สอน',
+      items: [{ MaterialID: m.id, Qty: 3, UnitPrice: 350 }],
+    }]);
+    const [req] = await rows('SELECT id FROM requests ORDER BY created_at DESC LIMIT 1');
+
+    const appRes = await rpc('apiUpdateRequestStatus', [[{ ID: req.id, Status: 'APPROVED' }]]);
+    expect(appRes.ok).toBe(true);
+
+    const lots = await rows('SELECT * FROM material_lots WHERE material_id = ? ORDER BY created_at ASC, rowid ASC', m.id);
+    expect(lots[0]).toMatchObject({ remaining_qty: 0, status: 'DEPLETED' });
+    expect(lots[1]).toMatchObject({ remaining_qty: 4, status: 'ACTIVE' });
+
+    const [updatedMat] = await rows('SELECT unit_price, stock_qty FROM materials WHERE id = ?', m.id);
+    expect(updatedMat.stock_qty).toBe(4);
+    expect(updatedMat.unit_price).toBe(380);
+
+    const getRes = await rpc('apiGetMaterials', []);
+    const mat = getRes.data.find((x: any) => x.ID === m.id);
+    expect(mat.UnitPrice).toBe(380);
+    expect(mat.NextLotPrice).toBeNull();
   });
 });
 

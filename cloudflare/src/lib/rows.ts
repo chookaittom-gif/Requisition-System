@@ -9,7 +9,8 @@ export type TableName =
   | 'opening_balances'
   | 'audit_log'
   | 'settings'
-  | 'shops';
+  | 'shops'
+  | 'material_lots';
 
 type ColumnMap = Record<string, string>; // D1 column -> legacy header
 
@@ -76,6 +77,16 @@ const MAPS: Record<TableName, ColumnMap> = {
     note: 'Note',
     created_at: 'CreatedAt',
     updated_at: 'UpdatedAt',
+  },
+  material_lots: {
+    id: 'ID',
+    material_id: 'MaterialID',
+    purchase_id: 'PurchaseID',
+    unit_price: 'UnitPrice',
+    initial_qty: 'InitialQty',
+    remaining_qty: 'RemainingQty',
+    status: 'Status',
+    created_at: 'CreatedAt',
   },
 };
 

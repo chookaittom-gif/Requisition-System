@@ -277,6 +277,11 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
     .bind(...mainBinds)
     .all<Obj>();
 
+  const { results: lotTotals } = await ctx.env.DB.prepare(
+    "SELECT material_id, SUM(remaining_qty * unit_price) AS lot_remain_amount FROM material_lots WHERE status = 'ACTIVE' AND remaining_qty > 0 GROUP BY material_id",
+  ).all<{ material_id: string; lot_remain_amount: number }>();
+  const lotRemainMap = new Map(lotTotals.map((l) => [String(l.material_id), Number(l.lot_remain_amount)]));
+
   const data = results
     .map((row) => {
       const m = toLegacy('materials', row);
@@ -285,6 +290,8 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
       const purchaseQty = num(row.purchased);
       const usedQty = num(row.used);
       const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
+      const lotRemainAmount = lotRemainMap.get(String(row.id));
+      const remainAmount = lotRemainAmount !== undefined && remainQty > 0 ? lotRemainAmount : remainQty * unitPrice;
       return {
         Code: m.Code,
         Name: m.Name,
@@ -300,7 +307,7 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
         UsedPrice: unitPrice,
         UsedAmount: usedQty * unitPrice,
         RemainQty: remainQty,
-        RemainAmount: remainQty * unitPrice,
+        RemainAmount: remainAmount,
         StockState: computeStockState(remainQty, num(m.MinQty)),
       };
     })

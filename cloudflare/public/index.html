@@ -2168,7 +2168,13 @@ function matTable(rows){
           <td class="px-3 py-3 font-bold text-brand-600">${esc(m.Code)}</td>
           <td class="px-3 py-3 font-semibold text-slate-700">${esc(m.Name)}</td>
           <td class="px-3 py-3 text-center text-slate-500">${esc(m.Unit)}</td>
-          <td class="px-3 py-3 text-right">${money(m.UnitPrice)}</td>
+          <td class="px-3 py-3 text-right">
+              <div class="font-bold text-slate-800">${money(m.UnitPrice)}</div>
+              ${m.NextLotPrice && Math.abs(m.NextLotPrice - m.UnitPrice) > 0.001 ? `
+                <div class="mt-0.5 inline-block text-[10px] font-semibold text-sky-700 bg-sky-50 border border-sky-200/80 rounded-md px-1.5 py-0.5 whitespace-nowrap" title="ล็อตใหม่ราคา ${money(m.NextLotPrice)} บ. (รอจ่าย ${nf(m.NextLotQty || 0)} ${esc(m.Unit)})">
+                  <i class="fa-solid fa-arrow-trend-up text-[9px]"></i> ล็อตถัดไป ${money(m.NextLotPrice)}
+                </div>` : ''}
+            </td>
             <td class="px-3 py-3 text-center font-bold text-amber-700 bg-amber-50/20">${nf(m.OpeningQty || 0)}</td>
           <td class="px-3 py-3 text-center font-bold">${nf(m.StockQty!==undefined?m.StockQty:m.RemainQty)}</td>
           <td class="px-3 py-3 text-right font-semibold text-teal">${money((m.StockQty!==undefined?m.StockQty:m.RemainQty)*m.UnitPrice)}</td>
@@ -4849,23 +4855,29 @@ async function viewMaterials(){
 
     <div class="mt-5">${cardWrap('ฟอร์มจัดซื้อพัสดุเพิ่ม','fa-cart-plus', `
       <form id="frmBuy" class="grid sm:grid-cols-12 gap-3 items-end">
-        <div class="sm:col-span-5">
+        <div class="sm:col-span-4">
           <label class="block text-sm font-bold text-slate-700 mb-1.5">เลือกพัสดุ <span class="text-rose2">*</span></label>
           <select id="buyMat" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
             <option value="">-- เลือกรายการพัสดุ --</option>
-            ${r.data.map(m=>`<option value="${esc(m.ID)}">${esc(m.Name)} (คงเหลือ ${nf(m.StockQty)} ${esc(m.Unit)})</option>`).join('')}
+            ${r.data.map(m=>`<option value="${esc(m.ID)}" data-price="${m.UnitPrice || 0}">${esc(m.Name)} (คงเหลือ ${nf(m.StockQty)} ${esc(m.Unit)})</option>`).join('')}
           </select>
         </div>
-        <div class="sm:col-span-3">
+        <div class="sm:col-span-2">
           <label class="block text-sm font-bold text-slate-700 mb-1.5">จำนวนที่ซื้อ <span class="text-rose2">*</span></label>
           <input id="buyQty" type="number" min="1" step="1" required placeholder="0" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-bold text-slate-700 mb-1.5">ราคาต่อหน่วย (บาท) <span class="text-rose2">*</span></label>
+          <input id="buyPrice" type="number" min="0" step="0.01" required placeholder="0.00" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
         <div class="sm:col-span-2">
           <label class="block text-sm font-bold text-slate-700 mb-1.5">วันที่ซื้อ</label>
           <input id="buyDate" type="date" value="${todayYMD()}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
         </div>
         <div class="sm:col-span-2">
-          <button type="submit" class="w-full py-3 rounded-2xl bg-teal text-white font-bold shadow-soft hover:brightness-110 active:scale-95 transition"><i class="fa-solid fa-floppy-disk"></i> บันทึกการซื้อ</button>
+          <button type="submit" class="w-full py-3 rounded-2xl bg-teal text-white font-bold shadow-soft hover:brightness-110 active:scale-95 transition min-h-[44px]"><i class="fa-solid fa-floppy-disk"></i> บันทึกการซื้อ</button>
+        </div>
+        <div id="buyPriceNotice" class="hidden sm:col-span-12 text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
         </div>
       </form>`)}
     </div>
@@ -4955,17 +4967,48 @@ async function viewMaterials(){
     }
   });
 
+  const updateBuyPriceNotice = () => {
+    const sel = $('#buyMat');
+    const opt = sel ? sel.options[sel.selectedIndex] : null;
+    const origPrice = opt && opt.dataset.price ? parseFloat(opt.dataset.price) : 0;
+    const currentPrice = parseFloat($('#buyPrice').value || 0);
+    const noticeEl = $('#buyPriceNotice');
+    if (!noticeEl) return;
+    if (opt && opt.value && !isNaN(currentPrice) && currentPrice > 0 && Math.abs(currentPrice - origPrice) > 0.001) {
+      noticeEl.innerHTML = `<i class="fa-solid fa-circle-info text-sky-600"></i> <span>ปรับราคาจากเดิม <strong>${money(origPrice)}</strong> บ. เป็น <strong>${money(currentPrice)}</strong> บ. (ระบบจะบันทึกเป็นล็อตราคาใหม่ และตัดจ่ายตามคิว FIFO)</span>`;
+      noticeEl.classList.remove('hidden');
+    } else {
+      noticeEl.classList.add('hidden');
+    }
+  };
+
+  $('#buyMat').addEventListener('change', () => {
+    const sel = $('#buyMat');
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && opt.dataset.price !== undefined && opt.value) {
+      $('#buyPrice').value = parseFloat(opt.dataset.price || 0).toFixed(2);
+    } else {
+      $('#buyPrice').value = '';
+    }
+    updateBuyPriceNotice();
+  });
+
+  $('#buyPrice').addEventListener('input', updateBuyPriceNotice);
+
   $('#frmBuy').addEventListener('submit', async e=>{
     e.preventDefault();
     const id  = $('#buyMat').value;
     const qty = parseFloat($('#buyQty').value || 0);
+    const unitPrice = parseFloat($('#buyPrice').value || 0);
     if(!id) return toast('warning','กรุณาเลือกพัสดุ');
     if(!(qty > 0)) return toast('warning','กรุณาระบุจำนวนที่ซื้อ');
+    if(isNaN(unitPrice) || unitPrice < 0) return toast('warning','กรุณาระบุราคาต่อหน่วยให้ถูกต้อง');
 
     showLoader('กำลังบันทึกการจัดซื้อ...');
     const res = await api('apiPurchaseMaterials', [{
       MaterialID: id,
       Qty: qty,
+      UnitPrice: unitPrice,
       PurchaseDate: $('#buyDate').value,
       Note: 'จัดซื้อเพิ่ม',
       actor: S.user.Username
@@ -5012,6 +5055,9 @@ function renderMats(list, key){
           <div class="p-2.5 rounded-2xl bg-slate-50">
             <p class="text-slate-500">ราคา/หน่วย</p>
             <p class="font-bold text-slate-800">${money(m.UnitPrice)} ฿</p>
+            ${m.NextLotPrice && Math.abs(m.NextLotPrice - m.UnitPrice) > 0.001 ? `
+              <span class="inline-block mt-1 text-[10px] font-semibold text-sky-700 bg-sky-100/70 rounded px-1.5 py-0.5">ล็อตถัดไป ${money(m.NextLotPrice)}</span>
+            ` : ''}
           </div>
           <div class="p-2.5 rounded-2xl bg-slate-50">
             <p class="text-slate-500">คงเหลือ / สั่งซื้อ</p>

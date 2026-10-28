@@ -129,18 +129,37 @@ registerRpc('apiSaveCategory', 'officer', (ctx, args) =>
 
 /* ============================== MATERIALS ============================== */
 export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
-  const { results } = await ctx.env.DB.prepare('SELECT * FROM materials').all<Obj>();
+  const db = ctx.env.DB;
+  const { results } = await db.prepare('SELECT * FROM materials').all<Obj>();
+  const { results: lots } = await db
+    .prepare("SELECT material_id, unit_price, remaining_qty FROM material_lots WHERE status = 'ACTIVE' AND remaining_qty > 0 ORDER BY created_at ASC, rowid ASC")
+    .all<{ material_id: string; unit_price: number; remaining_qty: number }>();
+  const lotsByMat = new Map<string, { unit_price: number; remaining_qty: number }[]>();
+  for (const l of lots) {
+    const arr = lotsByMat.get(l.material_id) || [];
+    arr.push(l);
+    lotsByMat.set(l.material_id, arr);
+  }
+
   return results
     .map((r) => {
       const m = toLegacy('materials', r);
       const stockQty = Number(m.StockQty || 0);
       const minQty = Number(m.MinQty || 0);
+      const matLots = lotsByMat.get(String(r.id)) || [];
+      const currentPrice = Number(m.UnitPrice || 0);
+      const nextLot = matLots.find((l) => Number(l.unit_price) !== currentPrice);
+      const nextLotPrice = nextLot ? Number(nextLot.unit_price) : null;
+      const nextLotQty = nextLot
+        ? matLots.filter((l) => Number(l.unit_price) === nextLotPrice).reduce((sum, l) => sum + Number(l.remaining_qty), 0)
+        : null;
+
       return {
         ID: m.ID,
         Code: m.Code,
         Name: m.Name,
         Unit: m.Unit,
-        UnitPrice: Number(m.UnitPrice || 0),
+        UnitPrice: currentPrice,
         StockQty: stockQty,
         MinQty: minQty,
         OpeningQty: Number(m.OpeningQty || 0),
@@ -158,6 +177,8 @@ export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
         AcquiredDate: m.AcquiredDate || '',
         OrderQty: Number(m.OrderQty || 0),
         StockState: computeStockState(stockQty, minQty),
+        NextLotPrice: nextLotPrice,
+        NextLotQty: nextLotQty,
       };
     })
     .sort((a, b) => String(a.Code).localeCompare(String(b.Code)));
@@ -303,6 +324,11 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
                 "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES (?, ?, ?, ?, 'IN', ?, 0, ?, '', 'จัดซื้อ', ?, ?)",
               )
               .bind(genId('SM'), newId, code, name, newStock, newStock, actor, now),
+            db
+              .prepare(
+                'INSERT INTO material_lots (id, material_id, purchase_id, unit_price, initial_qty, remaining_qty, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              )
+              .bind(genId('LOT'), newId, null, unitPrice, newStock, newStock, 'ACTIVE', now),
           );
         }
         if (initialOrderQty > 0) {
@@ -364,7 +390,7 @@ registerRpc('apiPurchaseMaterials', 'officer', (ctx, args) =>
     const list = args[0];
     if (!Array.isArray(list)) return fail('รูปแบบข้อมูลไม่ถูกต้อง', 'VALIDATION');
     const actor = actorOf(ctx);
-    const { results } = await db.prepare('SELECT id, code, name, unit_price FROM materials').all<Obj>();
+    const { results } = await db.prepare('SELECT id, code, name, unit_price, stock_qty FROM materials').all<Obj>();
     const byId = new Map(results.map((r) => [String(r.id), r]));
     const stmts: D1PreparedStatement[] = [];
     const now = nowBkk();
@@ -377,20 +403,31 @@ registerRpc('apiPurchaseMaterials', 'officer', (ctx, args) =>
       if (!(qty > 0)) continue;
       const purchaseDate = str(item.PurchaseDate) || todayBkk();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) throw new ValidationError('รูปแบบวันที่จัดซื้อไม่ถูกต้อง');
-      const unitPrice = Number(m.unit_price || 0);
+      const inputPrice = item.UnitPrice !== undefined && item.UnitPrice !== null && item.UnitPrice !== '' ? Number(item.UnitPrice) : null;
+      const unitPrice = inputPrice !== null && !isNaN(inputPrice) && inputPrice >= 0 ? inputPrice : Number(m.unit_price || 0);
       const note = String(item.Note ?? '');
       const id = String(m.id);
       const code = String(m.code);
+      const purchaseId = genId('P');
+      const auditDetail = unitPrice !== Number(m.unit_price || 0) ? `${code} +${qty} @ ${unitPrice}` : `${code} +${qty}`;
       stmts.push(
         db
           .prepare(
             'INSERT INTO purchases (id, material_id, code, name, qty, unit_price, amount, purchase_date, note, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
-          .bind(genId('P'), id, code, String(m.name), qty, unitPrice, qty * unitPrice, purchaseDate, note, actor, now),
+          .bind(purchaseId, id, code, String(m.name), qty, unitPrice, qty * unitPrice, purchaseDate, note, actor, now),
+        db
+          .prepare(
+            'INSERT INTO material_lots (id, material_id, purchase_id, unit_price, initial_qty, remaining_qty, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .bind(genId('LOT'), id, purchaseId, unitPrice, qty, qty, 'ACTIVE', now),
         movementStmt(db, { materialId: id, type: 'IN', qty, refDoc: '', note: note || 'จัดซื้อเพิ่ม', actor }),
         db.prepare('UPDATE materials SET stock_qty = stock_qty + ?, updated_at = ? WHERE id = ?').bind(qty, now, id),
-        logAudit(db, { action: 'PURCHASE', entity: 'Material', entityId: id, detail: `${code} +${qty}`, actor }),
+        logAudit(db, { action: 'PURCHASE', entity: 'Material', entityId: id, detail: auditDetail, actor }),
       );
+      if (Number(m.stock_qty || 0) === 0) {
+        stmts.push(db.prepare('UPDATE materials SET unit_price = ? WHERE id = ?').bind(unitPrice, id));
+      }
     }
 
     if (stmts.length) await db.batch(stmts);
