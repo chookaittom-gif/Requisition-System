@@ -333,7 +333,7 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
       totalMaterials: data.length,
       remainValue: total.RemainAmount,
       usedValue: total.UsedAmount,
-      lowStock: data.filter((x) => x.StockState !== 'OK').length,
+      lowStock: from || to ? data.filter((x) => x.StockState !== 'OK').length : results.filter((r) => computeStockState(Number(r.stock_qty || 0), Number(r.min_qty || 0)) !== 'OK').length,
     },
     total,
     data,
@@ -382,6 +382,11 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
       .bind(...binds)
       .all<Obj>();
 
+    const { results: lotTotals } = await ctx.env.DB.prepare(
+      "SELECT material_id, SUM(remaining_qty * unit_price) AS lot_remain_amount FROM material_lots WHERE status = 'ACTIVE' AND remaining_qty > 0 GROUP BY material_id",
+    ).all<{ material_id: string; lot_remain_amount: number }>();
+    const lotRemainMap = new Map(lotTotals.map((l) => [String(l.material_id), Number(l.lot_remain_amount)]));
+
     const data = results
       .map((row) => {
         const m = toLegacy('materials', row);
@@ -391,6 +396,8 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
         const usedQty = num(row.used);
 
         const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
+        const lotRemainAmount = lotRemainMap.get(String(row.id));
+        const amount = lotRemainAmount !== undefined && remainQty > 0 ? lotRemainAmount : remainQty * unitPrice;
         return {
           seq: 0,
           ID: m.ID,
@@ -405,7 +412,7 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
           PurchaseQty: purchaseQty,
           UsedQty: usedQty,
           RemainQty: remainQty,
-          Amount: remainQty * unitPrice,
+          Amount: amount,
           StorageLocation: m.StorageLocation || '',
         };
       })

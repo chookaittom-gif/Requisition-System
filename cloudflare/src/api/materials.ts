@@ -153,6 +153,7 @@ export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
       const nextLotQty = nextLot
         ? matLots.filter((l) => Number(l.unit_price) === nextLotPrice).reduce((sum, l) => sum + Number(l.remaining_qty), 0)
         : null;
+      const lotRemainAmount = matLots.reduce((sum, l) => sum + Number(l.remaining_qty) * Number(l.unit_price), 0);
 
       return {
         ID: m.ID,
@@ -179,6 +180,7 @@ export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
         StockState: computeStockState(stockQty, minQty),
         NextLotPrice: nextLotPrice,
         NextLotQty: nextLotQty,
+        RemainAmount: matLots.length > 0 && stockQty > 0 ? lotRemainAmount : stockQty * currentPrice,
       };
     })
     .sort((a, b) => String(a.Code).localeCompare(String(b.Code)));

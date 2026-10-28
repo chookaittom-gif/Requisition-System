@@ -3,7 +3,7 @@
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** Version `51a5d7f9-1677-4c95-8c0b-47ddf42a0295` (Commit `0267be2`) — Live at https://supply-requisition.chookait-tom.workers.dev
+**Latest Deployment:** Version pending deployment (Commit sync-inventory-values) — Live at https://supply-requisition.chookait-tom.workers.dev
 
 ---
 
@@ -21,7 +21,26 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-28 FIFO Lot Inventory & UI Workflow)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-28 Sync Inventory Values & Rules Optimization)
+
+### 1. fix(inventory): ซิงค์ตัวเลขคงคลังและแจ้งเตือนพัสดุใกล้หมดให้ตรงกันทั้ง 4 แท็บ
+- **ปัญหาเดิม:**
+  - ตัวเลขมูลค่าคงเหลือไม่ตรงกัน 3 ค่า (แดชบอร์ด/บัญชีพัสดุ = 28,081 บ., จัดการพัสดุ = 27,831 บ., ทะเบียนพัสดุ = 27,895 บ.) เนื่องจากหน้าจัดการพัสดุคิดจาก `UnitPrice * StockQty` เดี่ยว และทะเบียนพัสดุไม่คิดราคาตามล็อตจริง FIFO
+  - จำนวนแจ้งเตือนพัสดุใกล้หมดแสดง 10 รายการในแดชบอร์ด/จัดการพัสดุ แต่แสดง 8 รายการในบัญชีพัสดุ
+- **การแก้ไข:**
+  - `cloudflare/src/api/materials.ts` (`listMaterials`): ส่ง `RemainAmount` ที่คำนวณจากยอดรวมตามล็อตจริง (`material_lots`) สำหรับพัสดุแต่ละรายการ
+  - `cloudflare/public/index.html` (`viewMaterials`): ปรับยอดรวม `totalValue` ให้รวมจาก `RemainAmount` เพื่อให้ได้มูลค่าตามล็อตจริงตรงกับแดชบอร์ด (28,081.00 บาท)
+  - `cloudflare/src/api/reports.ts` (`apiGetInventoryReport`): ดึง `lotRemainMap` และคำนวณมูลค่าคงเหลือ `Amount` อิงตามล็อตจริง FIFO ให้ตรงกัน (28,081.00 บาท)
+  - `cloudflare/src/api/reports.ts` (`inventoryAccount`): ซิงค์สรุป `lowStock` ให้คำนวณจากสถานะสต็อกจริง (10 รายการ) เมื่อไม่ได้ระบุช่วงวันที่ย้อนหลัง
+- **ผลลัพธ์:** ทั้ง 4 แท็บ (แดชบอร์ด, ทะเบียนพัสดุคงเหลือ, บัญชีพัสดุ, จัดการพัสดุ) แสดงมูลค่าคงเหลือ **28,081.00 บาท** และแจ้งเตือนพัสดุใกล้หมด **10 รายการ** ตรงกันทั้งหมด 100%
+
+### 2. chore(rules): ลด Token ในระบบและลบ Rules ซ้ำซ้อน
+- ลบ `GEMINI.md` ใน root โปรเจกต์ เนื่องจากซ้ำซ้อนกับคำสั่ง Graft ใน `AGENTS.md` 100%
+- ปรับปรุง Global Rule (`~/.gemini/GEMINI.md`) ให้ Lean ตัดคำบรรยายและรายชื่อ Framework ฟุ่มเฟือย ขนาดลดลง 67.5% (ประหยัด ~2,700 tokens ต่อคำขอ)
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-28 FIFO Lot Inventory & UI Workflow)
 
 ### 1. feat(inventory): FIFO Lot tracking for material price changes
 - **Database Migration:**

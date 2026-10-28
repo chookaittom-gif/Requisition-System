@@ -4843,7 +4843,7 @@ async function viewMaterials(){
   S.cache.categories = (catRes && catRes.ok) ? catRes.data : [];
   const key = 'mats';
 
-  const totalValue = r.data.reduce((s,m)=> s + m.StockQty * m.UnitPrice, 0);
+  const totalValue = r.data.reduce((s,m)=> s + (m.RemainAmount !== undefined ? Number(m.RemainAmount) : m.StockQty * m.UnitPrice), 0);
   const lowCount   = r.data.filter(m=> m.StockState !== 'OK').length;
 
   c.innerHTML = `
