@@ -79,9 +79,7 @@ notifyHooks.onStatusChange = async (env, req, newStatus, rejectReason) => {
       );
     }
   } else if (newStatus === 'REJECTED') {
-    if (cfg.notifyTelegram && cfg.token && cfg.chatId) {
-      await sendTelegram(cfg.token, cfg.chatId, rejectedRequestText(req, rejectReason));
-    }
+    // Note: Telegram reject notifications disabled by requirement.
     if (cfg.notifyLine && lineToken && lineTo) {
       await pushLineCard(
         lineToken,

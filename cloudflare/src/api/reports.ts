@@ -141,7 +141,6 @@ type Counters = { approved: number; pending: number; rejected: number };
 const chartStatus = (c: Counters) => [
   { label: 'อนุมัติแล้ว', value: c.approved },
   { label: 'รออนุมัติ', value: c.pending },
-  { label: 'ปฏิเสธ', value: c.rejected },
 ];
 
 registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
@@ -167,6 +166,33 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
     const chartByItem = byName.map((r) => ({ label: r.name, value: num(r.qty) }));
     const chartTop10 = chartByItem.slice().sort((a, b) => b.value - a.value).slice(0, 10);
     const invAcc = await inventoryAccount(ctx, { fiscalYear: currentFiscalYear() });
+
+    const standardCategories = [
+      'วัสดุสำนักงาน',
+      'วัสดุงานบ้านงานครัว',
+      'วัสดุงานช่าง',
+      'วัสดุการเกษตร',
+      'วัสดุคอมพิวเตอร์',
+      'วัสดุจราจร',
+    ];
+    const catMap = new Map<string, { stockQty: number; count: number }>();
+    for (const c of standardCategories) {
+      catMap.set(c, { stockQty: 0, count: 0 });
+    }
+    for (const m of materials) {
+      const cat = String(m.Category || 'วัสดุสำนักงาน').trim();
+      const current = catMap.get(cat) ?? { stockQty: 0, count: 0 };
+      current.stockQty += num(m.StockQty);
+      current.count += 1;
+      catMap.set(cat, current);
+    }
+    const byCategory = Array.from(catMap.entries()).map(([name, data]) => ({
+      name,
+      stockQty: data.stockQty,
+      count: data.count,
+    }));
+    const chartByCategory = byCategory.map((c) => ({ label: c.name, value: c.stockQty }));
+
     return {
       ok: true,
       summary: {
@@ -181,6 +207,8 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
       chartByItem,
       chartTop10,
       chartStatus: chartStatus(counters),
+      byCategory,
+      chartByCategory,
     };
   }),
 );
@@ -510,6 +538,12 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
     }
   }
 
+  const { results: purchases } = await db
+    .prepare('SELECT id, qty FROM purchases WHERE material_id = ?')
+    .bind(id)
+    .all<{ id: string; qty: number }>();
+  const hasPurchases = purchases.length > 0;
+
   const { results: moves } = await db
     .prepare('SELECT * FROM stock_movements WHERE material_id = ? ORDER BY created_at ASC, rowid ASC')
     .bind(id)
@@ -518,6 +552,17 @@ async function stockCard(env: Env, materialId: unknown, filter: unknown) {
   let running = fiscalOpeningQty;
   const period: Obj[] = [];
   for (const m of moves) {
+    if (
+      fiscalOpeningQty > 0 &&
+      m.type === 'IN' &&
+      num(m.before_qty) === 0 &&
+      (m.note === 'จัดซื้อ' || !m.note) &&
+      !m.ref_doc &&
+      !hasPurchases &&
+      num(m.qty) === fiscalOpeningQty
+    ) {
+      continue;
+    }
     const d = String(m.created_at || '').substring(0, 10);
     if (d < fromDate) {
       const qty = num(m.qty);

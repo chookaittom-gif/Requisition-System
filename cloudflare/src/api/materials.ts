@@ -320,12 +320,16 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
           );
         }
         if (newStock > 0) {
+          if (initialOrderQty > 0) {
+            stmts.push(
+              db
+                .prepare(
+                  "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES (?, ?, ?, ?, 'IN', ?, ?, ?, '', 'จัดซื้อ', ?, ?)",
+                )
+                .bind(genId('SM'), newId, code, name, initialOrderQty, openingQty, newStock, actor, now),
+            );
+          }
           stmts.push(
-            db
-              .prepare(
-                "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES (?, ?, ?, ?, 'IN', ?, 0, ?, '', 'จัดซื้อ', ?, ?)",
-              )
-              .bind(genId('SM'), newId, code, name, newStock, newStock, actor, now),
             db
               .prepare(
                 'INSERT INTO material_lots (id, material_id, purchase_id, unit_price, initial_qty, remaining_qty, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

@@ -21,7 +21,44 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-29 Audit Log Actor Role Badge & Task Observer Review)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-29 Stock Card x2 Fix, Dashboard Overhaul, Purchase Order Reorder & Reject Status Removal)
+
+### 1. fix(inventory): แก้ปัญหายอดสต็อกการ์ด x2 จากยอดยกมา
+- **ปัญหาเดิม:** เมื่อเพิ่มพัสดุใหม่ด้วยยอดยกมา (เช่น 6) แต่ไม่ได้ระบุยอดสั่งซื้อ (`OrderQty: 0`) ระบบกลับสร้างทั้งรายการยอดยกมาใน `opening_balances` และสร้าง movement `IN 'จัดซื้อ'` ซ้ำใน `stock_movements` ส่งผลให้หน้าสต็อกการ์ดคำนวณยอดยกมา 6 + ยอดจัดซื้อ 6 = กลายเป็น 12
+- **การแก้ไข:**
+  - `cloudflare/src/api/materials.ts` (`create`): เพิ่มเงื่อนไขตรวจสอบ `initialOrderQty > 0` ก่อนสร้าง movement จัดซื้อ ป้องกันการสร้าง synthetic movement เมื่อมียกมาอย่างเดียว
+  - `cloudflare/src/api/reports.ts` (`stockCard`): เพิ่มฟิลเตอร์ละเว้น movement จัดซื้อที่ไม่มี `purchase_orders` จริงและวันที่ตรงกับยอดยกมา เพื่อป้องกันข้อมูลเก่าคำนวณเบิ้ล 2 เท่า
+- **ผลลัพธ์:** สต็อกการ์ดแสดงยอดยกมา 6 คงเหลือ 6 ถูกต้องตามสต็อกจริง ไม่เกิดยอดเบิ้ล
+
+### 2. feat(dashboard): ปรับปรุงแดชบอร์ดตามโครงสร้างหมวดหมู่จริง
+- **การปรับปรุง:**
+  - ลบตารางรายการพัสดุ (`matTable`) และปุ่มพิมพ์ (`btnPrintMat`) ออกจากแดชบอร์ดตามที่ผู้ใช้ร้องขอ
+  - เพิ่มการ์ดสรุปจำนวนสต็อกคงเหลือ 6 หมวดหมู่วัสดุหลัก:
+    - วัสดุสำนักงาน, วัสดุงานบ้านงานครัว, วัสดุงานช่าง, วัสดุการเกษตร, วัสดุคอมพิวเตอร์, วัสดุจราจร
+  - เพิ่ม Bar Chart (`chCategory`) แสดงเปรียบเทียบยอดคงเหลือแยกตามหมวดหมู่ชัดเจน
+  - ปรับข้อมูลใน `cloudflare/src/api/reports.ts` (`apiGetAdminDashboard`) ให้คำนวณ `byCategory` และส่งข้อมูลหมวดหมู่เข้าสู่กราฟแท่ง
+
+### 3. feat(purchase-order): ปรับโครงสร้างคอลัมน์ใบสั่งซื้อทั้งเว็บและ Excel
+- **การปรับปรุง:**
+  - ลบคอลัมน์ "หมายเหตุ" ออกจากตารางใบสั่งซื้อหน้าเว็บและ Excel
+  - สลับคอลัมน์ชื่อรายการมาอยู่ก่อนจำนวน/หน่วย:
+    - รูปแบบใหม่: `[ที่/ลำดับที่ | รายการ | จำนวน/หน่วย | ราคาต่อหน่วย | จำนวนเงิน]` (รวม 5 คอลัมน์)
+  - ปรับหน้า Excel (`exportPurchaseOrderXlsx`) ให้เหลือ 5 คอลัมน์ (A ถึง E), จัดลำดับคอลัมน์สอดคล้องกับหน้าเว็บ, ปรับ Print Area เป็น `A1:E...` พอดีหน้ากระดาษ A4
+
+### 4. feat(requests & notifications): ลบสถานะ "ปฏิเสธ" (REJECTED) ออกจากทุกระบบ
+- **การปรับปรุง:**
+  - ปิดการส่งข้อความแจ้งเตือนคำขอที่ถูกปฏิเสธใน Telegram (`cloudflare/src/api/admin.ts`)
+  - ลบการ์ดสรุปสถานะ "ปฏิเสธ" และตัวนับ/ตาราง/ปุ่มปฏิเสธในทุกหน้าจอ:
+    - หน้าแดชบอร์ด (`viewAdminDash`): ลบการ์ดปฏิเสธ และปรับ Doughnut Chart เหลือ 2 สถานะ (อนุมัติแล้ว, รออนุมัติ)
+    - หน้าคำขอเบิกสำหรับผู้ดูแลระบบ (`viewRequests`): ลบการ์ดสถานะปฏิเสธ, ลบแท็บ/ตารางรายการปฏิเสธ, และนำปุ่มปฏิเสธออก
+    - หน้าติดตามสถานะและคำขอเบิกของผู้ใช้ (`viewMyRequests`, `viewTeacherDash`, `viewPublicTrack`): ปรับการแสดงผลให้มีเฉพาะสถานะรออนุมัติและอนุมัติแล้ว
+
+### 5. chore(skills): ติดตั้ง Skill repomix-explorer
+- ติดตั้ง `repomix-explorer` ลงใน `~/.agents/skills/repomix-explorer` และ `~/.gemini/config/skills/repomix-explorer` สำหรับการวิเคราะห์และสรุปโค้ดเบสขนาดใหญ่
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-29 Audit Log Actor Role Badge & Task Observer Review)
 
 ### 1. feat(ui): Audit Log Actor Role Badge
 - **ปัญหาเดิม:** ในตาราง Audit Log เมื่อผู้ดูแลระบบ (Admin) เข้าสู่ระบบ คอลัมน์ `Entity` แสดงเป็น `User` ทำให้เกิดความสับสนว่าเป็นผู้ใช้ทั่วไปเข้าใช้งานหรือไม่
@@ -138,9 +175,9 @@
 ## 4. สถานะการทดสอบและ Production ล่าสุด (Current Verified Status)
 
 - **Test Suite Results (Vitest):**
-  - Worker Tests: **160 passed** (10 test files)
+  - Worker Tests: **161 passed** (10 test files)
   - Node Tests: **37 passed** (2 test files)
-  - **รวมทั้งสิ้น: 197 passed (100% PASS)**
+  - **รวมทั้งสิ้น: 198 passed (100% PASS)**
 - **TypeScript Typecheck:** 0 errors
 - **Git State:**
   - Branch: `main`

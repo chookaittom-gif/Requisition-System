@@ -220,6 +220,25 @@ describe('stock card', () => {
     expect(await asOfficer('apiGetStockCard', '', {})).toEqual({ ok: false, message: 'กรุณาระบุรหัสวัสดุ (Material ID)' });
     expect(await asOfficer('apiGetStockCard', 'NOPE', {})).toEqual({ ok: false, message: 'ไม่พบข้อมูลพัสดุในระบบ' });
   });
+
+  it('does not double count synthetic initial stock movements in stock card', async () => {
+    // Simulate legacy item with opening_qty 6 and synthetic movement IN 6 without purchase
+    await env.DB.prepare(
+      "INSERT INTO materials (id, code, name, unit, unit_price, stock_qty, min_qty, opening_qty, category, created_at, updated_at) VALUES ('M-TEST', '001-0010', 'ดินสอดำ', 'กล่อง', 59, 6, 2, 6, 'วัสดุสำนักงาน', '2026-10-28 00:00:00', '2026-10-28 00:00:00')"
+    ).run();
+    await env.DB.prepare(
+      "INSERT INTO opening_balances (id, material_id, fiscal_year, opening_qty, set_by, created_at, updated_at) VALUES ('OB-TEST', 'M-TEST', 2570, 6, 'admin', '2026-10-28 00:00:00', '2026-10-28 00:00:00')"
+    ).run();
+    await env.DB.prepare(
+      "INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES ('SM-TEST', 'M-TEST', '001-0010', 'ดินสอดำ', 'IN', 6, 0, 6, '', 'จัดซื้อ', 'admin', '2026-10-28 10:00:00')"
+    ).run();
+
+    const r = await asOfficer('apiGetStockCard', 'M-TEST', { fiscalYear: 2570 });
+    expect(r.ok).toBe(true);
+    expect(r.data.openingBalance).toBe(6);
+    expect(r.data.summary.currentBalance).toBe(6);
+    expect(r.data.entries).toHaveLength(1); // only ยอดยกมา, not doubled
+  });
 });
 
 describe('dashboards', () => {
@@ -231,7 +250,6 @@ describe('dashboards', () => {
     expect(r.chartStatus).toEqual([
       { label: 'อนุมัติแล้ว', value: 5 },
       { label: 'รออนุมัติ', value: 1 },
-      { label: 'ปฏิเสธ', value: 1 },
     ]);
     expect(r.chartTop10).toEqual([
       { label: 'กระดาษ', value: 55 },

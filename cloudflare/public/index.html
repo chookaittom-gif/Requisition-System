@@ -941,7 +941,7 @@ const MENUS = {
     { id:'a-po',       title:'ใบสั่งซื้อ',             sub:'กรอกและส่งออก Excel',       icon:'fa-file-invoice',          color:'#7c3aed' },
     { id:'a-movement', title:'ประวัติเคลื่อนไหวสต็อก', sub:'IN / OUT / ADJUST',         icon:'fa-right-left',            color:'#0284c7' },
     { id:'a-stockcard',title:'สต๊อกการ์ด (Stock Card)',sub:'บัตรคุมยอดพัสดุรายชิ้น',    icon:'fa-id-card',               color:'#0d9488' },
-    { id:'a-request',  title:'จัดการรายการขอเบิก',     sub:'อนุมัติ/ปฏิเสธใบขอเบิก',   icon:'fa-file-circle-check',     color:'#0284c7' },
+    { id:'a-request',  title:'จัดการรายการขอเบิก',     sub:'อนุมัติใบขอเบิก',           icon:'fa-file-circle-check',     color:'#0284c7' },
     { id:'a-low',      title:'พัสดุหมด/ใกล้หมด',       sub:'แจ้งเตือนสต็อก',           icon:'fa-triangle-exclamation',  color:'#d97706' },
     { id:'t-form',     title:'แบบฟอร์มขอเบิกพัสดุ',    sub:'สร้างใบขอเบิกใหม่',          icon:'fa-file-pen',              color:'#0d9488' },
     { id:'t-my',       title:'รายการขอเบิกของฉัน',     sub:'ติดตามสถานะ',                icon:'fa-list-check',            color:'#0284c7' },
@@ -959,7 +959,7 @@ const MENUS = {
     { id:'a-po',       title:'ใบสั่งซื้อ',             sub:'กรอกและส่งออก Excel',       icon:'fa-file-invoice',          color:'#7c3aed' },
     { id:'a-movement', title:'ประวัติเคลื่อนไหวสต็อก', sub:'IN / OUT / ADJUST',         icon:'fa-right-left',            color:'#0284c7' },
     { id:'a-stockcard',title:'สต๊อกการ์ด (Stock Card)',sub:'บัตรคุมยอดพัสดุรายชิ้น',    icon:'fa-id-card',               color:'#0d9488' },
-    { id:'a-request',  title:'จัดการรายการขอเบิก',     sub:'อนุมัติ/ปฏิเสธใบขอเบิก',   icon:'fa-file-circle-check',     color:'#0284c7' },
+    { id:'a-request',  title:'จัดการรายการขอเบิก',     sub:'อนุมัติใบขอเบิก',           icon:'fa-file-circle-check',     color:'#0284c7' },
     { id:'a-low',      title:'พัสดุหมด/ใกล้หมด',       sub:'แจ้งเตือนสต็อก',           icon:'fa-triangle-exclamation',  color:'#d97706' },
     { id:'t-form',     title:'แบบฟอร์มขอเบิกพัสดุ',    sub:'สร้างใบขอเบิกใหม่',          icon:'fa-file-pen',              color:'#0d9488' },
     { id:'t-my',       title:'รายการขอเบิกของฉัน',     sub:'ติดตามสถานะ',                icon:'fa-list-check',            color:'#0284c7' },
@@ -2059,7 +2059,6 @@ async function viewPublicTrack(){
       const st = String(req.Status).toUpperCase();
       let badgeHtml = '<span class="px-3 py-1 rounded-full text-xs font-bold bg-amber2/20 text-orange2"><i class="fa-regular fa-clock mr-1"></i>รออนุมัติ</span>';
       if(st==='APPROVED') badgeHtml = '<span class="px-3 py-1 rounded-full text-xs font-bold bg-teal/15 text-teal"><i class="fa-solid fa-circle-check mr-1"></i>อนุมัติแล้ว</span>';
-      if(st==='REJECTED') badgeHtml = '<span class="px-3 py-1 rounded-full text-xs font-bold bg-rose2/15 text-rose2"><i class="fa-solid fa-circle-xmark mr-1"></i>ปฏิเสธ</span>';
 
       return `
         <div class="rounded-3xl border border-slate-200 p-5 bg-white shadow-soft transition">
@@ -2109,6 +2108,19 @@ async function viewAdminDash(){
     if(!d || !d.ok) return (c.innerHTML = emptyBox((d && d.message) || 'โหลดแดชบอร์ดไม่สำเร็จ'));
 
     const s = d.summary;
+    const catStyles = {
+      'วัสดุสำนักงาน': { icon:'fa-briefcase', color:'#0284c7', bg:'#e0f2fe' },
+      'วัสดุงานบ้านงานครัว': { icon:'fa-broom', color:'#10b981', bg:'#d1fae5' },
+      'วัสดุงานช่าง': { icon:'fa-wrench', color:'#f59e0b', bg:'#fef3c7' },
+      'วัสดุการเกษตร': { icon:'fa-seedling', color:'#84cc16', bg:'#ecfccb' },
+      'วัสดุคอมพิวเตอร์': { icon:'fa-laptop', color:'#8b5cf6', bg:'#ede9fe' },
+      'วัสดุจราจร': { icon:'fa-traffic-light', color:'#ef4444', bg:'#fee2e2' },
+    };
+    const catList = (d.byCategory || []).map(c => ({
+      ...c,
+      ...(catStyles[c.name] || { icon:'fa-shapes', color:'#64748b', bg:'#f1f5f9' })
+    }));
+
     c.innerHTML = `
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeUp">
         ${statCardH('fa-layer-group','#0284c7','บัญชีพัสดุทั้งหมด', nf(s.totalMaterials),'รายการ','ทั้งหมด')}
@@ -2117,36 +2129,60 @@ async function viewAdminDash(){
         ${statCardH('fa-triangle-exclamation','#D32F2F','พัสดุใกล้หมด/หมด', nf(s.lowStock),'รายการ','แจ้งเตือน')}
       </div>
 
-      <div class="grid grid-cols-3 gap-4 mt-5">
+      <div class="grid grid-cols-2 gap-4 mt-5">
         ${statCardH('fa-circle-check','#26A69A','อนุมัติแล้ว', nf(d.counters.approved),'ใบ')}
         ${statCardH('fa-clock','#FFCA28','รออนุมัติ', nf(d.counters.pending),'ใบ')}
-        ${statCardH('fa-circle-xmark','#EF5350','ปฏิเสธ', nf(d.counters.rejected),'ใบ')}
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="mt-5">
+        <div class="flex items-center gap-2 mb-3">
+          <i class="fa-solid fa-shapes text-brand-600 text-sm"></i>
+          <h3 class="text-sm font-black text-slate-800">พัสดุคงเหลือแยกตามหมวดหมู่</h3>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          ${catList.map(c => `
+            <div class="p-4 rounded-3xl bg-white border border-slate-200/80 shadow-card flex flex-col justify-between transition hover:-translate-y-0.5">
+              <div class="flex items-center justify-between gap-1 mb-2">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center text-xs" style="background:${c.bg}; color:${c.color};">
+                  <i class="fa-solid ${c.icon}"></i>
+                </div>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${c.count} รายการ</span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-slate-500 truncate" title="${esc(c.name)}">${esc(c.name)}</p>
+                <p class="text-lg font-black text-slate-800 mt-0.5">${nf(c.stockQty)} <span class="text-xs font-medium text-slate-400">ชิ้น</span></p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
         <div class="lg:col-span-2">
-          ${cardWrap('จำนวนแต่ละรายการที่เบิก (อนุมัติแล้ว)','fa-chart-column','<div class="w-full h-[280px] relative"><canvas id="chItem"></canvas></div>')}
+          ${cardWrap('จำนวนพัสดุคงเหลือแยกตามหมวดหมู่ (ชิ้น)','fa-chart-column','<div class="w-full h-[280px] relative"><canvas id="chCategory"></canvas></div>')}
         </div>
         <div>
           ${cardWrap('สถานะใบขอเบิก','fa-chart-pie','<div class="w-full h-[280px] relative"><canvas id="chStatus"></canvas></div>')}
         </div>
       </div>
 
-      <div class="mt-5">
-        ${cardWrap('10 อันดับรายการที่เบิกมากที่สุด','fa-ranking-star','<div class="w-full h-[280px] relative"><canvas id="chTop10"></canvas></div>')}
-      </div>
-
-      <div class="mt-5">
-        ${cardWrap('ตารางรายการพัสดุ','fa-boxes-stacked', matTable(d.materials.slice(0,20)),
-          btn('btnPrintMat','fa-print','พิมพ์','bg-slate-800 text-white hover:bg-slate-700'))}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+        <div>
+          ${cardWrap('จำนวนแต่ละรายการที่เบิก (อนุมัติแล้ว)','fa-boxes-packing','<div class="w-full h-[280px] relative"><canvas id="chItem"></canvas></div>')}
+        </div>
+        <div>
+          ${cardWrap('10 อันดับรายการที่เบิกมากที่สุด','fa-ranking-star','<div class="w-full h-[280px] relative"><canvas id="chTop10"></canvas></div>')}
+        </div>
       </div>`;
 
+    drawChart('chCategory','bar', (d.chartByCategory||[]).map(x=>x.label), (d.chartByCategory||[]).map(x=>x.value), {
+      label:'จำนวนคงเหลือ (ชิ้น)',
+      colors: ['#0284c7','#10b981','#f59e0b','#84cc16','#8b5cf6','#ef4444']
+    });
+    drawChart('chStatus','doughnut', d.chartStatus.map(x=>x.label), d.chartStatus.map(x=>x.value),
+      { colors:['#26A69A','#FFCA28'] });
     drawChart('chItem','bar', d.chartByItem.map(x=>x.label), d.chartByItem.map(x=>x.value), {label:'จำนวนที่เบิก'});
     drawChart('chTop10','bar', d.chartTop10.map(x=>x.label), d.chartTop10.map(x=>x.value), {label:'จำนวนที่เบิก'});
-    drawChart('chStatus','doughnut', d.chartStatus.map(x=>x.label), d.chartStatus.map(x=>x.value),
-      { colors:['#26A69A','#FFCA28','#EF5350'] });
-
-    $('#btnPrintMat').addEventListener('click', ()=> printMaterials(d.materials));
   }catch(err){ c.innerHTML = emptyBox('โหลดข้อมูลไม่สำเร็จ: '+(err.message||err)); }
 }
 
@@ -3087,13 +3123,11 @@ async function viewRequests(){
 
   const pend = r.data.filter(x=>String(x.Status).toUpperCase()==='PENDING');
   const appr = r.data.filter(x=>String(x.Status).toUpperCase()==='APPROVED');
-  const rej  = r.data.filter(x=>String(x.Status).toUpperCase()==='REJECTED');
 
   c.innerHTML = `
-    <div class="grid grid-cols-3 gap-4 animate-fadeUp">
+    <div class="grid grid-cols-2 gap-4 animate-fadeUp">
       ${statCardH('fa-circle-check','#26A69A','อนุมัติแล้ว', nf(appr.length),'ใบ')}
       ${statCardH('fa-clock','#FFCA28','รออนุมัติ', nf(pend.length),'ใบ')}
-      ${statCardH('fa-circle-xmark','#EF5350','ปฏิเสธ', nf(rej.length),'ใบ')}
     </div>
 
     <div class="mt-4 mb-2 flex flex-wrap gap-3 items-center">
@@ -3106,11 +3140,7 @@ async function viewRequests(){
 
     <div class="mt-5">${cardWrap('รายการที่อนุมัติแล้ว','fa-circle-check',
       `<div data-req-section="appr">${reqTable(appr,'appr',false)}</div>`,
-      viewToggle('appr'))}</div>
-
-    <div class="mt-5">${cardWrap('รายการที่ปฏิเสธ','fa-circle-xmark',
-      `<div data-req-section="rej">${reqTable(rej,'rej',false)}</div>`,
-      viewToggle('rej'))}</div>`;
+      viewToggle('appr'))}</div>`;
 
   bindReqEvents();
   const bs = $('#btnApproveSel');
@@ -3130,11 +3160,9 @@ async function viewRequests(){
 
     const pend2 = all.filter(x => String(x.Status).toUpperCase() === 'PENDING' && match(x));
     const appr2 = all.filter(x => String(x.Status).toUpperCase() === 'APPROVED' && match(x));
-    const rej2  = all.filter(x => String(x.Status).toUpperCase() === 'REJECTED' && match(x));
 
     const pendEl = document.querySelector('[data-req-section="pend"]');
     const apprEl = document.querySelector('[data-req-section="appr"]');
-    const rejEl  = document.querySelector('[data-req-section="rej"]');
 
     if(pendEl) pendEl.innerHTML = reqTable(pend2, 'pend', true);
     if(apprEl) apprEl.innerHTML = reqTable(appr2, 'appr', false);
@@ -3201,7 +3229,6 @@ function reqActions(q){
               <button data-print-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-blue2/10 text-blue2 hover:bg-blue2 hover:text-white transition" title="พิมพ์"><i class="fa-solid fa-print"></i></button>`;
   if(S.user.Role==='admin' || S.user.Role==='officer'){
     if(st!=='APPROVED') html += `<button data-ap-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-teal/15 text-teal hover:bg-teal hover:text-white transition" title="อนุมัติ"><i class="fa-solid fa-check"></i></button>`;
-    if(st!=='REJECTED') html += `<button data-rj-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-amber2/25 text-orange2 hover:bg-orange2 hover:text-white transition" title="ปฏิเสธ"><i class="fa-solid fa-xmark"></i></button>`;
     html += `<button data-del-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-red2/10 text-red2 hover:bg-red2 hover:text-white transition" title="ลบ"><i class="fa-solid fa-trash"></i></button>`;
   }
   return html;
@@ -3212,7 +3239,6 @@ function bindReqEvents(){
   $$('[data-view-req]').forEach(b=> b.addEventListener('click', ()=> reqDetail(b.dataset.viewReq)));
   $$('[data-print-req]').forEach(b=> b.addEventListener('click', ()=> printRequest(b.dataset.printReq)));
   $$('[data-ap-req]').forEach(b=> b.addEventListener('click', ()=> changeStatus([b.dataset.apReq],'APPROVED')));
-  $$('[data-rj-req]').forEach(b=> b.addEventListener('click', ()=> rejectFlow(b.dataset.rjReq)));
   $$('[data-del-req]').forEach(b=> b.addEventListener('click', async ()=>{
     const q = (S.cache.requests||[]).find(x=>x.ID===b.dataset.delReq) || {};
     const r = await confirmDel('ต้องการลบใบขอเบิก '+(q.DocNo||'')+' ใช่หรือไม่? (ระบบจะคืนสต็อกให้อัตโนมัติหากเคยอนุมัติ)');
@@ -3920,11 +3946,10 @@ async function viewTeacherDash(){
         </div>
       </div>
 
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
         ${statCardH('fa-file-lines','#0284c7','ใบขอเบิกทั้งหมด', nf(d.summary.totalRequests),'ใบ','ของฉัน')}
         ${statCardH('fa-circle-check','#26A69A','อนุมัติแล้ว', nf(d.counters.approved),'ใบ')}
         ${statCardH('fa-clock','#FFCA28','รออนุมัติ', nf(d.counters.pending),'ใบ')}
-        ${statCardH('fa-circle-xmark','#EF5350','ปฏิเสธ', nf(d.counters.rejected),'ใบ')}
       </div>
 
       <div class="grid lg:grid-cols-3 gap-5 mt-5">
@@ -3935,7 +3960,7 @@ async function viewTeacherDash(){
       <div class="mt-5">${cardWrap('ใบขอเบิกล่าสุด','fa-clock-rotate-left', myReqTable(d.recent, false))}</div>`;
 
     drawChart('tChItem','bar', d.chartByItem.map(x=>x.label), d.chartByItem.map(x=>x.value), {label:'จำนวนที่เบิก'});
-    drawChart('tChStatus','doughnut', d.chartStatus.map(x=>x.label), d.chartStatus.map(x=>x.value), { colors:['#26A69A','#FFCA28','#EF5350'] });
+    drawChart('tChStatus','doughnut', d.chartStatus.map(x=>x.label), d.chartStatus.map(x=>x.value), { colors:['#26A69A','#FFCA28'] });
   }catch(err){ c.innerHTML = emptyBox('โหลดข้อมูลไม่สำเร็จ: '+(err.message||err)); }
 }
 
@@ -5827,12 +5852,11 @@ async function viewPurchaseOrder(){
             <thead>
               <tr class="bg-slate-50 text-slate-600 text-xs">
                 <th class="px-2 py-3 text-center rounded-l-xl w-12">ที่</th>
+                <th class="px-2 py-3 text-left">รายการ</th>
                 <th class="px-2 py-3 text-center w-24">จำนวน</th>
                 <th class="px-2 py-3 text-center w-24">หน่วย</th>
-                <th class="px-2 py-3 text-left">รายการ</th>
                 <th class="px-2 py-3 text-center w-28">ราคา/หน่วย</th>
                 <th class="px-2 py-3 text-right w-32">จำนวนเงิน (บาท)</th>
-                <th class="px-2 py-3 text-left w-36">หมายเหตุ</th>
                 <th class="px-2 py-3 rounded-r-xl w-12"></th>
               </tr>
             </thead>
@@ -5841,7 +5865,7 @@ async function viewPurchaseOrder(){
               <tr class="bg-slate-50/80 font-bold text-slate-700">
                 <td colspan="5" class="px-3 py-3 text-right">รวม</td>
                 <td id="poTotal" class="px-2 py-3 text-right font-extrabold text-slate-900">0.00</td>
-                <td colspan="2"></td>
+                <td></td>
               </tr>
             </tfoot>
           </table>
@@ -5880,12 +5904,11 @@ async function viewPurchaseOrder(){
     $('#poBody').innerHTML = rows.map((r, i) => `
       <tr>
         <td class="px-2 py-2 text-center text-xs text-slate-500">${i + 1}</td>
-        <td class="px-2 py-2"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" inputmode="decimal" class="${cell} text-center" value="${esc(r.qty)}"></td>
-        <td class="px-2 py-2"><input data-i="${i}" data-f="unit" class="${cell} text-center" value="${esc(r.unit)}"></td>
-        <td class="px-2 py-2"><input data-i="${i}" data-f="name" class="${cell}" value="${esc(r.name)}"></td>
-        <td class="px-2 py-2"><input data-i="${i}" data-f="price" type="number" min="0" step="0.01" inputmode="decimal" class="${cell} text-right" value="${esc(r.price)}"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="name" class="${cell}" value="${esc(r.name)}" placeholder="ชื่อรายการ"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" inputmode="decimal" class="${cell} text-center font-bold" value="${esc(r.qty)}" placeholder="0"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="unit" class="${cell} text-center" value="${esc(r.unit)}" placeholder="หน่วย"></td>
+        <td class="px-2 py-2"><input data-i="${i}" data-f="price" type="number" min="0" step="0.01" inputmode="decimal" class="${cell} text-right" value="${esc(r.price)}" placeholder="0.00"></td>
         <td id="poAmt${i}" class="px-2 py-2 text-right font-bold text-slate-700">-</td>
-        <td class="px-2 py-2"><input data-i="${i}" data-f="note" class="${cell}" value="${esc(r.note)}"></td>
         <td class="px-2 py-2 text-center"><button type="button" data-del="${i}" class="w-11 h-11 rounded-xl text-rose2 hover:bg-rose2/10 transition" title="ลบแถว"><i class="fa-solid fa-trash-can"></i></button></td>
       </tr>`).join('');
     refreshTotals();
@@ -5902,15 +5925,15 @@ async function viewPurchaseOrder(){
     const b = e.target.closest('[data-del]');
     if(!b) return;
     rows.splice(Number(b.dataset.del), 1);
-    if(!rows.length) rows.push({ qty:'', unit:'', name:'', price:'', note:'' });
+    if(!rows.length) rows.push({ qty:'', unit:'', name:'', price:'' });
     renderRows();
   });
   $('#btnPoAddRow').addEventListener('click', () => {
-    rows.push({ qty:'', unit:'', name:'', price:'', note:'' });
+    rows.push({ qty:'', unit:'', name:'', price:'' });
     renderRows();
   });
   $('#btnPoClear').addEventListener('click', () => {
-    rows = Array.from({ length: 5 }, () => ({ qty:'', unit:'', name:'', price:'', note:'' }));
+    rows = Array.from({ length: 5 }, () => ({ qty:'', unit:'', name:'', price:'' }));
     renderRows();
   });
   $('#poDate').addEventListener('change', e => { $('#poDateTh').textContent = thaiDate(e.target.value); });
@@ -6286,7 +6309,7 @@ async function exportPurchaseOrderXlsx(d){
     },
     views: [{ showGridLines: false }]
   });
-  ws.columns = [{ width: 8 }, { width: 14 }, { width: 38 }, { width: 15 }, { width: 15 }, { width: 16 }];
+  ws.columns = [{ width: 8 }, { width: 44 }, { width: 16 }, { width: 16 }, { width: 18 }];
 
   const put = (r, c1, c2, value, opt = {}) => {
     if(c2 > c1) ws.mergeCells(r, c1, r, c2);
@@ -6297,19 +6320,19 @@ async function exportPurchaseOrderXlsx(d){
     return cellRef;
   };
 
-  put(1, 1, 6, 'ใบสั่งซื้อ', { size: 20, bold: true, align: 'center' });
+  put(1, 1, 5, 'ใบสั่งซื้อ', { size: 20, bold: true, align: 'center' });
   ws.getRow(1).height = 30;
   const noText = `ใบสั่งซื้อเลขที่ ${d.no || '..............'} / ${d.year || '..........'}`;
-  put(3, 1, 3, noText);
-  put(3, 4, 6, (S.settings && S.settings.SchoolName) || '', { align: 'right' });
-  put(4, 4, 6, poThaiLine('วันที่', d.date), { align: 'right', bold: true });
-  put(5, 1, 6, 'เรียน  ' + (d.to || ''), { bold: true });
+  put(3, 1, 2, noText);
+  put(3, 3, 5, (S.settings && S.settings.SchoolName) || '', { align: 'right' });
+  put(4, 3, 5, poThaiLine('วันที่', d.date), { align: 'right', bold: true });
+  put(5, 1, 5, 'เรียน  ' + (d.to || ''), { bold: true });
   const q = poThaiParts(d.quoteDate);
-  put(6, 1, 6, `     ตามใบเสนอราคาของท่านที่ ${d.quoteNo || '..............'}  ลงวันที่ ${q.d ? q.d + ' เดือน ' + q.m + ' พ.ศ. ' + q.y : '........ เดือน ................ พ.ศ. ........'}`);
-  put(7, 1, 6, 'ราคาขายสิ่งของดังรายการต่อไปนี้');
+  put(6, 1, 5, `     ตามใบเสนอราคาของท่านที่ ${d.quoteNo || '..............'}  ลงวันที่ ${q.d ? q.d + ' เดือน ' + q.m + ' พ.ศ. ' + q.y : '........ เดือน ................ พ.ศ. ........'}`);
+  put(7, 1, 5, 'ราคาขายสิ่งของดังรายการต่อไปนี้');
 
   const HEAD = 8;
-  ['ลำดับที่', 'จำนวนของ', 'รายการ', 'ราคาหน่วยละ', 'จำนวนเงิน (บาท)', 'หมายเหตุ'].forEach((h, i) => {
+  ['ลำดับที่', 'รายการ', 'จำนวนของ', 'ราคาหน่วยละ', 'จำนวนเงิน (บาท)'].forEach((h, i) => {
     const cellRef = ws.getCell(HEAD, i + 1);
     cellRef.value = h;
     cellRef.font = { name: FONT, size: 13, bold: true };
@@ -6326,11 +6349,10 @@ async function exportPurchaseOrderXlsx(d){
     const qty = r ? (String(r.unit || '').trim() ? `${Number(r.qty)} ${String(r.unit).trim()}` : Number(r.qty)) : '';
     const vals = [
       r ? i + 1 : '',
-      qty,
       r ? String(r.name).trim() : '',
+      qty,
       r && r.price !== '' ? Number(r.price) : '',
-      r && amount ? amount : '',
-      r ? String(r.note || '').trim() : ''
+      r && amount ? amount : ''
     ];
     vals.forEach((v, c) => {
       const cellRef = ws.getCell(rowNo, c + 1);
@@ -6339,25 +6361,22 @@ async function exportPurchaseOrderXlsx(d){
       cellRef.border = THIN_BORDER;
       cellRef.alignment = {
         vertical: 'middle',
-        horizontal: (c === 0 || c === 1) ? 'center' : (c === 3 || c === 4) ? 'right' : 'left',
+        horizontal: (c === 0 || c === 2) ? 'center' : (c === 3 || c === 4) ? 'right' : 'left',
         wrapText: true
       };
       if(c === 3 || c === 4) cellRef.numFmt = '#,##0.00';
     });
-    const lines = r ? Math.max(1, Math.ceil(String(r.name).length / 34), Math.ceil(String(r.note || '').length / 14)) : 1;
+    const lines = r ? Math.max(1, Math.ceil(String(r.name).length / 38)) : 1;
     ws.getRow(rowNo).height = 21 * lines;
   }
 
   const TOT = HEAD + bodyRows + 1;
-  for(let c = 1; c <= 6; c++){
+  for(let c = 1; c <= 5; c++){
     const cellRef = ws.getCell(TOT, c);
     cellRef.border = THIN_BORDER;
     cellRef.font = { name: FONT, size: 13, bold: true };
   }
-  const totLabel = ws.getCell(TOT, 3);
-  totLabel.value = 'รวม';
-  totLabel.font = { name: FONT, size: 13, bold: true, italic: true };
-  totLabel.alignment = { vertical: 'middle', horizontal: 'center' };
+  put(TOT, 1, 4, 'รวม', { bold: true, italic: true, align: 'center' });
   const totVal = ws.getCell(TOT, 5);
   totVal.value = poTotal(items);
   totVal.numFmt = '#,##0.00';
@@ -6365,15 +6384,15 @@ async function exportPurchaseOrderXlsx(d){
   ws.getRow(TOT).height = 24;
 
   const SIG = TOT + 2;
-  put(SIG, 1, 3, '(ลงชื่อ).......................................ผู้รับใบสั่งซื้อ', { align: 'center' });
-  put(SIG, 4, 6, '(ลงชื่อ)...........................ผู้ออกใบสั่งซื้อ', { align: 'center' });
-  put(SIG + 1, 1, 3, `( ${d.recvName || '.......................................'} )`, { align: 'center' });
-  put(SIG + 1, 4, 6, `( ${d.issName || '...........................'} )`, { align: 'center' });
-  put(SIG + 2, 1, 3, d.recvDate ? thaiDate(d.recvDate) : '........ / ........ / ........', { align: 'center' });
-  put(SIG + 2, 4, 6, `ตำแหน่ง ${d.issPos || '...........................'}`, { align: 'center' });
+  put(SIG, 1, 2, '(ลงชื่อ).......................................ผู้รับใบสั่งซื้อ', { align: 'center' });
+  put(SIG, 3, 5, '(ลงชื่อ)...........................ผู้ออกใบสั่งซื้อ', { align: 'center' });
+  put(SIG + 1, 1, 2, `( ${d.recvName || '.......................................'} )`, { align: 'center' });
+  put(SIG + 1, 3, 5, `( ${d.issName || '...........................'} )`, { align: 'center' });
+  put(SIG + 2, 1, 2, d.recvDate ? thaiDate(d.recvDate) : '........ / ........ / ........', { align: 'center' });
+  put(SIG + 2, 3, 5, `ตำแหน่ง ${d.issPos || '...........................'}`, { align: 'center' });
   [SIG, SIG + 1, SIG + 2].forEach(r => { ws.getRow(r).height = 26; });
 
-  ws.pageSetup.printArea = `A1:F${SIG + 2}`;
+  ws.pageSetup.printArea = `A1:E${SIG + 2}`;
   const safe = s => String(s || '').replace(/[\\/:*?"<>|]/g, '-');
   const fileNo = d.no ? safe(d.no) + (d.year ? '-' + safe(d.year) : '') : 'ร่าง';
   await saveExcelWorkbook(wb, `ใบสั่งซื้อ_${fileNo}_${todayYMD()}.xlsx`);
@@ -7086,10 +7105,9 @@ async function viewMyRequests(){
     const rj = list.filter(x=>String(x.Status).toUpperCase()==='REJECTED').length;
 
     c.innerHTML = `
-      <div class="grid grid-cols-3 gap-4 animate-fadeUp">
+      <div class="grid grid-cols-2 gap-4 animate-fadeUp">
         ${statCardH('fa-circle-check','#26A69A','อนุมัติแล้ว', nf(ap),'ใบ')}
         ${statCardH('fa-clock','#FFCA28','รออนุมัติ', nf(pd),'ใบ')}
-        ${statCardH('fa-circle-xmark','#EF5350','ปฏิเสธ', nf(rj),'ใบ')}
       </div>
       <div class="mt-5">${cardWrap('รายการขอเบิกของฉัน','fa-list-check', myReqTable(list, true, key), viewToggle(key))}</div>`;
 

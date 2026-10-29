@@ -259,7 +259,7 @@ describe('line flex', () => {
     expect(tgCalls()[0].body.text).toBe(newRequestText(REQ));
   });
 
-  it('approved & rejected: LINE gets a flex card, Telegram gets text; other statuses send nothing', async () => {
+  it('approved & rejected: LINE gets a flex card, Telegram gets text only on approved (reject telegram disabled); other statuses send nothing', async () => {
     await withLine();
     await notifyHooks.onStatusChange!(env as any, REQ, 'CANCELLED', '');
     expect(sent()).toHaveLength(0);
@@ -267,15 +267,13 @@ describe('line flex', () => {
     await notifyHooks.onStatusChange!(env as any, REQ, 'REJECTED', 'งบประมาณไม่เพียงพอ');
     expect(lineCalls()).toHaveLength(1);
     expect(cardText(lineCalls()[0].body.messages[0])).toContain('ไม่อนุมัติใบขอเบิกพัสดุ');
-    expect(tgCalls()).toHaveLength(1);
-    expect(tgCalls()[0].body.text).toContain('ไม่อนุมัติใบขอเบิกพัสดุ');
-    expect(tgCalls()[0].body.text).toContain('งบประมาณไม่เพียงพอ');
+    expect(tgCalls()).toHaveLength(0);
 
     await notifyHooks.onStatusChange!(env as any, REQ, 'APPROVED', '');
     expect(lineCalls()).toHaveLength(2);
     expect(cardText(lineCalls()[1].body.messages[0])).toContain('อนุมัติใบขอเบิกพัสดุแล้ว');
-    expect(tgCalls()).toHaveLength(2);
-    expect(tgCalls()[1].body.text).toBe(approvedRequestText(REQ));
+    expect(tgCalls()).toHaveLength(1);
+    expect(tgCalls()[0].body.text).toBe(approvedRequestText(REQ));
   });
 
   it('flex rejected by LINE: falls back to the original text message', async () => {
@@ -487,7 +485,7 @@ describe('request notifications', () => {
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled());
   });
 
-  it('status change: rejection sends telegram message with reason', async () => {
+  it('status change: rejection does not send telegram message', async () => {
     await setSettings();
     await addMat('M1', 'A1', 10, 1);
     await create();
@@ -495,10 +493,8 @@ describe('request notifications', () => {
     await vi.waitFor(() => expect(sent()).toHaveLength(1));
     const res = await rpc('apiUpdateRequestStatus', [[{ ID: r.id, Status: 'REJECTED', RejectReason: 'ไม่อนุมัติเนื่องจากงบไม่พอ' }]]);
     expect(res.ok).toBe(true);
-    await vi.waitFor(() => expect(sent()).toHaveLength(2));
-    const tg = sent()[1];
-    expect(tg.body.text).toContain('❌ <b>ไม่อนุมัติใบขอเบิกพัสดุ</b>');
-    expect(tg.body.text).toContain('ไม่อนุมัติเนื่องจากงบไม่พอ');
+    // Telegram reject notification is disabled
+    expect(sent()).toHaveLength(1);
   });
 
   it('approval sends a short telegram and LINE message', async () => {

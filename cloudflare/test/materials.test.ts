@@ -49,14 +49,13 @@ const create = (over: Record<string, unknown> = {}) =>
   ]);
 
 describe('materials', () => {
-  it('create material logs opening IN', async () => {
+  it('create material with opening stock does not log duplicate purchase movement', async () => {
     expect((await create()).ok).toBe(true);
     const [m] = await rows('SELECT * FROM materials');
     expect(m.opening_qty).toBe(5);
     expect(m.material_type).toBe('เครื่องเขียน');
     const mv = await rows('SELECT * FROM stock_movements');
-    expect(mv).toHaveLength(1);
-    expect(mv[0]).toMatchObject({ type: 'IN', qty: 5, before_qty: 0, after_qty: 5, note: 'จัดซื้อ', actor: 'off1', material_id: m.id });
+    expect(mv).toHaveLength(0);
     expect((await rows("SELECT * FROM audit_log WHERE action='CREATE' AND entity='Material'")).length).toBe(1);
   });
 
@@ -112,7 +111,7 @@ describe('materials', () => {
   });
 
   it('actor comes from session', async () => {
-    await create({ actor: 'hacker' });
+    await create({ OrderQty: 5, actor: 'hacker' });
     expect((await rows('SELECT actor FROM stock_movements'))[0].actor).toBe('off1');
     expect((await rows('SELECT actor FROM audit_log WHERE entity = ?', 'Material'))[0].actor).toBe('off1');
   });
@@ -133,7 +132,7 @@ describe('materials', () => {
   });
 
   it('deleting a material keeps history', async () => {
-    await create();
+    await create({ OrderQty: 5 });
     const [m] = await rows('SELECT id FROM materials');
     const r = await rpc('apiDeleteMaterials', [[m.id]]);
     expect(r).toEqual({ ok: true, message: 'ลบข้อมูลพัสดุเรียบร้อยแล้ว' });
