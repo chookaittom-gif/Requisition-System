@@ -23,6 +23,13 @@
    - การคำนวณมูลค่าคงเหลือคงคลังทุกหน้า (แดชบอร์ด, บัญชีพัสดุ, จัดการพัสดุ, ทะเบียนพัสดุคงเหลือ) ต้องอิงผลรวมมูลค่าตามล็อตจริง (`material_lots`) เสมอ
    - การคำนวณสถานะเตือนใกล้หมด/หมด ต้องอิงสต็อกคงเหลือปัจจุบัน (`StockQty <= MinQty`) ให้สอดคล้องกันทุกมุมมอง
 
+5. **Data & Schema Migrations:**
+   - ห้ามถอด synthetic fallback หรือบังคับใช้ relational query เข้มงวดกับข้อมูลประวัติศาสตร์โดยไม่มี script backfill ข้อมูลเก่าล่วงหน้า เพื่อป้องกันยอดทางบัญชี (เช่น ยอดยกมา vs ยอดรับ) คลาดเคลื่อน
+
+6. **Windows CLI & Tooling:**
+   - รันคำสั่ง CLI อัตโนมัติด้วย flag ยืนยัน (`--yes`, `-y`) เสมอเพื่อป้องกันคำสั่งรอ Interactive TTY
+   - หลีกเลี่ยงการใช้ RTK กับ Unix-native binary alias (`ls`, `find`) ที่ไม่มีใน Windows PATH ให้ใช้ PowerShell cmdlet หรือ RTK subcommands ที่รองรับแทน (`rtk git`, `rtk rg`, `rtk test`)
+
 ## Project Context
 - **เทคโนโลยี:** Cloudflare Workers (TypeScript, RPC), Cloudflare D1 (SQLite), Single-Page Frontend (Vanilla JS, Tailwind), Google Apps Script (Legacy/Sync)
 - **ทางเข้าหลัก:** `cloudflare/public/index.html`, Backend `cloudflare/src/api/*.ts`

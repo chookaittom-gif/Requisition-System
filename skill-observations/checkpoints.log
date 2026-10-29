@@ -1,2 +1,3 @@
 # Checkpoints log
 2026-10-20: graphify AST knowledge graph built (322 nodes, 649 edges, 23 communities) with 0 token spend
+2026-10-29: task-observer review completed — actioned 0002 (schema backfill migration) and 0003 (Windows CLI & RTK fallbacks) into AGENTS.md rules 5 & 6.

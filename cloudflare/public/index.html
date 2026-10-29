@@ -3976,9 +3976,13 @@ async function exportCSV(type, filter){
 async function viewAuditLog(){
   const c = $('#content');
   c.innerHTML = skTable(8);
-  const r = await api('apiGetAuditLog', {});
+  const [r, ur] = await Promise.all([
+    api('apiGetAuditLog', {}),
+    S.cache.users ? Promise.resolve({ ok: true, data: S.cache.users }) : api('apiGetUsers')
+  ]);
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   S.cache.audit = r.data || [];
+  if(ur && ur.ok && ur.data) S.cache.users = ur.data;
 
   const actionBadge = (a)=>{
     const map = {
@@ -3989,6 +3993,39 @@ async function viewAuditLog(){
     };
     const cls = map[a] || 'bg-slate-100 text-slate-600';
     return `<span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${cls}">${esc(a)}</span>`;
+  };
+
+  const getActorRole = (actor, detail)=>{
+    if(!actor || actor === '-') return '';
+    const a = String(actor).toLowerCase();
+    const user = (S.cache.users || []).find(u =>
+      String(u.Username||'').toLowerCase() === a ||
+      String(u.FullName||'').toLowerCase() === a
+    );
+    if(user && user.Role) return String(user.Role).toLowerCase();
+    const m = String(detail||'').match(/\((admin|officer|staff|user)\)/i);
+    if(m) return m[1].toLowerCase();
+    if(a.includes('admin') || a === 'adm1') return 'admin';
+    return '';
+  };
+
+  const actorBadge = (actor, detail)=>{
+    if(!actor || actor === '-') return '<span class="text-slate-400">-</span>';
+    const role = getActorRole(actor, detail);
+    if(!role) return `<span class="text-slate-700">${esc(actor)}</span>`;
+    const isAdm = role === 'admin';
+    const isOff = role === 'officer' || role === 'staff';
+    const roleLabel = isAdm ? 'ผู้ดูแลระบบ' : (isOff ? 'เจ้าหน้าที่' : 'ผู้ใช้');
+    const roleCls = isAdm
+      ? 'bg-purple-50 text-purple-700 border border-purple-200/80'
+      : (isOff ? 'bg-sky-50 text-sky-700 border border-sky-200/80' : 'bg-slate-50 text-slate-600 border border-slate-200/80');
+    const icon = isAdm ? '<i class="fa-solid fa-shield-halved text-[9px] mr-1"></i>' : (isOff ? '<i class="fa-solid fa-user-tie text-[9px] mr-1"></i>' : '');
+    return `<div class="inline-flex items-center gap-1.5 flex-wrap">
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${roleCls}">
+        ${icon}${esc(roleLabel)}
+      </span>
+      <span class="font-medium text-slate-700">${esc(actor)}</span>
+    </div>`;
   };
 
   const renderRows = (list)=>{
@@ -4010,7 +4047,7 @@ async function viewAuditLog(){
             <td class="px-3 py-3 font-semibold text-slate-700">${esc(x.Entity||'-')}</td>
             <td class="px-3 py-3 text-xs text-slate-500">${esc(x.EntityID||'-')}</td>
             <td class="px-3 py-3 text-xs text-slate-600">${esc(x.Detail||'-')}</td>
-            <td class="px-3 py-3 text-xs text-slate-500">${esc(x.Actor||'-')}</td>
+            <td class="px-3 py-3 text-xs">${actorBadge(x.Actor, x.Detail)}</td>
           </tr>`).join('')}
         </tbody>
       </table></div>`;
@@ -4019,7 +4056,7 @@ async function viewAuditLog(){
   c.innerHTML = `<div class="mt-1">${cardWrap('Audit Log — บันทึกการใช้งานระบบ','fa-clipboard-list', `
     <div class="mb-4 flex flex-wrap gap-3 items-end">
       <div class="flex-1 min-w-[180px]">
-        <input id="audQ" placeholder="ค้นหารายละเอียด / ผู้ทำ / Entity..." class="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm">
+        <input id="audQ" placeholder="ค้นหารายละเอียด / ผู้ทำ / Entity / สิทธิ์..." class="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm">
       </div>
       <select id="audAction" class="px-4 py-2.5 rounded-2xl border border-slate-200 text-sm">
         <option value="">ทุกการกระทำ</option>
@@ -4043,11 +4080,15 @@ async function viewAuditLog(){
     const from = $('#audFrom').value;
     const to = $('#audTo').value;
     let list = S.cache.audit || [];
-    if(q) list = list.filter(x =>
-      String(x.Detail||'').toLowerCase().indexOf(q)>=0 ||
-      String(x.Actor||'').toLowerCase().indexOf(q)>=0 ||
-      String(x.Entity||'').toLowerCase().indexOf(q)>=0
-    );
+    if(q) list = list.filter(x => {
+      const role = getActorRole(x.Actor, x.Detail);
+      const roleTh = role === 'admin' ? 'ผู้ดูแลระบบ' : (role === 'officer' || role === 'staff' ? 'เจ้าหน้าที่' : 'ผู้ใช้');
+      return String(x.Detail||'').toLowerCase().indexOf(q)>=0 ||
+        String(x.Actor||'').toLowerCase().indexOf(q)>=0 ||
+        String(x.Entity||'').toLowerCase().indexOf(q)>=0 ||
+        role.indexOf(q)>=0 ||
+        roleTh.indexOf(q)>=0;
+    });
     if(action) list = list.filter(x => x.Action === action);
     if(from) list = list.filter(x => String(x.CreatedAt).substring(0,10) >= from);
     if(to) list = list.filter(x => String(x.CreatedAt).substring(0,10) <= to);

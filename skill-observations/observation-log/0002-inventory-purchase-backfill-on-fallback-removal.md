@@ -1,18 +1,18 @@
 ---
 id: 2
 title: "Fiscal year inventory reports require purchase row backfilling when removing synthetic order fallbacks"
-status: open
+status: actioned
 type: internal
 skill: [database, gas-best-practices]
 proposes_skill: []
-target_file: ["cloudflare/src/api/reports.ts", "cloudflare/src/api/materials.ts"]
+target_file: [AGENTS.md, cloudflare/src/api/reports.ts, cloudflare/src/api/materials.ts]
 siblings_checked: "none"
 area: "data integrity & accounting reconciliations"
 date: 2026-10-19
 session_context: "Reconciling opening balances vs purchases receipts in Cloudflare Workers and D1 database"
 parked_until: ""
-resolved: ""
-resolution: ""
+resolved: "2026-10-29"
+resolution: "Documented Data & Schema Migrations rule in AGENTS.md rule 5 to enforce backfill before removing synthetic fallbacks"
 reference: ""
 commands_verified: "run: npm test (190 passed), npx wrangler d1 execute ims_db --remote"
 ---

@@ -23,3 +23,5 @@ node_modules/
 .wrangler/
 .dev.vars
 .claude/settings.local.json
+
+repomix-output.*

@@ -1,9 +1,9 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-28)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-29)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** Commit `8af584a` (GitHub Run `40680835670`) — Live at https://supply-requisition.chookait-tom.workers.dev
+**Latest Deployment:** Live at https://supply-requisition.chookait-tom.workers.dev
 
 ---
 
@@ -21,7 +21,35 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-28 Sync Inventory Values & Rules Optimization)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-29 Audit Log Actor Role Badge & Task Observer Review)
+
+### 1. feat(ui): Audit Log Actor Role Badge
+- **ปัญหาเดิม:** ในตาราง Audit Log เมื่อผู้ดูแลระบบ (Admin) เข้าสู่ระบบ คอลัมน์ `Entity` แสดงเป็น `User` ทำให้เกิดความสับสนว่าเป็นผู้ใช้ทั่วไปเข้าใช้งานหรือไม่
+- **การออกแบบ & แก้ไข (ตามผลสรุป /grill-me และ /oil-ui-pro แนวทางที่ 1):**
+  - คงค่า `Entity` เป็น `User` ในระดับ Database ตาม Domain Model สากล เพื่อป้องกันผลกระทบต่อ API Contract และ Test assertion
+  - ใน [cloudflare/public/index.html](file:///d:/Webapp/ระบบเบิกจ่ายพัสดุ/cloudflare/public/index.html) (`viewAuditLog`):
+    - ดึงรายชื่อผู้ใช้ `apiGetUsers` ควบคู่กัน (และแคชไว้ใน `S.cache.users`)
+    - สร้าง `getActorRole` และ `actorBadge` เพื่อแสดง Badge สิทธิ์กำกับไว้ที่คอลัมน์ **ผู้ทำ (Actor)** ชัดเจน:
+      - ผู้ดูแลระบบ: Badge สีม่วง `[ผู้ดูแลระบบ]` พร้อมไอคอนโล่
+      - เจ้าหน้าที่: Badge สีฟ้า `[เจ้าหน้าที่]`
+      - ผู้ใช้ทั่วไป: Badge สีเทา `[ผู้ใช้]`
+    - ปรับปรุงการค้นหา (`filterAud`) ให้สามารถพิมพ์ `admin`, `ผู้ดูแลระบบ`, หรือ `เจ้าหน้าที่` เพื่อกรองเฉพาะกิจกรรมตามสิทธิ์ได้ทันที
+- **ผลการทดสอบ:** Vitest 197 ผ่านครบ 100%
+
+### 2. chore(tooling & governance): Task Observer Review, Graft & Repomix Setup
+- **Graft Context Graph:** ติดตั้งและสร้างกราฟความสัมพันธ์โค้ดเบส 288 โหนด 761 edges พร้อมตรวจสอบความสดใหม่ (`graft check: OK`)
+- **Token Management:**
+  - สร้าง [repomix.config.json](file:///d:/Webapp/ระบบเบิกจ่ายพัสดุ/repomix.config.json) ตัดคอมเมนต์และบรรทัดว่างสำหรับแพ็คโค้ด
+  - เปิดใช้งาน RTK Proxy และ Caveman Lite mode เพื่อประหยัด Output Tokens
+- **Task Observer Governance:**
+  - ทบทวน observation log ค้างและปรับสถานะเป็น `actioned` 2 รายการ:
+    - 0002 (Schema Migration Backfill Rule) -> บันทึกเป็น Rule 5 ใน [AGENTS.md](file:///d:/Webapp/ระบบเบิกจ่ายพัสดุ/AGENTS.md)
+    - 0003 (Windows CLI & RTK Fallback Rule) -> บันทึกเป็น Rule 6 ใน [AGENTS.md](file:///d:/Webapp/ระบบเบิกจ่ายพัสดุ/AGENTS.md)
+  - อัปเดต `skill-observations/last-review-date.txt` เป็น `2026-10-29` และบันทึก `checkpoints.log`
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-10-28 Sync Inventory Values & Rules Optimization)
 
 ### 1. fix(inventory): ซิงค์ตัวเลขคงคลังและแจ้งเตือนพัสดุใกล้หมดให้ตรงกันทั้ง 4 แท็บ
 - **ปัญหาเดิม:**

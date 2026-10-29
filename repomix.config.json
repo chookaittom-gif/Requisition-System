@@ -1,0 +1,20 @@
+{
+  "$schema": "https://partykit.github.io/repomix/schema.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "removeComments": true,
+    "removeEmptyLines": true,
+    "topFilesLength": 5
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "graft/**",
+      "skill-observations/**",
+      "docs/superpowers/**"
+    ]
+  }
+}

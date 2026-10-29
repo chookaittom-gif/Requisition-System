@@ -1,18 +1,18 @@
 ---
 id: 3
 title: "Headless CLI execution requires auto-confirm flags and Windows-aware RTK binary routing"
-status: open
+status: actioned
 type: open-source
 skill: [rtk, graft]
 proposes_skill: []
-target_file: []
+target_file: [AGENTS.md]
 siblings_checked: "none"
 area: "tool execution & cross-platform agent workflows"
 date: 2026-10-20
 session_context: "Executing graft init and rtk file exploration in Windows subshell environment"
 parked_until: ""
-resolved: ""
-resolution: ""
+resolved: "2026-10-29"
+resolution: "Documented Windows CLI & Tooling rule in AGENTS.md rule 6"
 reference: ""
 commands_verified: "run: rtk graft init --yes (passed), rtk ls (failed: no ls in PATH)"
 ---
