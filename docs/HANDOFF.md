@@ -3,7 +3,7 @@
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** Live at https://supply-requisition.chookait-tom.workers.dev (Version: `70db9b4d-107e-4344-b27d-d45307fb788f`)
+**Latest Deployment:** Live at https://supply-requisition.chookait-tom.workers.dev (Version: `4273f8c9-dbec-4dac-bbb5-79c83f0517fb`)
 
 ---
 
@@ -21,9 +21,16 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Draft Auto-Save 30m & Partial Request Approval)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Pagination & Partial Request Approval)
 
-### 1. feat(frontend): Auto-save แบบฟอร์มขอเบิก 30 นาที (`req_form_draft_v1`)
+### 1. feat(ui): Pagination 20 แถวต่อหน้าและ Print Page Breaks สำหรับบัญชีพัสดุ (`viewAccount`)
+- ปรับปรุงตารางบัญชีพัสดุ (ทะเบียนคุมวัสดุ) ให้แบ่งหน้าเริ่มต้นที่ **20 แถวต่อหน้า** สบายตา ไม่ทำให้ Sidebar ยาวเกินไป
+- เพิ่ม Dropdown เลือกขนาดหน้า: `[20 แถว | 25 แถว | 50 แถว | ทั้งหมด]`
+- เพิ่มแถบควบคุมเลขหน้าด้านล่าง `[ก่อนหน้า] [1] [2] [3] [ถัดไป]` พร้อมแสดงข้อความสรุปช่วงรายการที่แสดง
+- คงแถบสรุปยอดรวมทั้งสิ้น (Grand Total) ในส่วนท้ายตาราง (`tfoot`) แสดงยอดรวมจริงของทุกรายการตรงกับการ์ดสรุปด้านบนเสมอ
+- ปรับปรุงการสั่งพิมพ์รายงาน (`printAccount`): แบ่งหน้า A4 แนวนอนอัตโนมัติหน้าละ 20 แถว พร้อมหัวตารางทุกล็อต และแสดงยอดรวมพร้อมบล็อกลายเซ็นในหน้าสุดท้าย ป้องกันตารางล้นหรือตัดกลางแถว
+
+### 2. feat(frontend): Auto-save แบบฟอร์มขอเบิก 30 นาที (`req_form_draft_v1`)
 - บันทึกข้อมูลร่างฟอร์มลง `localStorage` ทันทีเมื่อมีการพิมพ์หรือแก้ไขรายการ (`saveReqDraft()`) รองรับทั้งฟิลด์ข้อความ วันที่ ตำแหน่ง ผู้ขอเบิก แผนก วัตถุประสงค์ หมายเหตุ และรายการพัสดุ
 - กำหนดเวลาหมดอายุ 30 นาที (`REQ_DRAFT_TTL_MS = 30 * 60 * 1000`)
 - เมื่อเปิดฟอร์มหรือรีเฟรช/กลับมาที่หน้าเว็บ หากมีร่างที่ยังไม่หมดอายุ ระบบจะโหลดข้อมูลกลับมาให้อัตโนมัติ พร้อมแสดงแถบแจ้งเตือนสีส้มอ่อนและปุ่ม "ล้างแบบร่าง" (`#btnClearReqDraft`)

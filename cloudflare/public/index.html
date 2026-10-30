@@ -4011,9 +4011,45 @@ async function viewAccount(){
   c.innerHTML = skCards(4) + skTable(10);
   const currentFY = currentFiscalYear();
 
+  S.accountPage = S.accountPage || 1;
+  S.accountPageSize = S.accountPageSize || 20;
+
   const renderAccount = (r)=>{
     const s = r.summary, t = r.total;
     const rangeText = thaiDateRange(r.filter);
+    const allRows = r.data || [];
+    const totalItems = allRows.length;
+    const pageSize = S.accountPageSize === 'all' ? totalItems : Number(S.accountPageSize || 20);
+    const totalPages = Math.max(1, Math.ceil(totalItems / (pageSize || 1)));
+
+    if(S.accountPage > totalPages) S.accountPage = totalPages;
+    if(S.accountPage < 1) S.accountPage = 1;
+
+    const startIdx = S.accountPageSize === 'all' ? 0 : (S.accountPage - 1) * pageSize;
+    const endIdx = S.accountPageSize === 'all' ? totalItems : Math.min(startIdx + pageSize, totalItems);
+    const pageRows = allRows.slice(startIdx, endIdx);
+
+    const renderPagePills = () => {
+      if(totalPages <= 1) return '';
+      let pages = [];
+      if(totalPages <= 7){
+        for(let p = 1; p <= totalPages; p++) pages.push(p);
+      } else {
+        const cur = S.accountPage;
+        if(cur <= 4){
+          pages = [1, 2, 3, 4, 5, '...', totalPages];
+        } else if(cur >= totalPages - 3){
+          pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+        } else {
+          pages = [1, '...', cur - 1, cur, cur + 1, '...', totalPages];
+        }
+      }
+      return pages.map(p => {
+        if(p === '...') return '<span class="px-1.5 py-1 text-slate-400 font-bold">…</span>';
+        const active = p === S.accountPage;
+        return `<button type="button" data-acc-page="${p}" class="min-w-[34px] h-[34px] px-2 rounded-xl font-bold text-xs transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}">${p}</button>`;
+      }).join('');
+    };
 
     c.innerHTML = `
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeUp">
@@ -4053,7 +4089,20 @@ async function viewAccount(){
             <i class="fa-solid fa-print"></i> พิมพ์
           </button>
         </div>
-        <p class="text-xs text-slate-500 mb-3">แสดงข้อมูล: <b>${esc(rangeText)}</b> · ณ วันที่ ${thaiDate(r.asOf)}</p>
+
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <p>แสดงข้อมูล: <b>${esc(rangeText)}</b> · ณ วันที่ ${thaiDate(r.asOf)}</p>
+          <div class="flex items-center gap-2">
+            <label for="accPageSize" class="font-semibold text-slate-600">แสดงต่อหน้า:</label>
+            <select id="accPageSize" class="px-2.5 py-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 outline-none text-xs focus:border-brand-500 transition">
+              <option value="20" ${S.accountPageSize===20?'selected':''}>20 แถว</option>
+              <option value="25" ${S.accountPageSize===25?'selected':''}>25 แถว</option>
+              <option value="50" ${S.accountPageSize===50?'selected':''}>50 แถว</option>
+              <option value="all" ${S.accountPageSize==='all'?'selected':''}>ทั้งหมด (${totalItems})</option>
+            </select>
+          </div>
+        </div>
+
         <div class="overflow-x-auto -mx-5 px-5">
           <table class="w-full text-sm tbl min-w-[1100px]">
             <thead>
@@ -4073,9 +4122,9 @@ async function viewAccount(){
                 <th class="px-2 py-2 text-center rounded-r-xl">สถานะ</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">${r.data.map((x, idx)=>`
+            <tbody class="divide-y divide-slate-100">${pageRows.map((x, idx)=>`
               <tr class="hover:bg-brand-50/40 transition">
-                <td class="px-2 py-2 text-center text-slate-500 font-medium">${idx + 1}</td>
+                <td class="px-2 py-2 text-center text-slate-500 font-medium">${startIdx + idx + 1}</td>
                 <td class="px-2 py-2 font-bold text-brand-600">${esc(x.Code)}</td>
                 <td class="px-2 py-2 font-semibold text-slate-700">${esc(x.Name)}</td>
                 <td class="px-2 py-2 text-center text-xs text-slate-500">${esc(x.Category||'-')}</td>
@@ -4106,7 +4155,59 @@ async function viewAccount(){
             </tfoot>
           </table>
         </div>
+
+        ${totalPages > 1 ? `
+          <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+            <div class="font-medium text-slate-500">
+              แสดงรายการที่ <b>${totalItems ? startIdx + 1 : 0}</b> ถึง <b>${endIdx}</b> จากทั้งหมด <b>${nf(totalItems)}</b> รายการ
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap justify-center">
+              <button type="button" id="btnAccPrev" class="px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition" ${S.accountPage<=1?'disabled':''}>
+                <i class="fa-solid fa-chevron-left mr-1"></i> ก่อนหน้า
+              </button>
+              <div class="flex items-center gap-1">
+                ${renderPagePills()}
+              </div>
+              <button type="button" id="btnAccNext" class="px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition" ${S.accountPage>=totalPages?'disabled':''}>
+                ถัดไป <i class="fa-solid fa-chevron-right ml-1"></i>
+              </button>
+            </div>
+          </div>
+        ` : ''}
       `)}</div>`;
+
+    S.cache.accountLast = r;
+
+    $('#accPageSize')?.addEventListener('change', (e)=>{
+      const v = e.target.value;
+      S.accountPageSize = v === 'all' ? 'all' : parseInt(v, 10);
+      S.accountPage = 1;
+      renderAccount(r);
+    });
+
+    $('#btnAccPrev')?.addEventListener('click', ()=>{
+      if(S.accountPage > 1){
+        S.accountPage--;
+        renderAccount(r);
+      }
+    });
+
+    $('#btnAccNext')?.addEventListener('click', ()=>{
+      if(S.accountPage < totalPages){
+        S.accountPage++;
+        renderAccount(r);
+      }
+    });
+
+    $$('[data-acc-page]').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const p = parseInt(btn.dataset.accPage, 10);
+        if(p && p !== S.accountPage){
+          S.accountPage = p;
+          renderAccount(r);
+        }
+      });
+    });
 
     S.cache.accountLast = r;
 
@@ -7680,46 +7781,66 @@ function printLowStock(rows){
 function printAccount(r){
   const t = r.total;
   const rangeInfo = thaiDateRange(r.filter);
-  doPrint(`<div>
-    ${printHeader('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)', true)}
-    <div style="font-size:12px;text-align:right;margin-bottom:6px">${rangeInfo !== 'ทั้งหมด' ? rangeInfo + ' • ' : ''}ข้อมูล ณ วันที่ ${thaiDate(r.asOf)}</div>
-    <table class="acct-table">
-      <colgroup>
-        <col style="width:4%"><col style="width:7%"><col style="width:16%">
-        <col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
-        <col style="width:6%"><col style="width:7%"><col style="width:8%">
-        <col style="width:6%"><col style="width:7%"><col style="width:8%">
-        <col style="width:6%"><col style="width:8%">
-      </colgroup>
-      <thead>
-        <tr style="background:#f1f1f1">
-          <th rowspan="2" style="width:4%">ที่</th><th rowspan="2" style="width:7%">รหัส</th><th rowspan="2">รายการ</th>
-          <th colspan="4">วัสดุคงเหลือยกมา</th><th colspan="3">จัดซื้อ</th><th colspan="3">วัสดุใช้ไป</th><th colspan="2">วัสดุคงเหลือ</th>
-        </tr>
-        <tr style="background:#f7f7f7">
-          <th>ยอดยกมา</th><th>หน่วยนับ</th><th>ราคา/หน่วย</th><th>รวมเงิน</th>
-          <th>จำนวน</th><th>ราคา/หน่วย</th><th>รวมเงิน</th>
-          <th>จำนวน</th><th>ราคา/หน่วย</th><th>รวมเงิน</th>
-          <th>จำนวน</th><th>รวมเงิน</th>
-        </tr>
-      </thead>
-      <tbody>${r.data.map((x, idx)=>`<tr>
-        <td style="text-align:center">${idx + 1}</td><td style="text-align:center">${esc(x.Code)}</td><td>${esc(x.Name)}</td>
-        <td style="text-align:center">${nf(x.OpeningQty)}</td><td style="text-align:center">${esc(x.Unit)}</td>
-        <td style="text-align:right">${money(x.UnitPrice)}</td><td style="text-align:right">${money(x.OpeningAmount)}</td>
-        <td style="text-align:center">${nf(x.PurchaseQty)}</td><td style="text-align:right">${money(x.PurchasePrice)}</td><td style="text-align:right">${money(x.PurchaseAmount)}</td>
-        <td style="text-align:center">${nf(x.UsedQty)}</td><td style="text-align:right">${money(x.UsedPrice)}</td><td style="text-align:right">${money(x.UsedAmount)}</td>
-        <td style="text-align:center">${nf(x.RemainQty)}</td><td style="text-align:right">${money(x.RemainAmount)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr style="background:#f1f1f1;font-weight:700">
-        <td colspan="3" style="text-align:center">รวมทั้งสิ้น</td>
-        <td style="text-align:center">${nf(t.OpeningQty)}</td><td></td><td></td><td style="text-align:right">${money(t.OpeningAmount)}</td>
-        <td style="text-align:center">${nf(t.PurchaseQty)}</td><td></td><td style="text-align:right">${money(t.PurchaseAmount)}</td>
-        <td style="text-align:center">${nf(t.UsedQty)}</td><td></td><td style="text-align:right">${money(t.UsedAmount)}</td>
-        <td style="text-align:center">${nf(t.RemainQty)}</td><td style="text-align:right">${money(t.RemainAmount)}</td></tr></tfoot>
-    </table>
-    <div style="margin-top:30px;font-size:13px;text-align:right">ลงชื่อ.................................................เจ้าหน้าที่พัสดุ<br><span style="margin-right:30px">(.................................................)</span></div>
-    <div style="margin-top:14px;font-size:11px;text-align:right;color:#555">พิมพ์เมื่อ ${thaiDate(todayYMD())}</div>
-  </div>`, true);
+  const rows = r.data || [];
+  const rowsPerPage = 20; // 20 แถวต่อหน้า
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+
+  const pagesHtml = [];
+  for(let page = 1; page <= totalPages; page++){
+    const startIdx = (page - 1) * rowsPerPage;
+    const pageRows = rows.slice(startIdx, startIdx + rowsPerPage);
+    const isLastPage = page === totalPages;
+
+    pagesHtml.push(`
+      <div class="print-page" style="${isLastPage ? '' : 'page-break-after:always;'}">
+        ${printHeader('บัญชีพัสดุ (ทะเบียนคุมวัสดุ)', true)}
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:6px">
+          <div>${rangeInfo !== 'ทั้งหมด' ? 'ช่วงเวลา: ' + rangeInfo : ''}</div>
+          <div>ข้อมูล ณ วันที่ ${thaiDate(r.asOf)} • หน้า ${page} / ${totalPages}</div>
+        </div>
+        <table class="acct-table">
+          <colgroup>
+            <col style="width:4%"><col style="width:7%"><col style="width:16%">
+            <col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
+            <col style="width:6%"><col style="width:7%"><col style="width:8%">
+            <col style="width:6%"><col style="width:7%"><col style="width:8%">
+            <col style="width:6%"><col style="width:8%">
+          </colgroup>
+          <thead>
+            <tr style="background:#f1f1f1">
+              <th rowspan="2" style="width:4%">ที่</th><th rowspan="2" style="width:7%">รหัส</th><th rowspan="2">รายการ</th>
+              <th colspan="4">วัสดุคงเหลือยกมา</th><th colspan="3">จัดซื้อ</th><th colspan="3">วัสดุใช้ไป</th><th colspan="2">วัสดุคงเหลือ</th>
+            </tr>
+            <tr style="background:#f7f7f7">
+              <th>ยอดยกมา</th><th>หน่วยนับ</th><th>ราคา/หน่วย</th><th>รวมเงิน</th>
+              <th>จำนวน</th><th>ราคา/หน่วย</th><th>รวมเงิน</th>
+              <th>จำนวน</th><th>ราคา/หน่วย</th><th>รวมเงิน</th>
+              <th>จำนวน</th><th>รวมเงิน</th>
+            </tr>
+          </thead>
+          <tbody>${pageRows.map((x, idx)=>`<tr>
+            <td style="text-align:center">${startIdx + idx + 1}</td><td style="text-align:center">${esc(x.Code)}</td><td>${esc(x.Name)}</td>
+            <td style="text-align:center">${nf(x.OpeningQty)}</td><td style="text-align:center">${esc(x.Unit)}</td>
+            <td style="text-align:right">${money(x.UnitPrice)}</td><td style="text-align:right">${money(x.OpeningAmount)}</td>
+            <td style="text-align:center">${nf(x.PurchaseQty)}</td><td style="text-align:right">${money(x.PurchasePrice)}</td><td style="text-align:right">${money(x.PurchaseAmount)}</td>
+            <td style="text-align:center">${nf(x.UsedQty)}</td><td style="text-align:right">${money(x.UsedPrice)}</td><td style="text-align:right">${money(x.UsedAmount)}</td>
+            <td style="text-align:center">${nf(x.RemainQty)}</td><td style="text-align:right">${money(x.RemainAmount)}</td></tr>`).join('')}</tbody>
+          ${isLastPage ? `<tfoot><tr style="background:#f1f1f1;font-weight:700">
+            <td colspan="3" style="text-align:center">รวมทั้งสิ้น</td>
+            <td style="text-align:center">${nf(t.OpeningQty)}</td><td></td><td></td><td style="text-align:right">${money(t.OpeningAmount)}</td>
+            <td style="text-align:center">${nf(t.PurchaseQty)}</td><td></td><td style="text-align:right">${money(t.PurchaseAmount)}</td>
+            <td style="text-align:center">${nf(t.UsedQty)}</td><td></td><td style="text-align:right">${money(t.UsedAmount)}</td>
+            <td style="text-align:center">${nf(t.RemainQty)}</td><td style="text-align:right">${money(t.RemainAmount)}</td></tr></tfoot>` : ''}
+        </table>
+        ${isLastPage ? `
+          <div style="margin-top:24px;font-size:12px;text-align:right">ลงชื่อ.................................................เจ้าหน้าที่พัสดุ<br><span style="margin-right:30px">(.................................................)</span></div>
+          <div style="margin-top:10px;font-size:11px;text-align:right;color:#555">พิมพ์เมื่อ ${thaiDate(todayYMD())}</div>
+        ` : ''}
+      </div>
+    `);
+  }
+
+  doPrint(pagesHtml.join(''), true);
 }
 </script>
 
