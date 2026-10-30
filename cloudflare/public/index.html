@@ -1030,8 +1030,12 @@ function badge(state){
   if(state==='LOW') return '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber2/25 text-orange2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>ใกล้หมด</span>';
   return '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal/15 text-teal"><i class="fa-solid fa-check mr-1"></i>ปกติ</span>';
 }
-function stBadge(s){
-  const m = ST_META[String(s||'PENDING').toUpperCase()] || ST_META.PENDING;
+function stBadge(s, isPartial){
+  const st = String(s||'PENDING').toUpperCase();
+  if(st === 'APPROVED' && (isPartial === 1 || isPartial === true || isPartial === '1')){
+    return '<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200/80"><i class="fa-solid fa-check-double mr-1 text-amber-600"></i>อนุมัติบางส่วน</span>';
+  }
+  const m = ST_META[st] || ST_META.PENDING;
   return `<span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${m.cls}"><i class="fa-solid ${m.ico} mr-1"></i>${m.th}</span>`;
 }
 
@@ -3254,7 +3258,7 @@ function bindReqEvents(){
   $$('.chkAllReq').forEach(a=> a.addEventListener('change', e=> $$('.chk-req').forEach(x=> x.checked=e.target.checked)));
   $$('[data-view-req]').forEach(b=> b.addEventListener('click', ()=> reqDetail(b.dataset.viewReq)));
   $$('[data-print-req]').forEach(b=> b.addEventListener('click', ()=> printRequest(b.dataset.printReq)));
-  $$('[data-ap-req]').forEach(b=> b.addEventListener('click', ()=> changeStatus([b.dataset.apReq],'APPROVED')));
+  $$('[data-ap-req]').forEach(b=> b.addEventListener('click', ()=> openApproveModal(b.dataset.apReq)));
   $$('[data-del-req]').forEach(b=> b.addEventListener('click', async ()=>{
     const q = (S.cache.requests||[]).find(x=>x.ID===b.dataset.delReq) || {};
     const r = await confirmDel('ต้องการลบใบขอเบิก '+(q.DocNo||'')+' ใช่หรือไม่? (ระบบจะคืนสต็อกให้อัตโนมัติหากเคยอนุมัติ)');
@@ -3306,7 +3310,11 @@ async function batchApprove(){
 
 async function openApproveModal(id){
   showLoader('กำลังโหลดรายการขอเบิก...');
-  const r = await api('apiGetRequestForPrint', id);
+  const [r, rMats] = await Promise.all([
+    api('apiGetRequestForPrint', id),
+    (!S.cache.materials || !S.cache.materials.length) ? api('apiGetMaterials') : Promise.resolve(null)
+  ]);
+  if(rMats && rMats.ok) S.cache.materials = rMats.data;
   hideLoader();
   if(!r || !r.ok) return alertErr((r && r.message) || 'โหลดข้อมูลไม่สำเร็จ');
 
@@ -3464,21 +3472,7 @@ async function openApproveModal(id){
     });
 
     if(positiveCount === 0){
-      const c = await Swal.fire({
-        icon: 'warning',
-        title: 'ไม่อนุมัติทุกรายการ?',
-        text: 'ไม่มีรายการที่ได้รับอนุมัติ ต้องการเปลี่ยนเป็นสถานะ "ไม่อนุมัติ" หรือไม่?',
-        showCancelButton: true,
-        confirmButtonText: 'เปลี่ยนเป็นไม่อนุมัติ',
-        cancelButtonText: 'แก้ไขรายการใหม่',
-        confirmButtonColor: '#e11d48',
-        cancelButtonColor: '#94a3b8'
-      });
-      if(c.isConfirmed){
-        closeModal();
-        changeStatus([id], 'REJECTED');
-      }
-      return;
+      return toast('warning', 'กรุณาระบุจำนวนอนุมัติอย่างน้อย 1 รายการ');
     }
 
     const isPartial = apItems.some((x, i) => x.ApprovedQty < Number(items[i].Qty || 0));
