@@ -3577,6 +3577,42 @@ async function viewInventoryReport(){
     const t = r.total || { OpeningQty:0, PurchaseQty:0, UsedQty:0, RemainQty:0, Amount:0 };
     const summary = r.categorySummary || [];
 
+    S.invRepPage = S.invRepPage || 1;
+    S.invRepPageSize = S.invRepPageSize || 20;
+
+    const totalItems = data.length;
+    const pageSize = S.invRepPageSize === 'all' ? totalItems : Number(S.invRepPageSize || 20);
+    const totalPages = Math.max(1, Math.ceil(totalItems / (pageSize || 1)));
+
+    if(S.invRepPage > totalPages) S.invRepPage = totalPages;
+    if(S.invRepPage < 1) S.invRepPage = 1;
+
+    const startIdx = S.invRepPageSize === 'all' ? 0 : (S.invRepPage - 1) * pageSize;
+    const endIdx = S.invRepPageSize === 'all' ? totalItems : Math.min(startIdx + pageSize, totalItems);
+    const pageRows = data.slice(startIdx, endIdx);
+
+    const renderPagePills = () => {
+      if(totalPages <= 1) return '';
+      let pages = [];
+      if(totalPages <= 7){
+        for(let p = 1; p <= totalPages; p++) pages.push(p);
+      } else {
+        const cur = S.invRepPage;
+        if(cur <= 4){
+          pages = [1, 2, 3, 4, 5, '...', totalPages];
+        } else if(cur >= totalPages - 3){
+          pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+        } else {
+          pages = [1, '...', cur - 1, cur, cur + 1, '...', totalPages];
+        }
+      }
+      return pages.map(p => {
+        if(p === '...') return '<span class="px-1.5 py-1 text-slate-400 font-bold">…</span>';
+        const active = p === S.invRepPage;
+        return `<button type="button" data-inv-page="${p}" class="min-w-[34px] h-[34px] px-2 rounded-xl font-bold text-xs transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}">${p}</button>`;
+      }).join('');
+    };
+
     c.innerHTML = `
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeUp">
         ${statCardH('fa-boxes-stacked','#059669','รายการในรายงาน', nf(data.length),'รายการ')}
@@ -3637,6 +3673,21 @@ async function viewInventoryReport(){
           <p>หน่วยงาน ${esc(rep.schoolName)} · ปีงบประมาณ ${rep.fiscalYear} (ณ วันที่ ${esc(rep.reportDateThai)})</p>
         </div>
 
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div class="font-medium text-slate-500">
+            ${totalItems ? `แสดงรายการที่ <b>${startIdx + 1}</b> ถึง <b>${endIdx}</b> จากทั้งหมด <b>${nf(totalItems)}</b> รายการ` : `ไม่พบรายการวัสดุ`}
+          </div>
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+            <span class="font-semibold text-slate-600">แสดง:</span>
+            <select id="invPageSize" class="bg-transparent font-bold text-slate-700 outline-none text-xs cursor-pointer">
+              <option value="20" ${S.invRepPageSize===20?'selected':''}>20</option>
+              <option value="25" ${S.invRepPageSize===25?'selected':''}>25</option>
+              <option value="50" ${S.invRepPageSize===50?'selected':''}>50</option>
+              <option value="all" ${S.invRepPageSize==='all'?'selected':''}>ทั้งหมด</option>
+            </select>
+          </div>
+        </div>
+
         <!-- ตารางข้อมูลหลัก (14 คอลัมน์ตรงกับ Excel) -->
         <div class="overflow-x-auto -mx-5 px-5">
           <table class="w-full text-xs tbl min-w-[1300px]">
@@ -3659,7 +3710,7 @@ async function viewInventoryReport(){
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              ${data.length ? data.map(row => `
+              ${pageRows.length ? pageRows.map(row => `
                 <tr class="hover:bg-slate-50 transition">
                   <td class="px-2 py-2 text-center text-slate-500">${row.seq}</td>
                   <td class="px-2 py-2 font-medium text-slate-700">${esc(row.Category || '-')}</td>
@@ -3693,6 +3744,25 @@ async function viewInventoryReport(){
             </tfoot>
           </table>
         </div>
+
+        ${totalPages > 1 ? `
+          <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+            <div class="font-medium text-slate-500">
+              หน้า <b>${S.invRepPage}</b> / <b>${totalPages}</b>
+            </div>
+            <div class="flex items-center gap-1">
+              <button type="button" id="btnInvPrev" class="w-8 h-8 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center" title="ก่อนหน้า" ${S.invRepPage<=1?'disabled':''}>
+                <i class="fa-solid fa-chevron-left text-[11px]"></i>
+              </button>
+              <div class="flex items-center gap-1">
+                ${renderPagePills()}
+              </div>
+              <button type="button" id="btnInvNext" class="w-8 h-8 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center" title="ถัดไป" ${S.invRepPage>=totalPages?'disabled':''}>
+                <i class="fa-solid fa-chevron-right text-[11px]"></i>
+              </button>
+            </div>
+          </div>
+        ` : ''}
 
         <p class="mt-3 text-[11px] text-slate-500 italic">
           หมายเหตุ : การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี
@@ -3734,6 +3804,37 @@ async function viewInventoryReport(){
 
     S.cache.reportLast = r;
 
+    $('#invPageSize')?.addEventListener('change', (e)=>{
+      const v = e.target.value;
+      S.invRepPageSize = v === 'all' ? 'all' : parseInt(v, 10);
+      S.invRepPage = 1;
+      renderReport(r);
+    });
+
+    $('#btnInvPrev')?.addEventListener('click', ()=>{
+      if(S.invRepPage > 1){
+        S.invRepPage--;
+        renderReport(r);
+      }
+    });
+
+    $('#btnInvNext')?.addEventListener('click', ()=>{
+      if(S.invRepPage < totalPages){
+        S.invRepPage++;
+        renderReport(r);
+      }
+    });
+
+    $$('[data-inv-page]').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const p = parseInt(btn.dataset.invPage, 10);
+        if(p && p !== S.invRepPage){
+          S.invRepPage = p;
+          renderReport(r);
+        }
+      });
+    });
+
     // Event: กรองรายงาน
     $('#btnRepFilter').addEventListener('click', async ()=>{
       showLoader('กำลังประมวลผลรายงาน...');
@@ -3743,6 +3844,7 @@ async function viewInventoryReport(){
       const res = await api('apiGetInventoryReport', { fiscalYear: fy, reportDate: rDate, category: cat });
       hideLoader();
       if(!res.ok) return alertErr(res.message);
+      S.invRepPage = 1;
       renderReport(res);
     });
 
@@ -3752,6 +3854,7 @@ async function viewInventoryReport(){
       const res = await api('apiGetInventoryReport', {});
       hideLoader();
       if(!res.ok) return alertErr(res.message);
+      S.invRepPage = 1;
       renderReport(res);
     });
 
@@ -3888,119 +3991,139 @@ function printInventoryReport(r){
   const data = r.data || [];
   const t = r.total;
   const catTitle = rep.category ? rep.category : '';
+  const rowsPerPage = 15; // 15 แถวต่อหน้า (หน้าสุดท้ายรวมสรุปและลายเซ็น พอดี A4 แนวนอน)
+  const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
 
-  const html = `
-    <div style="font-family:'Sarabun',sans-serif;color:#000;line-height:1.3">
-      <div style="text-align:center;margin-bottom:10px">
-        <div style="font-size:15px;font-weight:700">รายงานการสำรวจทะเบียนวัสดุ${esc(catTitle)}คงเหลือ</div>
-        <div style="font-size:13px;font-weight:600">หน่วยงาน ${esc(rep.schoolName)}</div>
-        <div style="font-size:12px">ปีงบประมาณ ${rep.fiscalYear} (ณ วันที่ ${esc(rep.reportDateThai)})</div>
-      </div>
+  const pagesHtml = [];
 
-      <table class="inv-report-table">
-        <colgroup>
-          <col style="width:3.5%">
-          <col style="width:8%">
-          <col style="width:8%">
-          <col style="width:7%">
-          <col style="width:19%">
-          <col style="width:7.5%">
-          <col style="width:4.5%">
-          <col style="width:6.5%">
-          <col style="width:5.5%">
-          <col style="width:5%">
-          <col style="width:5%">
-          <col style="width:5.5%">
-          <col style="width:8%">
-          <col style="width:7%">
-        </colgroup>
-        <thead>
-          <tr>
-            <th>ที่</th>
-            <th>ประเภทวัสดุ</th>
-            <th>ชนิดวัสดุ</th>
-            <th>รหัสวัสดุ</th>
-            <th>รายการวัสดุ</th>
-            <th>ขนาด/ลักษณะ</th>
-            <th>หน่วยนับ</th>
-            <th>ราคา/หน่วย</th>
-            <th>ยอดยกมา</th>
-            <th>รับ</th>
-            <th>เบิก</th>
-            <th>คงเหลือ</th>
-            <th>จำนวนเงิน</th>
-            <th>สถานที่จัดเก็บ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.map(row => `
+  for(let page = 1; page <= totalPages; page++){
+    const startIdx = (page - 1) * rowsPerPage;
+    const pageRows = data.slice(startIdx, startIdx + rowsPerPage);
+    const isLastPage = page === totalPages;
+
+    const pageContent = `
+      <div class="print-page" style="font-family:'Sarabun',sans-serif;color:#000;line-height:1.3;${!isLastPage ? 'page-break-after:always;' : ''}">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-size:15px;font-weight:700">รายงานการสำรวจทะเบียนวัสดุ${esc(catTitle)}คงเหลือ</div>
+          <div style="font-size:13px;font-weight:600">หน่วยงาน ${esc(rep.schoolName)}</div>
+          <div style="font-size:12px">ปีงบประมาณ ${rep.fiscalYear} (ณ วันที่ ${esc(rep.reportDateThai)})</div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#555;margin-bottom:4px">
+          <span>หน่วยงาน: ${esc(rep.schoolName)}</span>
+          <span>หน้า ${page} / ${totalPages}</span>
+        </div>
+
+        <table class="inv-report-table" style="width:100%; border-collapse:collapse;">
+          <colgroup>
+            <col style="width:3.5%">
+            <col style="width:8%">
+            <col style="width:8%">
+            <col style="width:7%">
+            <col style="width:19%">
+            <col style="width:7.5%">
+            <col style="width:4.5%">
+            <col style="width:6.5%">
+            <col style="width:5.5%">
+            <col style="width:5%">
+            <col style="width:5%">
+            <col style="width:5.5%">
+            <col style="width:8%">
+            <col style="width:7%">
+          </colgroup>
+          <thead>
             <tr>
-              <td style="text-align:center">${row.seq}</td>
-              <td>${esc(row.Category || '')}</td>
-              <td>${esc(row.MaterialType || '')}</td>
-              <td style="text-align:center;white-space:nowrap">${esc(row.Code || '')}</td>
-              <td style="word-break:break-word">${esc(row.Name)}</td>
-              <td>${esc(row.SizeSpec || '')}</td>
-              <td style="text-align:center;white-space:nowrap">${esc(row.Unit || '')}</td>
-              <td style="text-align:right;white-space:nowrap">${money(row.UnitPrice)}</td>
-              <td style="text-align:center;white-space:nowrap">${nf(row.OpeningQty)}</td>
-              <td style="text-align:center;white-space:nowrap">${nf(row.PurchaseQty)}</td>
-              <td style="text-align:center;white-space:nowrap">${nf(row.UsedQty)}</td>
-              <td style="text-align:center;font-weight:700;white-space:nowrap">${nf(row.RemainQty)}</td>
-              <td style="text-align:right;font-weight:700;white-space:nowrap">${money(row.Amount)}</td>
-              <td style="text-align:center">${esc(row.StorageLocation || '')}</td>
+              <th>ที่</th>
+              <th>ประเภทวัสดุ</th>
+              <th>ชนิดวัสดุ</th>
+              <th>รหัสวัสดุ</th>
+              <th>รายการวัสดุ</th>
+              <th>ขนาด/ลักษณะ</th>
+              <th>หน่วยนับ</th>
+              <th>ราคา/หน่วย</th>
+              <th>ยอดยกมา</th>
+              <th>รับ</th>
+              <th>เบิก</th>
+              <th>คงเหลือ</th>
+              <th>จำนวนเงิน</th>
+              <th>สถานที่จัดเก็บ</th>
             </tr>
-          `).join('')}
-        </tbody>
-        <tfoot>
-          <tr style="background:#f1f5f9;font-weight:700">
-            <td colspan="8" style="text-align:center">รวม</td>
-            <td style="text-align:center;white-space:nowrap">${nf(t.OpeningQty)}</td>
-            <td style="text-align:center;white-space:nowrap">${nf(t.PurchaseQty)}</td>
-            <td style="text-align:center;white-space:nowrap">${nf(t.UsedQty)}</td>
-            <td style="text-align:center;white-space:nowrap">${nf(t.RemainQty)}</td>
-            <td style="text-align:right;white-space:nowrap">${money(t.Amount)}</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
+          </thead>
+          <tbody>
+            ${pageRows.map(row => `
+              <tr>
+                <td style="text-align:center">${row.seq}</td>
+                <td>${esc(row.Category || '')}</td>
+                <td>${esc(row.MaterialType || '')}</td>
+                <td style="text-align:center;white-space:nowrap">${esc(row.Code || '')}</td>
+                <td style="word-break:break-word">${esc(row.Name)}</td>
+                <td>${esc(row.SizeSpec || '')}</td>
+                <td style="text-align:center;white-space:nowrap">${esc(row.Unit || '')}</td>
+                <td style="text-align:right;white-space:nowrap">${money(row.UnitPrice)}</td>
+                <td style="text-align:center;white-space:nowrap">${nf(row.OpeningQty)}</td>
+                <td style="text-align:center;white-space:nowrap">${nf(row.PurchaseQty)}</td>
+                <td style="text-align:center;white-space:nowrap">${nf(row.UsedQty)}</td>
+                <td style="text-align:center;font-weight:700;white-space:nowrap">${nf(row.RemainQty)}</td>
+                <td style="text-align:right;font-weight:700;white-space:nowrap">${money(row.Amount)}</td>
+                <td style="text-align:center">${esc(row.StorageLocation || '')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+          ${isLastPage ? `
+            <tfoot>
+              <tr style="background:#f1f5f9;font-weight:700">
+                <td colspan="8" style="text-align:center">รวม</td>
+                <td style="text-align:center;white-space:nowrap">${nf(t.OpeningQty)}</td>
+                <td style="text-align:center;white-space:nowrap">${nf(t.PurchaseQty)}</td>
+                <td style="text-align:center;white-space:nowrap">${nf(t.UsedQty)}</td>
+                <td style="text-align:center;white-space:nowrap">${nf(t.RemainQty)}</td>
+                <td style="text-align:right;white-space:nowrap">${money(t.Amount)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          ` : ''}
+        </table>
 
-      <div style="font-size:9.5px;margin-top:6px">
-        <b>หมายเหตุ :</b> การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี
-      </div>
+        ${isLastPage ? `
+          <div style="font-size:9.5px;margin-top:6px">
+            <b>หมายเหตุ :</b> การจัดทำวัสดุคงเหลือ ณ วันที่ 30 กันยายน ของทุกปี จัดทำตามรูปแบบพัสดุ และจัดส่งข้อมูลให้กับกลุ่มงานบัญชีภายในวันที่ 5 ตุลาคม ของทุกปี
+          </div>
 
-      <!-- ช่องลงนาม 3 ตำแหน่งตามระเบียบพัสดุ -->
-      <div class="print-signatures" style="display:flex;justify-content:space-between;margin-top:24px;font-size:10.5px;text-align:center;page-break-inside:avoid">
-        <div style="width:31%">
-          <div style="border-bottom:1px dotted #000;height:18px;margin-bottom:5px"></div>
-          ลงชื่อ........................................................ผู้สำรวจ/ผู้จัดทำ<br>
-          (........................................................)<br>
-          ตำแหน่ง........................................................<br>
-          วันที่.........../.........../...........
+          <!-- ช่องลงนาม 3 ตำแหน่งตามระเบียบพัสดุ -->
+          <div class="print-signatures" style="display:flex;justify-content:space-between;margin-top:20px;font-size:10.5px;text-align:center;page-break-inside:avoid">
+            <div style="width:31%">
+              <div style="border-bottom:1px dotted #000;height:18px;margin-bottom:5px"></div>
+              ลงชื่อ........................................................ผู้สำรวจ/ผู้จัดทำ<br>
+              (........................................................)<br>
+              ตำแหน่ง........................................................<br>
+              วันที่.........../.........../...........
+            </div>
+            <div style="width:31%">
+              <div style="border-bottom:1px dotted #000;height:18px;margin-bottom:5px"></div>
+              ลงชื่อ........................................................ผู้ตรวจสอบ<br>
+              (........................................................)<br>
+              ตำแหน่ง เจ้าหน้าที่พัสดุ<br>
+              วันที่.........../.........../...........
+            </div>
+            <div style="width:32%">
+              <div style="border-bottom:1px dotted #000;height:18px;margin-bottom:5px"></div>
+              ลงชื่อ........................................................ผู้อนุมัติ/หัวหน้าหน่วยงาน<br>
+              (........................................................)<br>
+              ผู้อำนวยการ${esc(rep.schoolName)}<br>
+              วันที่.........../.........../...........
+            </div>
+          </div>
+        ` : ''}
+
+        <div style="margin-top:10px;font-size:8.5px;text-align:right;color:#666">
+          พิมพ์เมื่อ ${thaiDate(todayYMD())}
         </div>
-        <div style="width:31%">
-          <div style="border-bottom:1px dotted #000;height:18px;margin-bottom:5px"></div>
-          ลงชื่อ........................................................ผู้ตรวจสอบ<br>
-          (........................................................)<br>
-          ตำแหน่ง เจ้าหน้าที่พัสดุ<br>
-          วันที่.........../.........../...........
-        </div>
-        <div style="width:32%">
-          <div style="border-bottom:1px dotted #000;height:18px;margin-bottom:5px"></div>
-          ลงชื่อ........................................................ผู้อนุมัติ/หัวหน้าหน่วยงาน<br>
-          (........................................................)<br>
-          ผู้อำนวยการ${esc(rep.schoolName)}<br>
-          วันที่.........../.........../...........
-        </div>
       </div>
+    `;
+    pagesHtml.push(pageContent);
+  }
 
-      <div style="margin-top:12px;font-size:8.5px;text-align:right;color:#666">
-        พิมพ์เมื่อ ${thaiDate(todayYMD())}
-      </div>
-    </div>
-  `;
-
-  doPrint(html, true); // landscape = true
+  doPrint(pagesHtml.join(''), true); // landscape = true
 }
 
 /* =================================================================================
@@ -5231,6 +5354,9 @@ async function viewMaterials(){
   S.cache.categories = (catRes && catRes.ok) ? catRes.data : [];
   const key = 'mats';
 
+  S.matPage = S.matPage || 1;
+  S.matPageSize = S.matPageSize || 20;
+
   const totalValue = r.data.reduce((s,m)=> s + (m.RemainAmount !== undefined ? Number(m.RemainAmount) : m.StockQty * m.UnitPrice), 0);
   const lowCount   = r.data.filter(m=> m.StockState !== 'OK').length;
 
@@ -5287,7 +5413,20 @@ async function viewMaterials(){
             <option value="OUT">หมดสต็อก</option>
           </select>
         </div>
-        <div id="matList">${renderMats(r.data, key)}</div>`,
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div id="matCountInfo" class="font-medium text-slate-500"></div>
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+            <span class="font-semibold text-slate-600">แสดง:</span>
+            <select id="matPageSize" class="bg-transparent font-bold text-slate-700 outline-none text-xs cursor-pointer">
+              <option value="20" ${S.matPageSize===20?'selected':''}>20</option>
+              <option value="25" ${S.matPageSize===25?'selected':''}>25</option>
+              <option value="50" ${S.matPageSize===50?'selected':''}>50</option>
+              <option value="all" ${S.matPageSize==='all'?'selected':''}>ทั้งหมด</option>
+            </select>
+          </div>
+        </div>
+        <div id="matList"></div>
+        <div id="matPagination"></div>`,
         viewToggle(key) +
         btn('btnScanMat','fa-qrcode','สแกนเพิ่ม','bg-brand-600 text-white hover:brightness-110 shadow-soft') +
         btn('btnAddMat','fa-plus','เพิ่มพัสดุ') +
@@ -5325,7 +5464,106 @@ async function viewMaterials(){
     });
   });
 
-  bindMatEvents();
+  const renderMatPage = () => {
+    const totalItems = currentMatList.length;
+    const pageSize = S.matPageSize === 'all' ? totalItems : Number(S.matPageSize || 20);
+    const totalPages = Math.max(1, Math.ceil(totalItems / (pageSize || 1)));
+
+    if(S.matPage > totalPages) S.matPage = totalPages;
+    if(S.matPage < 1) S.matPage = 1;
+
+    const startIdx = S.matPageSize === 'all' ? 0 : (S.matPage - 1) * pageSize;
+    const endIdx = S.matPageSize === 'all' ? totalItems : Math.min(startIdx + pageSize, totalItems);
+    const pageList = currentMatList.slice(startIdx, endIdx);
+
+    const countInfo = $('#matCountInfo');
+    if(countInfo){
+      countInfo.innerHTML = totalItems
+        ? `แสดงรายการที่ <b>${startIdx + 1}</b> ถึง <b>${endIdx}</b> จากทั้งหมด <b>${nf(totalItems)}</b> รายการ`
+        : `ไม่พบรายการพัสดุตามเงื่อนไขที่เลือก`;
+    }
+
+    $('#matList').innerHTML = renderMats(pageList, key);
+    bindMatEvents();
+
+    const renderMatPagePills = () => {
+      if(totalPages <= 1) return '';
+      let pages = [];
+      if(totalPages <= 7){
+        for(let p = 1; p <= totalPages; p++) pages.push(p);
+      } else {
+        const cur = S.matPage;
+        if(cur <= 4){
+          pages = [1, 2, 3, 4, 5, '...', totalPages];
+        } else if(cur >= totalPages - 3){
+          pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+        } else {
+          pages = [1, '...', cur - 1, cur, cur + 1, '...', totalPages];
+        }
+      }
+      return pages.map(p => {
+        if(p === '...') return '<span class="px-1.5 py-1 text-slate-400 font-bold">…</span>';
+        const active = p === S.matPage;
+        return `<button type="button" data-mat-page="${p}" class="min-w-[34px] h-[34px] px-2 rounded-xl font-bold text-xs transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}">${p}</button>`;
+      }).join('');
+    };
+
+    const pagEl = $('#matPagination');
+    if(pagEl){
+      if(totalPages > 1){
+        pagEl.innerHTML = `
+          <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+            <div class="font-medium text-slate-500">
+              หน้า <b>${S.matPage}</b> / <b>${totalPages}</b>
+            </div>
+            <div class="flex items-center gap-1">
+              <button type="button" id="btnMatPrev" class="w-8 h-8 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center" title="ก่อนหน้า" ${S.matPage<=1?'disabled':''}>
+                <i class="fa-solid fa-chevron-left text-[11px]"></i>
+              </button>
+              <div class="flex items-center gap-1">
+                ${renderMatPagePills()}
+              </div>
+              <button type="button" id="btnMatNext" class="w-8 h-8 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center" title="ถัดไป" ${S.matPage>=totalPages?'disabled':''}>
+                <i class="fa-solid fa-chevron-right text-[11px]"></i>
+              </button>
+            </div>
+          </div>`;
+
+        $('#btnMatPrev')?.addEventListener('click', ()=>{
+          if(S.matPage > 1){
+            S.matPage--;
+            renderMatPage();
+          }
+        });
+        $('#btnMatNext')?.addEventListener('click', ()=>{
+          if(S.matPage < totalPages){
+            S.matPage++;
+            renderMatPage();
+          }
+        });
+        $$('[data-mat-page]').forEach(btn => {
+          btn.addEventListener('click', ()=>{
+            const p = parseInt(btn.dataset.matPage, 10);
+            if(p && p !== S.matPage){
+              S.matPage = p;
+              renderMatPage();
+            }
+          });
+        });
+      } else {
+        pagEl.innerHTML = '';
+      }
+    }
+  };
+
+  $('#matPageSize')?.addEventListener('change', (e)=>{
+    const v = e.target.value;
+    S.matPageSize = v === 'all' ? 'all' : parseInt(v, 10);
+    S.matPage = 1;
+    renderMatPage();
+  });
+
+  renderMatPage();
 
   const filterMats = ()=>{
     const q   = ($('#matQ').value || '').toLowerCase().trim();
@@ -5343,8 +5581,8 @@ async function viewMaterials(){
     if(st)  list = list.filter(m => m.StockState === st);
 
     currentMatList = list;
-    $('#matList').innerHTML = renderMats(list, key);
-    bindMatEvents();
+    S.matPage = 1;
+    renderMatPage();
   };
 
   ['matQ','matCat','matState'].forEach(id=>{
