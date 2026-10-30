@@ -100,10 +100,11 @@ describe('public/index.html static checks', () => {
   });
 
   it('configures staticBackdrop and clean state for materials modal with default minQty 5', () => {
-    expect(html).toContain('staticBackdrop = false');
+    expect(html).toContain('staticBackdrop = true');
     expect(html).toContain('staticBackdrop: true');
     expect(html).toContain('@keyframes modal-shake');
     expect(html).toContain('animate-shake');
+    expect(html).toContain('navigator.vibrate');
     expect(html).not.toContain('saveMatDraft_');
     expect(html).not.toContain('getMatDraft_');
     expect(html).not.toContain('btnClearDraft');

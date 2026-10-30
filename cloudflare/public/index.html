@@ -1114,14 +1114,14 @@ function emptyBox(text){
 }
 
 /* ---------------- MODAL ---------------- */
-function openModal({title, sub, icon, body, foot, size, staticBackdrop = false}){
+function openModal({title, sub, icon, body, foot, size, staticBackdrop = true}){
   $('#modalTitle').textContent = title||'';
   $('#modalSub').textContent   = sub||'';
   $('#modalIcon').className     = 'fa-solid ' + (icon||'fa-pen');
   $('#modalBody').innerHTML     = body||'';
   $('#modalFoot').innerHTML     = foot||'';
   $('#modalBox').className = 'mx-auto my-4 w-full ' + (size||'max-w-2xl') + ' bg-white rounded-[26px] shadow-2xl animate-pop overflow-hidden';
-  if(staticBackdrop) $('#modal').dataset.static = 'true';
+  if(staticBackdrop !== false) $('#modal').dataset.static = 'true';
   else delete $('#modal').dataset.static;
   $('#modal').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -1148,6 +1148,9 @@ $('#modal').addEventListener('click', e => {
       if(btnClose){
         btnClose.classList.add('ring-4', 'ring-white', 'scale-125', 'transition-all', 'duration-200');
         setTimeout(() => btnClose.classList.remove('ring-4', 'ring-white', 'scale-125'), 360);
+      }
+      if(typeof navigator !== 'undefined' && navigator.vibrate){
+        try{ navigator.vibrate([40, 60, 40]); }catch(_){}
       }
       return;
     }

@@ -34,7 +34,9 @@
     - เพิ่มไอคอนแก้ไข (`fa-pen-to-square`) สีเหลืองส้ม (Amber) ในคอลัมน์ "จัดการ" ของตารางและ Card view ในฟังก์ชัน `reqActions(q)`
     - ผูก Event `[data-edit-req]` ใน `bindReqEvents()`
     - เพิ่มฟังก์ชัน Modal `openEditReqModal(id)` ดึงข้อมูลเดิมมาแสดง ให้แก้ไขพร้อม UI เพิ่ม/ลบรายการพัสดุ และ Loading/Disabled state ป้องกัน Double Submit
+    - **ล็อกการปิด Modal จากพื้นที่ว่าง (Static Backdrop by Default):** ปรับให้ `openModal` มีค่าเริ่มต้น `staticBackdrop = true` ทุกตัวทั่วทั้งระบบ ป้องกันการเผลอคลิกพื้นหลังแล้วฟอร์มหลุด พร้อมเอฟเฟกต์สั่นภาพ (`animate-shake`), วงแหวนไฮไลต์ปุ่มกากบาท (`ring-4 ring-white scale-125`), และสั่นเครื่องจริงผ่าน Haptic Feedback (`navigator.vibrate([40, 60, 40])`)
   - `cloudflare/test/requests.test.ts`: เพิ่ม Unit Test ครอบคลุมการแก้ไข PENDING, APPROVED (ห้ามแตะพัสดุ), และตรวจจับจำนวนเกินสต็อก
+  - `cloudflare/test/node/frontend.test.ts`: อัปเดตทดสอบ staticBackdrop และ Haptic vibration effect
 - **ผลลัพธ์การทดสอบ:**
   - Vitest + Node Frontend Tests ผ่านครบถ้วน 212/212 tests (100%)
   - Graft index wiring graph ซิงค์ตรงกับโค้ดทั้งหมด (303 nodes, 802 edges)
