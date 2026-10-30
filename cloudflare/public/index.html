@@ -4092,13 +4092,13 @@ async function viewAccount(){
 
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <p>แสดงข้อมูล: <b>${esc(rangeText)}</b> · ณ วันที่ ${thaiDate(r.asOf)}</p>
-          <div class="flex items-center gap-2">
-            <label for="accPageSize" class="font-semibold text-slate-600">แสดงต่อหน้า:</label>
-            <select id="accPageSize" class="px-2.5 py-1 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 outline-none text-xs focus:border-brand-500 transition">
-              <option value="20" ${S.accountPageSize===20?'selected':''}>20 แถว</option>
-              <option value="25" ${S.accountPageSize===25?'selected':''}>25 แถว</option>
-              <option value="50" ${S.accountPageSize===50?'selected':''}>50 แถว</option>
-              <option value="all" ${S.accountPageSize==='all'?'selected':''}>ทั้งหมด (${totalItems})</option>
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-xl">
+            <span class="font-semibold text-slate-600">แสดง:</span>
+            <select id="accPageSize" class="bg-transparent font-bold text-slate-700 outline-none text-xs cursor-pointer">
+              <option value="20" ${S.accountPageSize===20?'selected':''}>20</option>
+              <option value="25" ${S.accountPageSize===25?'selected':''}>25</option>
+              <option value="50" ${S.accountPageSize===50?'selected':''}>50</option>
+              <option value="all" ${S.accountPageSize==='all'?'selected':''}>ทั้งหมด</option>
             </select>
           </div>
         </div>
@@ -4161,15 +4161,15 @@ async function viewAccount(){
             <div class="font-medium text-slate-500">
               แสดงรายการที่ <b>${totalItems ? startIdx + 1 : 0}</b> ถึง <b>${endIdx}</b> จากทั้งหมด <b>${nf(totalItems)}</b> รายการ
             </div>
-            <div class="flex items-center gap-1.5 flex-wrap justify-center">
-              <button type="button" id="btnAccPrev" class="px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition" ${S.accountPage<=1?'disabled':''}>
-                <i class="fa-solid fa-chevron-left mr-1"></i> ก่อนหน้า
+            <div class="flex items-center gap-1">
+              <button type="button" id="btnAccPrev" class="w-8 h-8 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center" title="ก่อนหน้า" ${S.accountPage<=1?'disabled':''}>
+                <i class="fa-solid fa-chevron-left text-[11px]"></i>
               </button>
               <div class="flex items-center gap-1">
                 ${renderPagePills()}
               </div>
-              <button type="button" id="btnAccNext" class="px-3 py-1.5 min-h-[36px] rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition" ${S.accountPage>=totalPages?'disabled':''}>
-                ถัดไป <i class="fa-solid fa-chevron-right ml-1"></i>
+              <button type="button" id="btnAccNext" class="w-8 h-8 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center" title="ถัดไป" ${S.accountPage>=totalPages?'disabled':''}>
+                <i class="fa-solid fa-chevron-right text-[11px]"></i>
               </button>
             </div>
           </div>
@@ -7782,7 +7782,7 @@ function printAccount(r){
   const t = r.total;
   const rangeInfo = thaiDateRange(r.filter);
   const rows = r.data || [];
-  const rowsPerPage = 20; // 20 แถวต่อหน้า
+  const rowsPerPage = 15; // 15 แถวต่อหน้า (หน้าสุดท้ายรวมลายเซ็น พอดี A4 แนวนอน)
   const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
 
   const pagesHtml = [];
