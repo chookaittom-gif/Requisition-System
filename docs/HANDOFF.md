@@ -21,7 +21,15 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Pagination All Main Views & Print Breaks)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Bugfix openApproveModal & Pagination)
+
+### 0. fix(requests): แก้ไข TypeError $(...).forEach ใน modal พิจารณาอนุมัติคำขอเบิก
+- **Root Cause:** ใน `cloudflare/public/index.html` ภายในฟังก์ชัน `openApproveModal(id)` มีการเรียกใช้ Selector `$('#tblApItems .item-approve-row')` (ใช้ `$` เดี่ยว ซึ่งคือ `querySelector` ส่งคืน Element เดี่ยว) แล้วนำไปเรียก `.forEach` ทำให้เกิด `TypeError: $(...).forEach is not a function at openApproveModal`
+- **การแก้ไข:**
+  - เปลี่ยนการเรียกแถวตารางพัสดุเป็น `$$('#tblApItems .item-approve-row')` (ใช้ `$$` ซึ่งคือ `querySelectorAll` ส่งคืน Array) ทั้งหมด 3 จุดใน `openApproveModal` (ใน `updateSummary()`, การผูก Event Listener เช็คบ็อกซ์/จำนวน, และตอนกดปุ่มยืนยันบันทึกการอนุมัติ)
+  - เพิ่ม Static Regression Test ใน `cloudflare/test/node/frontend.test.ts` เพื่อป้องกันการเรียก Array methods (`forEach`, `map`, `filter`, `reduce`) บน `$(...)` ทั่วทั้งไฟล์
+- **ผลลัพธ์:**
+  - Modal พิจารณาอนุมัติคำขอเบิกเปิดและทำงานได้อย่างสมบูรณ์ คำนวณยอดเงินและจำนวนรายการแบบ Reactive ทันทีตอนเปิดและตอนปรับเปลี่ยนค่า และบันทึกการอนุมัติได้ถูกต้อง
 
 ### 1. feat(ui): Pagination ครบทั้ง 3 มุมมองหลัก (บัญชีพัสดุ, จัดการพัสดุ, ทะเบียนวัสดุคงเหลือ)
 - **แท็บบัญชีพัสดุ (`viewAccount`):**

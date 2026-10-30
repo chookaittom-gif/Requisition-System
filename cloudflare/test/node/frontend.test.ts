@@ -21,6 +21,12 @@ describe('public/index.html static checks', () => {
     });
   }
 
+  it('ensures DOM query collections use $$ instead of $ before forEach', () => {
+    // $ returns a single element via querySelector. Calling .forEach on $(...) throws TypeError.
+    const invalidCalls = html.match(/(?<!\$)\$\('[^']+'\)\.(forEach|map|filter|reduce)/g) || [];
+    expect(invalidCalls).toEqual([]);
+  });
+
   it('validates JavaScript syntax in all inline script tags', () => {
     let idx = 0;
     let inlineCount = 0;

@@ -3410,7 +3410,7 @@ async function openApproveModal(id){
   const updateSummary = () => {
     let count = 0;
     let totalAmt = 0;
-    $('#tblApItems .item-approve-row').forEach(row => {
+    $$('#tblApItems .item-approve-row').forEach(row => {
       const chk = row.querySelector('.chk-item-ap');
       const inp = row.querySelector('.inp-item-ap-qty');
       const price = parseFloat(row.dataset.price || 0);
@@ -3424,7 +3424,7 @@ async function openApproveModal(id){
     $('#sumApTotal').textContent = `${money(totalAmt)} ฿`;
   };
 
-  $('#tblApItems .item-approve-row').forEach(row => {
+  $$('#tblApItems .item-approve-row').forEach(row => {
     const chk = row.querySelector('.chk-item-ap');
     const inp = row.querySelector('.inp-item-ap-qty');
     const maxQty = parseFloat(inp.max || 0);
@@ -3461,7 +3461,7 @@ async function openApproveModal(id){
   $('#btnConfirmAp').addEventListener('click', async () => {
     const apItems = [];
     let positiveCount = 0;
-    $('#tblApItems .item-approve-row').forEach(row => {
+    $$('#tblApItems .item-approve-row').forEach(row => {
       const itId = row.dataset.id;
       const itCode = row.dataset.code;
       const chk = row.querySelector('.chk-item-ap');
