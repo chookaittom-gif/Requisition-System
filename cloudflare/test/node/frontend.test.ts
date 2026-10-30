@@ -307,4 +307,16 @@ describe('upload helpers (executed from the page source)', () => {
     await u.uploadFile(new File([new Uint8Array(size)], 'a.pdf', { type: 'application/pdf' }), 'material_file');
     expect(calls).toEqual([`bytes 0-5242879/${size}`, `bytes 5242880-${size - 1}/${size}`]);
   });
+
+  it('implements requisition form draft auto-save (30 min) and restore on reload', () => {
+    expect(html).toContain('req_form_draft_v1_');
+    expect(html).toContain('const REQ_DRAFT_TTL_MS = 30 * 60 * 1000;');
+    expect(html).toContain('function saveReqDraft(');
+    expect(html).toContain('function loadReqDraft()');
+    expect(html).toContain('function clearReqDraft()');
+    expect(html).toContain('id="draftAlertContainer"');
+    expect(html).toContain('id="btnClearReqDraft"');
+    expect(html).toContain("sessionStorage.setItem('supply_last_view', view)");
+    expect(html).toContain('saveSession_(S.user)');
+  });
 });

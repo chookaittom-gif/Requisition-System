@@ -1826,6 +1826,7 @@ $('#btnGuestTrack') && $('#btnGuestTrack').addEventListener('click', ()=> enterG
 
 function enterGuest(targetView){
   S.user = { ID:'GUEST', Username:'guest', Role:'guest', FullName:'ผู้ขอเบิก (อาจารย์ / บุคลากร)', Position:'ผู้ขอเบิก' };
+  saveSession_(S.user);
   enterApp();
   if(targetView) go(targetView);
 }
@@ -1861,8 +1862,16 @@ function enterApp(){
   $('#sbRole').textContent = getRoleLabel(u.Role) + (u.Position? ' • '+u.Position : '');
   $('#sbAvatar').textContent = (u.FullName||'U').replace(/^(นาย|นาง|นางสาว|น.ส.)/,'').trim().charAt(0).toUpperCase();
   renderMenu();
-  if(u.Role==='guest') go('t-form');
-  else go('a-dash');
+  const savedView = sessionStorage.getItem('supply_last_view');
+  const role = u.Role || 'officer';
+  const list = MENUS[role] || MENUS.officer;
+  if(u.Role==='guest'){
+    const guestView = (savedView && list.some(m => m.id === savedView)) ? savedView : 't-form';
+    go(guestView);
+  } else {
+    const targetView = (savedView && list.some(m => m.id === savedView)) ? savedView : 'a-dash';
+    go(targetView);
+  }
 }
 
 function renderMenu(){
@@ -1910,7 +1919,12 @@ function toggleSidebar(){
   $('#sbBackdrop').classList.toggle('hidden');
 }
 
-$('#btnRefresh').addEventListener('click', ()=>{ S.cache = {}; go(S.view, true); toast('success','รีเฟรชข้อมูลแล้ว'); });
+$('#btnRefresh').addEventListener('click', ()=>{
+  try { if($('#frmReq')) saveReqDraft(true); }catch(e){}
+  S.cache = {};
+  go(S.view, true);
+  toast('success','รีเฟรชข้อมูลแล้ว');
+});
 
 $('#btnLogout').addEventListener('click', async ()=>{
   if(S.user && S.user.Role === 'guest'){
@@ -1931,6 +1945,7 @@ $('#btnLogout').addEventListener('click', async ()=>{
   localStorage.removeItem('supply_session_expiry');
   localStorage.removeItem('supply_login_time');
   sessionStorage.removeItem('supply_user');
+  sessionStorage.removeItem('supply_last_view');
   backToLoginPage();
 });
 
@@ -1965,6 +1980,7 @@ function backToLoginPage(){
 
 async function go(view, keepCache){
   S.view = view;
+  try { sessionStorage.setItem('supply_last_view', view); }catch(e){}
   const role = S.user ? S.user.Role : 'officer';
   const list = MENUS[role] || MENUS.officer;
   const meta = list.find(m=>m.id===view) || list[0];
@@ -6956,6 +6972,95 @@ async function viewProfile(){
 /* =================================================================================
  *  VIEW : REQUEST FORM (แบบฟอร์มขอเบิกพัสดุ)
  * ================================================================================= */
+const REQ_DRAFT_KEY = () => 'req_form_draft_v1_' + (S?.user?.Username || S?.user?.ID || 'guest');
+const REQ_DRAFT_TTL_MS = 30 * 60 * 1000; // 30 นาที
+
+function clearReqDraft(){
+  try { localStorage.removeItem(REQ_DRAFT_KEY()); }catch(e){}
+  const alertEl = $('#draftAlert');
+  if(alertEl) alertEl.remove();
+}
+
+function loadReqDraft(){
+  try {
+    const raw = localStorage.getItem(REQ_DRAFT_KEY());
+    if(!raw) return null;
+    const draft = JSON.parse(raw);
+    if(!draft || !draft.savedAt || !draft.data) return null;
+    if(Date.now() - draft.savedAt > REQ_DRAFT_TTL_MS){
+      clearReqDraft();
+      return null;
+    }
+    return draft;
+  }catch(e){
+    return null;
+  }
+}
+
+let reqDraftTimer_ = null;
+function saveReqDraft(immediate = false){
+  if(immediate){
+    clearTimeout(reqDraftTimer_);
+    doSaveReqDraft_();
+    return;
+  }
+  clearTimeout(reqDraftTimer_);
+  reqDraftTimer_ = setTimeout(doSaveReqDraft_, 350);
+}
+
+function doSaveReqDraft_(){
+  if(!$('#frmReq')) return;
+  const items = [];
+  $$('#itemRows > div').forEach(row => {
+    const i = row.dataset.row;
+    const sel = $(`[data-sel="${i}"]`);
+    const qty = $(`[data-qty="${i}"]`);
+    const remark = $(`[data-remark="${i}"]`);
+    if(sel && (sel.value || (qty && qty.value) || (remark && remark.value))){
+      items.push({
+        MaterialID: sel.value || '',
+        Qty: qty ? qty.value : '',
+        Remark: remark ? remark.value : ''
+      });
+    }
+  });
+
+  const data = {
+    Date: $('#rDate')?.value || '',
+    Position: $('#rPos')?.value || '',
+    FullName: $('#rName')?.value || '',
+    Department: $('#rDept')?.value || '',
+    Purpose: $('#rPurpose')?.value || '',
+    Note: $('#rNote')?.value || '',
+    items
+  };
+
+  const hasContent = !!(
+    (data.Department && data.Department.trim()) ||
+    (data.Purpose && data.Purpose.trim()) ||
+    (data.Note && data.Note.trim()) ||
+    (items.length > 0 && items.some(it => it.MaterialID || parseFloat(it.Qty) > 0 || (it.Remark && it.Remark.trim()))) ||
+    ($('#rName') && !$('#rName').readOnly && data.FullName && data.FullName.trim()) ||
+    ($('#rPos') && !$('#rPos').readOnly && data.Position && data.Position.trim())
+  );
+
+  if(!hasContent){
+    clearReqDraft();
+    return;
+  }
+
+  try {
+    localStorage.setItem(REQ_DRAFT_KEY(), JSON.stringify({
+      savedAt: Date.now(),
+      data
+    }));
+  }catch(e){}
+}
+
+window.addEventListener('beforeunload', () => {
+  try { if($('#frmReq')) saveReqDraft(true); }catch(e){}
+});
+
 async function viewRequestForm(){
   const c = $('#content');
   c.innerHTML = skTable(6);
@@ -6965,6 +7070,7 @@ async function viewRequestForm(){
   S.reqItemSeq = 0;
 
   c.innerHTML = `<div class="max-w-4xl mx-auto animate-fadeUp">${cardWrap('แบบฟอร์มขอเบิกพัสดุ','fa-file-pen', `
+    <div id="draftAlertContainer"></div>
     <form id="frmReq" class="space-y-5">
       <div class="grid sm:grid-cols-2 gap-4">
         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">วันที่ <span class="text-rose2">*</span></label>
@@ -7110,6 +7216,7 @@ async function viewRequestForm(){
     if(opt){
       rDeptInput.value = opt.dataset.val;
       deptMenu.classList.add('hidden');
+      saveReqDraft(false);
     }
   });
 
@@ -7124,11 +7231,15 @@ async function viewRequestForm(){
   };
   document.addEventListener('click', onDocDeptClick);
 
-  $('#btnAddItem').addEventListener('click', addItemRow);
+  $('#btnAddItem').addEventListener('click', () => {
+    addItemRow();
+    saveReqDraft(false);
+  });
   $('#btnDelItem').addEventListener('click', ()=>{
     const rows = $$('#itemRows > div');
     if(rows.length <= 1) return toast('warning','ต้องมีอย่างน้อย 1 รายการ');
     rows[rows.length - 1].remove();
+    saveReqDraft(false);
   });
 
   /* ---------- สแกนเพิ่มรายการ (กล้อง + ถ่ายรูป + ปืนยิง) ---------- */
@@ -7166,6 +7277,7 @@ async function viewRequestForm(){
           const next     = Math.min(current + 1, max);
           qtyInput.value = next;
           qtyInput.focus();
+          saveReqDraft(false);
           if(next >= max) toast('warning', `ถึงจำนวนคงเหลือสูงสุดแล้ว (${nf(max)})`);
           else toast('success', `เพิ่มจำนวน "${m.Name}" เป็น ${nf(next)}`);
         }else{
@@ -7186,13 +7298,94 @@ async function viewRequestForm(){
           sel.dispatchEvent(new Event('change'));
           $(`[data-qty="${i}"]`).value = 1;
           $(`[data-qty="${i}"]`).focus();
+          saveReqDraft(false);
           toast('success', `เพิ่ม "${m.Name}" แล้ว`);
         }
       }
     });
   });
 
-  addItemRow();
+  // ponytail: Restore draft if exists and not expired
+  const draft = loadReqDraft();
+  let draftRestored = false;
+
+  if(draft && draft.data){
+    const d = draft.data;
+    if(d.Date && $('#rDate')){
+      $('#rDate').value = d.Date;
+      if($('#rDateTh')) $('#rDateTh').textContent = thaiDate(d.Date);
+    }
+    if($('#rPos') && !$('#rPos').readOnly && d.Position) $('#rPos').value = d.Position;
+    if($('#rName') && !$('#rName').readOnly && d.FullName) $('#rName').value = d.FullName;
+    if($('#rDept') && d.Department) $('#rDept').value = d.Department;
+    if($('#rPurpose') && d.Purpose) $('#rPurpose').value = d.Purpose;
+    if($('#rNote') && d.Note) $('#rNote').value = d.Note;
+
+    if(Array.isArray(d.items) && d.items.length){
+      $('#itemRows').innerHTML = '';
+      S.reqItemSeq = 0;
+      d.items.forEach(it => {
+        addItemRow();
+        const curRow = $$('#itemRows > div').pop();
+        if(curRow){
+          const i = curRow.dataset.row;
+          const sel = $(`[data-sel="${i}"]`);
+          if(sel && it.MaterialID){
+            sel.value = it.MaterialID;
+            sel.dispatchEvent(new Event('change'));
+          }
+          if($(`[data-qty="${i}"]`) && (it.Qty !== undefined && it.Qty !== '')){
+            $(`[data-qty="${i}"]`).value = it.Qty;
+          }
+          if($(`[data-remark="${i}"]`) && it.Remark){
+            $(`[data-remark="${i}"]`).value = it.Remark;
+          }
+        }
+      });
+      draftRestored = true;
+    }
+
+    const draftTimeStr = new Date(draft.savedAt).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+    const draftContainer = $('#draftAlertContainer');
+    if(draftContainer){
+      draftContainer.innerHTML = `
+        <div id="draftAlert" class="mb-4 p-3.5 sm:p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm animate-fadeUp">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+            </div>
+            <div>
+              <span class="font-bold block text-slate-800">กู้คืนแบบร่างเดิมให้อัตโนมัติ</span>
+              <span class="text-xs text-amber-700">บันทึกล่าสุดเมื่อ ${draftTimeStr} น. (ระบบเก็บแบบร่างไว้ 30 นาที)</span>
+            </div>
+          </div>
+          <button type="button" id="btnClearReqDraft" class="min-h-[44px] px-3.5 py-2 rounded-xl bg-amber-200/80 hover:bg-amber-300 text-amber-900 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer self-end sm:self-auto shadow-sm">
+            <i class="fa-solid fa-trash-can"></i> ล้างแบบร่าง
+          </button>
+        </div>`;
+
+      $('#btnClearReqDraft')?.addEventListener('click', () => {
+        clearReqDraft();
+        viewRequestForm();
+        toast('info', 'ล้างข้อมูลแบบร่างเรียบร้อยแล้ว');
+      });
+    }
+  }
+
+  if(!draftRestored){
+    addItemRow();
+  }
+
+  // Bind draft save events
+  $('#frmReq').addEventListener('input', () => saveReqDraft(false));
+  $('#frmReq').addEventListener('change', () => saveReqDraft(false));
+
+  $('#btnResetReq').addEventListener('click', (e) => {
+    e.preventDefault();
+    clearReqDraft();
+    viewRequestForm();
+    toast('info', 'ล้างฟอร์มและแบบร่างเรียบร้อยแล้ว');
+  });
 
   $('#frmReq').addEventListener('submit', submitRequest);
 }
@@ -7238,16 +7431,19 @@ function addItemRow(){
     const q = $(`[data-qty="${i}"]`);
     q.max = o && o.value ? o.dataset.stock : '';
     q.value = '';
+    saveReqDraft(false);
   });
   $(`[data-qty="${i}"]`).addEventListener('input', e=>{
     const max = parseFloat(e.target.max||0);
     if(max && parseFloat(e.target.value||0) > max){
       e.target.value = max; toast('warning','จำนวนที่ขอเบิกต้องไม่เกินจำนวนคงเหลือ ('+nf(max)+')');
     }
+    saveReqDraft(false);
   });
   $(`[data-rm="${i}"]`).addEventListener('click', ()=>{
     if($$('#itemRows > div').length<=1) return toast('warning','ต้องมีอย่างน้อย 1 รายการ');
     $(`[data-row="${i}"]`).remove();
+    saveReqDraft(false);
   });
 }
 
@@ -7289,6 +7485,7 @@ async function submitRequest(e){
     });
     hideLoader();
     if(!res.ok) return alertErr(res.message);
+    clearReqDraft();
     await alertOk(res.message);
     if(S.user && S.user.Role === 'guest'){
       go('g-track', true);
