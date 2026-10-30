@@ -52,6 +52,7 @@ export type ApplyResult = { ok: true } | { ok: false; shortages: Shortage[] };
 interface ItemRow {
   material_id: string | null;
   qty: number;
+  effective_qty?: number;
 }
 
 /**
@@ -71,7 +72,7 @@ export async function applyRequestStock(
   const req = await db.prepare('SELECT doc_no FROM requests WHERE id = ?').bind(requestId).first<{ doc_no: string }>();
   const docNo = req?.doc_no ?? '';
   const { results: items } = await db
-    .prepare('SELECT material_id, qty FROM request_items WHERE request_id = ? AND material_id IS NOT NULL')
+    .prepare('SELECT material_id, qty, COALESCE(approved_qty, qty) AS effective_qty FROM request_items WHERE request_id = ? AND material_id IS NOT NULL')
     .bind(requestId)
     .all<ItemRow>();
   const txn = crypto.randomUUID();
@@ -93,12 +94,14 @@ export async function applyRequestStock(
           .bind(to, txn, now, requestId, from),
   ];
   for (const it of items) {
+    const effQty = Number(it.effective_qty ?? it.qty);
+    if (effQty <= 0) continue;
     const materialId = it.material_id as string;
     stmts.push(
       movementStmt(db, {
         materialId,
         type,
-        qty: it.qty,
+        qty: effQty,
         refDoc: docNo,
         note,
         actor,
@@ -109,12 +112,14 @@ export async function applyRequestStock(
         .prepare(
           'UPDATE materials SET stock_qty = stock_qty + (? * ?), updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND stock_txn = ?)',
         )
-        .bind(direction, it.qty, now, materialId, requestId, txn),
+        .bind(direction, effQty, now, materialId, requestId, txn),
     );
   }
 
   if (direction === -1) {
     for (const it of items) {
+      const effQty = Number(it.effective_qty ?? it.qty);
+      if (effQty <= 0) continue;
       const materialId = it.material_id as string;
       const { results: lots } = await db
         .prepare(
@@ -124,7 +129,7 @@ export async function applyRequestStock(
         .all<{ id: string; unit_price: number; remaining_qty: number }>();
 
       if (lots.length > 0) {
-        let needed = it.qty;
+        let needed = effQty;
         let firstLotDepleted = false;
         let activePriceAfter: number | null = null;
 
@@ -158,6 +163,8 @@ export async function applyRequestStock(
     }
   } else {
     for (const it of items) {
+      const effQty = Number(it.effective_qty ?? it.qty);
+      if (effQty <= 0) continue;
       const materialId = it.material_id as string;
       const lastLot = await db
         .prepare('SELECT id FROM material_lots WHERE material_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
@@ -167,7 +174,7 @@ export async function applyRequestStock(
         stmts.push(
           db
             .prepare("UPDATE material_lots SET remaining_qty = remaining_qty + ?, status = 'ACTIVE' WHERE id = ?")
-            .bind(it.qty, lastLot.id),
+            .bind(effQty, lastLot.id),
         );
       }
     }
@@ -187,7 +194,10 @@ export async function applyRequestStock(
 
 async function findShortages(db: D1Database, items: ItemRow[]): Promise<Shortage[]> {
   const need = new Map<string, number>();
-  for (const it of items) need.set(it.material_id as string, (need.get(it.material_id as string) ?? 0) + it.qty);
+  for (const it of items) {
+    const q = Number(it.effective_qty ?? it.qty);
+    if (q > 0) need.set(it.material_id as string, (need.get(it.material_id as string) ?? 0) + q);
+  }
   const out: Shortage[] = [];
   for (const [id, qty] of need) {
     const m = await db
@@ -210,6 +220,7 @@ export function mapRequest(row: Obj): Obj {
   r.Status = String(r.Status || 'PENDING').toUpperCase();
   r.TotalAmount = Number(r.TotalAmount || 0);
   r.ItemCount = Number(r.ItemCount || 0);
+  r.IsPartial = Number(row.is_partial || 0) === 1;
   return r;
 }
 
@@ -449,6 +460,7 @@ registerRpc('apiGetRequestForPrint', 'officer', async (ctx, args) => {
       Qty: Number(l.Qty || 0),
       UnitPrice: Number(l.UnitPrice || 0),
       TotalPrice: Number(l.TotalPrice || 0),
+      ...(it.approved_qty !== null && it.approved_qty !== undefined ? { ApprovedQty: Number(it.approved_qty) } : {}),
     };
   });
   return { ok: true, data: { request: mapRequest(row), items, printedAt: nowBkk() } };
@@ -491,11 +503,46 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
       }
       const reason = next === 'REJECTED' ? str(item.RejectReason) : '';
       const now = nowBkk();
+      const partialItems = Array.isArray(item.Items) ? item.Items : Array.isArray(item.items) ? item.items : null;
+      let isPartial = 0;
+      let approvedTotal = 0;
+      let approvedCount = 0;
+
+      if (next === 'APPROVED' && partialItems) {
+        const { results: dbItems } = await db.prepare('SELECT id, qty, unit_price FROM request_items WHERE request_id = ?').bind(id).all<{ id: string; qty: number; unit_price: number }>();
+        const mapReqItem = new Map(dbItems.map((x) => [x.id, x]));
+
+        for (const pIt of partialItems) {
+          const rawIt = asObj(pIt);
+          const itId = str(rawIt.ID || rawIt.id);
+          const orig = mapReqItem.get(itId);
+          if (!orig) continue;
+          let aQty = Number(rawIt.ApprovedQty ?? rawIt.approved_qty ?? orig.qty);
+          if (isNaN(aQty) || aQty < 0) aQty = 0;
+          if (aQty > orig.qty) aQty = orig.qty;
+          if (aQty < orig.qty) isPartial = 1;
+          if (aQty > 0) {
+            approvedCount++;
+            approvedTotal += aQty * orig.unit_price;
+          }
+          await db.prepare('UPDATE request_items SET approved_qty = ? WHERE id = ?').bind(aQty, itId).run();
+        }
+      }
+
       const extra = [
         db
-          .prepare('UPDATE requests SET status = ?, reject_reason = ?, approved_date = ?, approved_by = ?, updated_at = ? WHERE id = ?')
-          .bind(next, reason, now, actor, now, id),
-        logAudit(db, { action: 'STATUS', entity: 'Request', entityId: id, detail: `${r.doc_no} → ${next}`, actor }),
+          .prepare(
+            next === 'APPROVED' && partialItems
+              ? 'UPDATE requests SET status = ?, reject_reason = ?, approved_date = ?, approved_by = ?, is_partial = ?, total_amount = ?, item_count = ?, updated_at = ? WHERE id = ?'
+              : 'UPDATE requests SET status = ?, reject_reason = ?, approved_date = ?, approved_by = ?, is_partial = ?, updated_at = ? WHERE id = ?',
+          )
+          .bind(
+            ...(next === 'APPROVED' && partialItems
+              ? [next, reason, now, actor, isPartial, approvedTotal, approvedCount, now, id]
+              : [next, reason, now, actor, 0, now, id]),
+          ),
+        logAudit(db, { action: 'STATUS', entity: 'Request', entityId: id, detail: `${r.doc_no} → ${next}${isPartial ? ' (อนุมัติบางส่วน)' : ''}`, actor }),
+        ...(next !== 'APPROVED' ? [db.prepare('UPDATE request_items SET approved_qty = NULL WHERE request_id = ?').bind(id)] : []),
       ];
       // Every non-approve move also goes through applyRequestStock(+1): it is a guarded no-op when
       // stock_applied=0, and returns stock if a concurrent approval slipped in after our read.
@@ -507,7 +554,28 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
       results.push({ ...base, ok: true, message: 'อัปเดตสถานะเรียบร้อยแล้ว' });
       const hook = notifyHooks.onStatusChange;
       if (hook) {
-        const mapped = { ...mapRequest(r), Status: next };
+        const { results: finalItems } = await db.prepare('SELECT * FROM request_items WHERE request_id = ?').bind(id).all<Obj>();
+        const mappedItems = finalItems.map((it) => {
+          const l = toLegacy('request_items', it);
+          return {
+            ID: l.ID,
+            Code: l.Code,
+            Name: l.Name,
+            Unit: l.Unit,
+            Qty: Number(l.Qty || 0),
+            ApprovedQty: it.approved_qty !== null && it.approved_qty !== undefined ? Number(it.approved_qty) : Number(l.Qty || 0),
+            UnitPrice: Number(l.UnitPrice || 0),
+            TotalPrice: Number(l.TotalPrice || 0),
+          };
+        });
+        const mapped = {
+          ...mapRequest(r),
+          Status: next,
+          IsPartial: isPartial === 1,
+          TotalAmount: next === 'APPROVED' && partialItems ? approvedTotal : Number(r.total_amount || 0),
+          ItemCount: next === 'APPROVED' && partialItems ? approvedCount : Number(r.item_count || 0),
+          Items: mappedItems,
+        };
         runHook(ctx, () => hook(ctx.env, mapped, next, reason));
       }
     }

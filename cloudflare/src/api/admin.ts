@@ -49,7 +49,7 @@ notifyHooks.onNewRequest = async (env, req) => {
         lineToken,
         lineTo,
         newRequestFlex(req),
-        `📄 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department}\nวัตถุประสงค์: ${req.Purpose}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
+        `🔔 มีใบขอเบิกพัสดุใหม่\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nวัตถุประสงค์: ${req.Purpose || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
       );
     }
   }
@@ -71,11 +71,13 @@ notifyHooks.onStatusChange = async (env, req, newStatus, rejectReason) => {
       await sendTelegram(cfg.token, cfg.chatId, approvedRequestText(req));
     }
     if (cfg.notifyLine && lineToken && lineTo) {
+      const isPartial = Boolean(req.IsPartial || (Array.isArray(req.Items) && req.Items.some((it: any) => it.ApprovedQty !== undefined && it.ApprovedQty < it.Qty)));
+      const lineTitle = isPartial ? '✅ อนุมัติใบขอเบิกพัสดุแล้ว (อนุมัติบางส่วน)' : '✅ อนุมัติใบขอเบิกพัสดุแล้ว';
       await pushLineCard(
         lineToken,
         lineTo,
         approvedRequestFlex(req),
-        `✅ อนุมัติใบขอเบิกพัสดุแล้ว\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
+        `${lineTitle}\nเลขที่: ${req.DocNo}\nผู้ขอเบิก: ${req.FullName}\nแผนก: ${req.Department || '-'}\nจำนวน: ${req.ItemCount} รายการ | มูลค่ารวม: ${total} บาท`,
       );
     }
   } else if (newStatus === 'REJECTED') {

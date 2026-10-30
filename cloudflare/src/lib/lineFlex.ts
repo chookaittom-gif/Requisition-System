@@ -60,10 +60,40 @@ export function newRequestFlex(req: Obj): LineMessage {
 
 /** Approved-request LINE Flex card (green). */
 export function approvedRequestFlex(req: Obj): LineMessage {
-  return card('✅ อนุมัติใบขอเบิกพัสดุแล้ว', '#16A34A', `✅ อนุมัติแล้ว ${textOf(req.DocNo)} – ${textOf(req.FullName)}`, req);
+  const isPartial = Boolean(req.IsPartial || (Array.isArray(req.Items) && req.Items.some((it: any) => it.ApprovedQty !== undefined && it.ApprovedQty < it.Qty)));
+  const title = isPartial ? '✅ อนุมัติแล้ว (อนุมัติบางส่วน)' : '✅ อนุมัติใบขอเบิกพัสดุแล้ว';
+  const color = isPartial ? '#0D9488' : '#16A34A';
+  const alt = isPartial ? `✅ อนุมัติแล้ว (อนุมัติบางส่วน) ${textOf(req.DocNo)} – ${textOf(req.FullName)}` : `✅ อนุมัติแล้ว ${textOf(req.DocNo)} – ${textOf(req.FullName)}`;
+
+  let extraRow: Obj | undefined;
+  if (isPartial && Array.isArray(req.Items) && req.Items.length > 0) {
+    const lines: string[] = [];
+    for (const it of req.Items as Obj[]) {
+      const aQty = Number(it.ApprovedQty ?? it.Qty ?? 0);
+      const reqQty = Number(it.Qty ?? 0);
+      const unit = it.Unit ? ` ${it.Unit}` : '';
+      if (aQty > 0) {
+        lines.push(`• ${it.Name}: ${aQty}${unit}${aQty < reqQty ? ` (ขอ ${reqQty})` : ''}`);
+      } else {
+        lines.push(`• ${it.Name}: ❌ ไม่อนุมัติ`);
+      }
+    }
+    if (lines.length > 0) {
+      extraRow = {
+        type: 'box',
+        layout: 'vertical',
+        margin: 'md',
+        contents: [
+          { type: 'text', text: 'รายละเอียดการอนุมัติ:', size: 'xs', color: '#888888', weight: 'bold' },
+          { type: 'text', text: lines.slice(0, 10).join('\n'), size: 'xs', color: '#333333', wrap: true },
+        ],
+      };
+    }
+  }
+
+  return card(title, color, alt, req, extraRow);
 }
 
-/** Rejected-request LINE Flex card (rose / red). */
 export function rejectedRequestFlex(req: Obj, reason?: string): LineMessage {
   const r = reason || textOf(req.RejectReason) || '-';
   return card(

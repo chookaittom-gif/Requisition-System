@@ -1,4 +1,4 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-29)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-30)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
@@ -21,7 +21,34 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-29 Stock Card x2 Fix, Dashboard Overhaul, Purchase Order Reorder & Reject Status Removal)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Draft Auto-Save 30m & Partial Request Approval)
+
+### 1. feat(frontend): Auto-save แบบฟอร์มขอเบิก 30 นาที (`req_form_draft_v1`)
+- บันทึกข้อมูลร่างฟอร์มลง `localStorage` ทันทีเมื่อมีการพิมพ์หรือแก้ไขรายการ (`saveReqDraft()`)
+- กำหนดเวลาหมดอายุ 30 นาที (`DRAFT_TTL_MS = 30 * 60 * 1000`)
+- เมื่อเปิดฟอร์มหรือกลับมาที่หน้าเว็บ หากมีร่างที่ยังไม่หมดอายุ ระบบจะโหลดข้อมูลกลับมาให้อัตโนมัติ พร้อมแสดงแถบแจ้งเตือนสีส้มอ่อนและปุ่ม "ล้างร่าง" (`clearReqDraft()`)
+- ล้างข้อมูลร่างอัตโนมัติเมื่อกด "ล้างฟอร์ม" หรือส่งคำขอเบิกสำเร็จ
+
+### 2. feat(requests): ระบบอนุมัติบางส่วน (Partial Approval)
+- **Database Schema:** `cloudflare/migrations/0010_partial_approval.sql`
+  - เพิ่ม `is_partial INTEGER NOT NULL DEFAULT 0` ในตาราง `requests`
+  - เพิ่ม `approved_qty REAL` ในตาราง `request_items`
+- **Backend & Inventory Logic:**
+  - `applyRequestStock`: ตัดและคืนสต็อกตาม `COALESCE(approved_qty, qty)` หาก `effective_qty = 0` จะไม่ตัดสต็อก
+  - `apiUpdateRequestStatus`: รองรับส่งรายการ `Items: [{ ID, Code, ApprovedQty }]` เมื่อกดอนุมัติ พร้อมคำนวณ `ItemCount`, `TotalAmount` และตั้งค่า `is_partial` ตามจริง
+  - กรณีเปลี่ยนสถานะกลับ (Rollback) เช่น ยกเลิกหรือเปลี่ยนสถานะ คืนสต็อกตามจำนวนที่เคยตัดจริง และ reset `approved_qty`
+- **Frontend UI:**
+  - เพิ่ม Modal อนุมัติแบบกำหนดรายการ (`openApproveModal(id)`): มี Checkbox เลือกแต่ละรายการ และ Input ปรับจำนวนที่อนุมัติ (0 ถึงจำนวนที่ขอ)
+  - คำนวณสรุปจำนวนรายการและยอดเงินรวมที่อนุมัติแบบเรียลไทม์
+  - เพิ่ม Badge "อนุมัติบางส่วน" สีส้ม (`stBadge`) ในตารางคำขอเบิก
+  - ปรับหน้ารายละเอียดคำขอเบิก (`reqDetail`) แสดงยอดที่ขอเบิกและยอดที่อนุมัติจริง
+- **Notifications:**
+  - LINE Flex (`cloudflare/src/lib/lineFlex.ts`) และ Telegram (`cloudflare/src/lib/telegram.ts`):
+  - แจ้งเตือนระบุ "(อนุมัติบางส่วน)" พร้อมแจกแจงรายการและจำนวนที่อนุมัติชัดเจน
+
+---
+
+## 3. สรุปประวัติการพัฒนาก่อนหน้า (2026-10-29)
 
 ### 1. fix(inventory): แก้ปัญหายอดสต็อกการ์ด x2 จากยอดยกมา
 - **ปัญหาเดิม:** เมื่อเพิ่มพัสดุใหม่ด้วยยอดยกมา (เช่น 6) แต่ไม่ได้ระบุยอดสั่งซื้อ (`OrderQty: 0`) ระบบกลับสร้างทั้งรายการยอดยกมาใน `opening_balances` และสร้าง movement `IN 'จัดซื้อ'` ซ้ำใน `stock_movements` ส่งผลให้หน้าสต็อกการ์ดคำนวณยอดยกมา 6 + ยอดจัดซื้อ 6 = กลายเป็น 12

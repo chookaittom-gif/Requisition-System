@@ -154,12 +154,12 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
     const counters: Counters = { approved: n('APPROVED'), pending: n('PENDING'), rejected: n('REJECTED') };
     const used = await db
       .prepare(
-        "SELECT COALESCE(SUM(i.total_price), 0) AS value, COALESCE(SUM(i.qty), 0) AS qty FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED'",
+        "SELECT COALESCE(SUM(COALESCE(i.approved_qty, i.qty) * i.unit_price), 0) AS value, COALESCE(SUM(COALESCE(i.approved_qty, i.qty)), 0) AS qty FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED'",
       )
       .first<{ value: number; qty: number }>();
     const { results: byName } = await db
       .prepare(
-        "SELECT i.name AS name, SUM(i.qty) AS qty FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED' GROUP BY i.name ORDER BY MIN(i.rowid)",
+        "SELECT i.name AS name, SUM(COALESCE(i.approved_qty, i.qty)) AS qty FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED' AND COALESCE(i.approved_qty, i.qty) > 0 GROUP BY i.name ORDER BY MIN(i.rowid)",
       )
       .all<{ name: string; qty: number }>();
 
@@ -299,7 +299,7 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
   const { results } = await ctx.env.DB.prepare(
     `SELECT m.*${obSelect},
        (SELECT COALESCE(SUM(p.qty), 0) FROM purchases p WHERE ${purchaseWhere.join(' AND ')}) AS purchased,
-       (SELECT COALESCE(SUM(i.qty), 0) FROM request_items i JOIN requests r ON r.id = i.request_id WHERE ${usedWhere.join(' AND ')}) AS used
+       (SELECT COALESCE(SUM(COALESCE(i.approved_qty, i.qty)), 0) FROM request_items i JOIN requests r ON r.id = i.request_id WHERE ${usedWhere.join(' AND ')}) AS used
      FROM materials m ${obJoin}`,
   )
     .bind(...mainBinds)
@@ -401,7 +401,7 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
       `SELECT m.*, ob.opening_qty AS ob_qty,
          (SELECT COALESCE(SUM(p.qty), 0) FROM purchases p
             WHERE p.material_id = m.id AND substr(p.purchase_date, 1, 10) BETWEEN ? AND ?) AS purchased,
-         (SELECT COALESCE(SUM(i.qty), 0) FROM request_items i JOIN requests r ON r.id = i.request_id
+         (SELECT COALESCE(SUM(COALESCE(i.approved_qty, i.qty)), 0) FROM request_items i JOIN requests r ON r.id = i.request_id
             WHERE i.material_id = m.id AND r.status = 'APPROVED'
               AND substr(COALESCE(NULLIF(r.request_date, ''), r.approved_date), 1, 10) BETWEEN ? AND ?) AS used
        FROM materials m

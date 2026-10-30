@@ -105,16 +105,41 @@ export function newRequestText(req: Obj): string {
 /** Approved-request Telegram text: same short shape as newRequestText. */
 export function approvedRequestText(req: Obj): string {
   const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-  return (
-    `✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว</b>\n` +
+  const isPartial = Boolean(req.IsPartial || (Array.isArray(req.Items) && req.Items.some((it: any) => it.ApprovedQty !== undefined && it.ApprovedQty < it.Qty)));
+  const title = isPartial ? '✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว (อนุมัติบางส่วน)</b>\n' : '✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว</b>\n';
+  let text = (
+    title +
     `📄 <b>เลขที่:</b> <code>${esc(req.DocNo)}</code>\n` +
     `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}\n` +
     `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${esc(req.Department || '-')}\n` +
     `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`
   );
+
+  if (isPartial && Array.isArray(req.Items) && req.Items.length > 0) {
+    const approvedLines: string[] = [];
+    const rejectedLines: string[] = [];
+    for (const it of req.Items as Obj[]) {
+      const aQty = Number(it.ApprovedQty ?? it.Qty ?? 0);
+      const reqQty = Number(it.Qty ?? 0);
+      const unit = it.Unit ? ` ${it.Unit}` : '';
+      if (aQty > 0) {
+        approvedLines.push(`  • ${esc(it.Name)}: <b>${aQty}</b>${unit}${aQty < reqQty ? ` (ขอ ${reqQty})` : ''}`);
+      }
+      if (aQty === 0) {
+        rejectedLines.push(`  • ${esc(it.Name)} (ขอ ${reqQty}${unit} - ไม่อนุมัติ)`);
+      }
+    }
+    if (approvedLines.length) {
+      text += `\n\n📦 <b>รายการที่อนุมัติ:</b>\n` + approvedLines.join('\n');
+    }
+    if (rejectedLines.length) {
+      text += `\n\n❌ <b>รายการที่ตัดออก:</b>\n` + rejectedLines.join('\n');
+    }
+  }
+
+  return text;
 }
 
-/** Rejected-request Telegram text. */
 export function rejectedRequestText(req: Obj, reason?: string): string {
   const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
   return (

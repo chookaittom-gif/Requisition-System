@@ -228,6 +228,40 @@ describe('approve / stock', () => {
     expect(await rows("SELECT * FROM audit_log WHERE action='STATUS'")).toHaveLength(2);
     expect(await status(id, 'BOGUS')).toMatchObject({ ok: false, message: 'สถานะไม่ถูกต้อง' });
   });
+
+  it('partial approval approves selected items and adjusted qty, deducting stock accurately', async () => {
+    await createReq([
+      { MaterialID: 'M-A', Qty: 2 },
+      { MaterialID: 'M-B', Qty: 2 },
+    ]);
+    const { id } = await lastReq();
+    const reqItems = await rows('SELECT id, material_id FROM request_items WHERE request_id = ?', id);
+    const itemA = reqItems.find((x: any) => x.material_id === 'M-A');
+    const itemB = reqItems.find((x: any) => x.material_id === 'M-B');
+
+    const res = await rpc('apiUpdateRequestStatus', [[{
+      ID: id,
+      Status: 'APPROVED',
+      Items: [
+        { ID: itemA.id, ApprovedQty: 1 },
+        { ID: itemB.id, ApprovedQty: 0 },
+      ],
+    }]]);
+    expect(res).toMatchObject({ ok: true });
+
+    const q = await lastReq();
+    expect(q.status).toBe('APPROVED');
+    expect(q.is_partial).toBe(1);
+    expect(q.item_count).toBe(1);
+    expect(q.total_amount).toBe(10);
+
+    expect(await stock('M-A')).toBe(9);
+    expect(await stock('M-B')).toBe(2);
+
+    await status(id, 'REJECTED');
+    expect(await stock('M-A')).toBe(10);
+    expect(await stock('M-B')).toBe(2);
+    });
 });
 
 describe('delete', () => {

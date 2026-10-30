@@ -37,11 +37,11 @@ const MAPS: Record<TableName, ColumnMap> = {
     id: 'ID', doc_no: 'DocNo', request_date: 'RequestDate', user_id: 'UserID', full_name: 'FullName',
     position: 'Position', department: 'Department', purpose: 'Purpose', note: 'Note', attach_url: 'AttachUrl',
     status: 'Status', reject_reason: 'RejectReason', approved_date: 'ApprovedDate', approved_by: 'ApprovedBy',
-    total_amount: 'TotalAmount', item_count: 'ItemCount', created_at: 'CreatedAt', updated_at: 'UpdatedAt',
+    total_amount: 'TotalAmount', item_count: 'ItemCount', is_partial: 'IsPartial', created_at: 'CreatedAt', updated_at: 'UpdatedAt',
   },
   request_items: {
     id: 'ID', request_id: 'RequestID', material_id: 'MaterialID', code: 'Code', name: 'Name', unit: 'Unit',
-    qty: 'Qty', unit_price: 'UnitPrice', total_price: 'TotalPrice', remark: 'Remark',
+    qty: 'Qty', unit_price: 'UnitPrice', total_price: 'TotalPrice', remark: 'Remark', approved_qty: 'ApprovedQty',
   },
   purchases: {
     id: 'ID', material_id: 'MaterialID', code: 'Code', name: 'Name', qty: 'Qty', unit_price: 'UnitPrice',
