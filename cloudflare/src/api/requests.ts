@@ -478,6 +478,118 @@ registerRpc('apiGetRequestForPrint', 'officer', async (ctx, args) => {
   return { ok: true, data: { request: mapRequest(row), items, printedAt: nowBkk() } };
 });
 
+registerRpc('apiUpdateRequest', 'officer', (ctx, args) =>
+  guarded(async () => {
+    const db = ctx.env.DB;
+    const p = asObj(args[0]);
+    const id = str(p.ID || p.id);
+    if (!id) return fail('กรุณาระบุรหัสใบขอเบิก');
+
+    const r = await db
+      .prepare('SELECT * FROM requests WHERE id = ?')
+      .bind(id)
+      .first<Obj & { doc_no: string; status: string; full_name: string; position: string; department: string; purpose: string; note: string; attach_url: string; request_date: string }>();
+    if (!r) return fail('ไม่พบใบขอเบิกนี้');
+
+    const status = String(r.status).toUpperCase();
+    const actor = actorOf(ctx);
+    const now = nowBkk();
+
+    const requestDate = p.RequestDate ? str(p.RequestDate) : (r.request_date ? str(r.request_date) : todayBkk());
+    if (!DAY_RE.test(requestDate)) throw new ValidationError('รูปแบบวันที่ไม่ถูกต้อง');
+
+    const attachUrl = p.AttachUrl !== undefined ? str(p.AttachUrl) : (r.attach_url ? str(r.attach_url) : '');
+    if (attachUrl && !/^https?:\/\/\S+$/i.test(attachUrl)) {
+      throw new ValidationError('ไฟล์แนบต้องเป็นลิงก์ (http/https) หรือว่างเปล่า');
+    }
+
+    const fullName = p.FullName !== undefined ? str(p.FullName) : str(r.full_name);
+    if (!fullName) throw new ValidationError('กรุณาระบุชื่อผู้ขอเบิก');
+    const position = p.Position !== undefined ? str(p.Position) : str(r.position);
+    const department = p.Department !== undefined ? str(p.Department) : str(r.department);
+    const purpose = p.Purpose !== undefined ? str(p.Purpose) : str(r.purpose);
+    const note = p.Note !== undefined ? str(p.Note) : str(r.note);
+
+    const rawItems = Array.isArray(p.items) ? p.items : (Array.isArray(p.Items) ? p.Items : null);
+
+    if (status === 'APPROVED') {
+      if (rawItems !== null) {
+        return fail('ใบขอเบิกนี้ได้รับการอนุมัติแล้ว ไม่อนุญาตให้แก้ไขรายการพัสดุ');
+      }
+      await db.batch([
+        db
+          .prepare(
+            'UPDATE requests SET full_name = ?, position = ?, department = ?, purpose = ?, note = ?, attach_url = ?, request_date = ?, updated_at = ? WHERE id = ?'
+          )
+          .bind(fullName, position, department, purpose, note, attachUrl, requestDate, now, id),
+        logAudit(db, { action: 'UPDATE', entity: 'Request', entityId: id, detail: `แก้ไขข้อมูลทั่วไป ${r.doc_no}`, actor }),
+      ]);
+      return { ok: true, message: 'แก้ไขข้อมูลใบขอเบิกเรียบร้อยแล้ว' };
+    }
+
+    if (rawItems !== null) {
+      if (!rawItems.length) return fail('ไม่พบรายการพัสดุที่ถูกต้อง');
+      if (rawItems.length > MAX_ITEMS) throw new ValidationError(`ขอเบิกได้ไม่เกิน ${MAX_ITEMS} รายการต่อใบ`);
+
+      const wanted = rawItems.map((raw) => {
+        const it = asObj(raw);
+        const qty = typeof it.Qty === 'string' && it.Qty.trim() === '' ? NaN : Number(it.Qty);
+        if (!Number.isFinite(qty) || qty <= 0) throw new ValidationError('จำนวนที่ขอเบิกต้องเป็นตัวเลขที่มากกว่า 0');
+        const matId = str(it.MaterialID || it.materialId || it.material_id);
+        return { materialId: matId, qty, remark: str(it.Remark || it.remark) };
+      });
+      const ids = [...new Set(wanted.map((w) => w.materialId))];
+      const { results: mats } = await db
+        .prepare(
+          `SELECT id, code, name, unit, unit_price, stock_qty FROM materials WHERE id IN (${ids.map(() => '?').join(',')})`,
+        )
+        .bind(...ids)
+        .all<{ id: string; code: string; name: string; unit: string; unit_price: number; stock_qty: number }>();
+      const byId = new Map(mats.map((m) => [m.id, m]));
+
+      const asked = new Map<string, number>();
+      const items = wanted.map((w) => {
+        const m = byId.get(w.materialId);
+        if (!m) throw new ValidationError('ไม่พบรายการพัสดุที่ถูกต้อง');
+        const sum = (asked.get(m.id) ?? 0) + w.qty;
+        asked.set(m.id, sum);
+        if (sum > m.stock_qty) {
+          throw new ValidationError(`จำนวนที่ขอเบิก "${m.name}" เกินจำนวนคงเหลือในสต็อก (${m.stock_qty} ${m.unit})`);
+        }
+        return { m, qty: w.qty, remark: w.remark, totalPrice: w.qty * m.unit_price };
+      });
+      const total = items.reduce((s, i) => s + i.totalPrice, 0);
+
+      await db.batch([
+        db
+          .prepare(
+            'UPDATE requests SET full_name = ?, position = ?, department = ?, purpose = ?, note = ?, attach_url = ?, request_date = ?, total_amount = ?, item_count = ?, updated_at = ? WHERE id = ?'
+          )
+          .bind(fullName, position, department, purpose, note, attachUrl, requestDate, total, items.length, now, id),
+        db.prepare('DELETE FROM request_items WHERE request_id = ?').bind(id),
+        ...items.map((i) =>
+          db
+            .prepare(
+              'INSERT INTO request_items (id, request_id, material_id, code, name, unit, qty, unit_price, total_price, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .bind(genId('RI'), id, i.m.id, i.m.code, i.m.name, i.m.unit, i.qty, i.m.unit_price, i.totalPrice, i.remark),
+        ),
+        logAudit(db, { action: 'UPDATE', entity: 'Request', entityId: id, detail: `แก้ไขข้อมูลและรายการพัสดุ ${r.doc_no}`, actor }),
+      ]);
+    } else {
+      await db.batch([
+        db
+          .prepare(
+            'UPDATE requests SET full_name = ?, position = ?, department = ?, purpose = ?, note = ?, attach_url = ?, request_date = ?, updated_at = ? WHERE id = ?'
+          )
+          .bind(fullName, position, department, purpose, note, attachUrl, requestDate, now, id),
+        logAudit(db, { action: 'UPDATE', entity: 'Request', entityId: id, detail: `แก้ไขข้อมูลทั่วไป ${r.doc_no}`, actor }),
+      ]);
+    }
+    return { ok: true, message: 'แก้ไขใบขอเบิกเรียบร้อยแล้ว' };
+  }),
+);
+
 /* ============================== STATUS / DELETE ============================== */
 interface StatusResult {
   ID: string;

@@ -336,8 +336,77 @@ describe('reads', () => {
   });
 
   it('officer-only functions need a session', async () => {
-    for (const fn of ['apiGetRequests', 'apiGetMyRequests', 'apiGetRequestForPrint', 'apiUpdateRequestStatus', 'apiDeleteRequests']) {
+    for (const fn of ['apiGetRequests', 'apiGetMyRequests', 'apiGetRequestForPrint', 'apiUpdateRequestStatus', 'apiDeleteRequests', 'apiUpdateRequest']) {
       expect(await guest(fn, [])).toMatchObject({ ok: false, code: 'AUTH' });
     }
+  });
+
+  describe('update', () => {
+    it('updates general info and items on PENDING request', async () => {
+      await createReq([{ MaterialID: 'M-A', Qty: 2 }], { FullName: 'สมชาย', Purpose: 'งานเก่า' });
+      const req = await lastReq();
+
+      const res = await rpc('apiUpdateRequest', [{
+        ID: req.id,
+        FullName: 'สมชาย ใจดี',
+        Purpose: 'งานใหม่',
+        Department: 'ฝ่ายไอที',
+        items: [{ MaterialID: 'M-B', Qty: 1, Remark: 'ดินสอทดสอบ' }],
+      }]);
+
+      expect(res).toEqual({ ok: true, message: 'แก้ไขใบขอเบิกเรียบร้อยแล้ว' });
+      const updated = await lastReq();
+      expect(updated.full_name).toBe('สมชาย ใจดี');
+      expect(updated.purpose).toBe('งานใหม่');
+      expect(updated.department).toBe('ฝ่ายไอที');
+      expect(updated.total_amount).toBe(10);
+      expect(updated.item_count).toBe(1);
+
+      const items = await rows('SELECT * FROM request_items WHERE request_id = ?', req.id);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ material_id: 'M-B', code: 'B-1', name: 'ดินสอ', qty: 1, total_price: 10 });
+    });
+
+    it('updates general info on APPROVED request without items', async () => {
+      await createReq([{ MaterialID: 'M-A', Qty: 2 }]);
+      const req = await lastReq();
+      await status(req.id, 'APPROVED');
+
+      const res = await rpc('apiUpdateRequest', [{
+        ID: req.id,
+        FullName: 'สมหญิง',
+        Purpose: 'แก้ไขเหตุผลหลังอนุมัติ',
+      }]);
+
+      expect(res).toEqual({ ok: true, message: 'แก้ไขข้อมูลใบขอเบิกเรียบร้อยแล้ว' });
+      const updated = await lastReq();
+      expect(updated.full_name).toBe('สมหญิง');
+      expect(updated.purpose).toBe('แก้ไขเหตุผลหลังอนุมัติ');
+    });
+
+    it('rejects modifying items on APPROVED request', async () => {
+      await createReq([{ MaterialID: 'M-A', Qty: 2 }]);
+      const req = await lastReq();
+      await status(req.id, 'APPROVED');
+
+      const res = await rpc('apiUpdateRequest', [{
+        ID: req.id,
+        items: [{ MaterialID: 'M-A', Qty: 3 }],
+      }]);
+
+      expect(res).toEqual({ ok: false, message: 'ใบขอเบิกนี้ได้รับการอนุมัติแล้ว ไม่อนุญาตให้แก้ไขรายการพัสดุ' });
+    });
+
+    it('validates stock quantity on update', async () => {
+      await createReq([{ MaterialID: 'M-A', Qty: 2 }]);
+      const req = await lastReq();
+
+      const res = await rpc('apiUpdateRequest', [{
+        ID: req.id,
+        items: [{ MaterialID: 'M-A', Qty: 99 }],
+      }]);
+
+      expect(res).toMatchObject({ ok: false, code: 'VALIDATION' });
+    });
   });
 });

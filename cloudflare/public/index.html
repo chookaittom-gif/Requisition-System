@@ -3247,11 +3247,12 @@ function reqTable(list, key, showChk){
 
 function reqActions(q){
   const st = String(q.Status).toUpperCase();
-  let html = `<button data-view-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-700 hover:text-white transition" title="ดูรายละเอียด"><i class="fa-solid fa-eye"></i></button>
-              <button data-print-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-blue2/10 text-blue2 hover:bg-blue2 hover:text-white transition" title="พิมพ์"><i class="fa-solid fa-print"></i></button>`;
+  let html = `<button data-view-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-700 hover:text-white transition flex items-center justify-center" title="ดูรายละเอียด"><i class="fa-solid fa-eye"></i></button>
+              <button data-print-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-blue2/10 text-blue2 hover:bg-blue2 hover:text-white transition flex items-center justify-center" title="พิมพ์"><i class="fa-solid fa-print"></i></button>`;
   if(S.user.Role==='admin' || S.user.Role==='officer'){
-    if(st!=='APPROVED') html += `<button data-ap-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-teal/15 text-teal hover:bg-teal hover:text-white transition" title="อนุมัติ"><i class="fa-solid fa-check"></i></button>`;
-    html += `<button data-del-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-red2/10 text-red2 hover:bg-red2 hover:text-white transition" title="ลบ"><i class="fa-solid fa-trash"></i></button>`;
+    html += `<button data-edit-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-600 hover:text-white transition flex items-center justify-center" title="แก้ไขใบขอเบิก"><i class="fa-solid fa-pen-to-square"></i></button>`;
+    if(st!=='APPROVED') html += `<button data-ap-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-teal/15 text-teal hover:bg-teal hover:text-white transition flex items-center justify-center" title="อนุมัติ"><i class="fa-solid fa-check"></i></button>`;
+    html += `<button data-del-req="${esc(q.ID)}" class="w-9 h-9 rounded-xl bg-red2/10 text-red2 hover:bg-red2 hover:text-white transition flex items-center justify-center" title="ลบ"><i class="fa-solid fa-trash"></i></button>`;
   }
   return html;
 }
@@ -3260,6 +3261,7 @@ function bindReqEvents(){
   $$('.chkAllReq').forEach(a=> a.addEventListener('change', e=> $$('.chk-req').forEach(x=> x.checked=e.target.checked)));
   $$('[data-view-req]').forEach(b=> b.addEventListener('click', ()=> reqDetail(b.dataset.viewReq)));
   $$('[data-print-req]').forEach(b=> b.addEventListener('click', ()=> printRequest(b.dataset.printReq)));
+  $$('[data-edit-req]').forEach(b=> b.addEventListener('click', ()=> openEditReqModal(b.dataset.editReq)));
   $$('[data-ap-req]').forEach(b=> b.addEventListener('click', ()=> openApproveModal(b.dataset.apReq)));
   $$('[data-del-req]').forEach(b=> b.addEventListener('click', async ()=>{
     const q = (S.cache.requests||[]).find(x=>x.ID===b.dataset.delReq) || {};
@@ -3307,6 +3309,275 @@ async function batchApprove(){
     showCancelButton:true, confirmButtonText:'อนุมัติทั้งหมด', cancelButtonText:'ยกเลิก', confirmButtonColor:'#26A69A', cancelButtonColor:'#94a3b8', reverseButtons:true });
   if(!r.isConfirmed) return;
   changeStatus(ids,'APPROVED');
+}
+
+
+async function openEditReqModal(id){
+  showLoader('กำลังโหลดข้อมูลใบขอเบิก...');
+  const [r, rMats] = await Promise.all([
+    api('apiGetRequestForPrint', id),
+    (!S.cache.materials || !S.cache.materials.length) ? api('apiGetMaterials') : Promise.resolve(null)
+  ]);
+  if(rMats && rMats.ok) S.cache.materials = rMats.data;
+  hideLoader();
+  if(!r || !r.ok) return alertErr((r && r.message) || 'โหลดข้อมูลไม่สำเร็จ');
+
+  const q = r.data.request;
+  const items = r.data.items || [];
+  const isApproved = String(q.Status).toUpperCase() === 'APPROVED';
+  const allMats = S.cache.materials || [];
+  const activeMats = allMats.filter(m => m.Status !== 'INACTIVE' || items.some(it => it.MaterialID === m.ID || it.Code === m.Code));
+  const matMap = new Map(allMats.map(m => [m.ID, m]));
+  const matCodeMap = new Map(allMats.map(m => [m.Code, m]));
+
+  const renderMatOptions = (selectedId, selectedCode) => {
+    let opts = '<option value="">-- เลือกรายการพัสดุ --</option>';
+    for(const m of activeMats){
+      const isSel = (selectedId && m.ID === selectedId) || (selectedCode && m.Code === selectedCode);
+      opts += `<option value="${esc(m.ID)}" data-unit="${esc(m.Unit||'')}" data-stock="${m.StockQty||0}" ${isSel ? 'selected' : ''}>${esc(m.Code)} - ${esc(m.Name)} (คงเหลือ: ${nf(m.StockQty)} ${esc(m.Unit||'')})</option>`;
+    }
+    return opts;
+  };
+
+  const createItemRowHtml = (it = {}) => {
+    const m = (it.MaterialID && matMap.get(it.MaterialID)) || (it.Code && matCodeMap.get(it.Code)) || {};
+    const matId = m.ID || it.MaterialID || '';
+    const unit = m.Unit || it.Unit || '';
+    const qty = it.Qty !== undefined ? it.Qty : 1;
+    const remark = it.Remark || '';
+
+    return `
+      <div class="edit-item-row p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+        <div class="grid sm:grid-cols-12 gap-2 items-center">
+          <div class="sm:col-span-6">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">รายการพัสดุ <span class="text-rose2">*</span></label>
+            <select class="edit-mat-sel w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:border-brand-500 outline-none transition">
+              ${renderMatOptions(matId, it.Code)}
+            </select>
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">จำนวน <span class="text-rose2">*</span></label>
+            <div class="flex items-center gap-1.5">
+              <input type="number" min="1" step="1" value="${qty}" class="edit-mat-qty w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-center font-bold focus:border-brand-500 outline-none transition">
+              <span class="edit-mat-unit text-xs text-slate-500 whitespace-nowrap min-w-[36px]">${esc(unit)}</span>
+            </div>
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">หมายเหตุ</label>
+            <div class="flex items-center gap-1.5">
+              <input type="text" value="${esc(remark)}" placeholder="ระบุถ้ามี" class="edit-mat-remark w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-brand-500 outline-none transition">
+              <button type="button" class="btn-del-item-row w-8 h-8 rounded-lg bg-rose2/10 text-rose2 hover:bg-rose2 hover:text-white transition flex items-center justify-center flex-shrink-0" title="ลบรายการนี้">
+                <i class="fa-solid fa-trash text-xs"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  openModal({
+    title: `แก้ไขใบขอเบิก ${esc(q.DocNo)}`,
+    sub: `${thaiDate(q.RequestDate)} • สถานะ: ${q.Status === 'APPROVED' ? 'อนุมัติแล้ว' : (q.Status === 'REJECTED' ? 'ปฏิเสธ' : 'รออนุมัติ')}`,
+    icon: 'fa-pen-to-square',
+    size: 'max-w-4xl',
+    body: `
+      <form id="frmEditReq" class="space-y-4 text-slate-700">
+        ${isApproved ? `
+          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900">
+            <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm flex-shrink-0"></i>
+            <div>
+              <p class="font-bold">ใบขอเบิกนี้ได้รับการอนุมัติแล้ว</p>
+              <p class="text-amber-800 mt-0.5">สามารถแก้ไขได้เฉพาะข้อมูลทั่วไป (ชื่อผู้ขอเบิก/ฝ่าย/วัตถุประสงค์) เพื่อรักษาความถูกต้องของยอดสต็อกและประวัติการตัดล็อต</p>
+            </div>
+          </div>
+        ` : `
+          <div class="p-3.5 rounded-2xl bg-brand-50 border border-brand-100 flex items-start gap-2.5 text-xs text-brand-800">
+            <i class="fa-solid fa-circle-info text-brand-600 mt-0.5 text-sm flex-shrink-0"></i>
+            <div>
+              <p class="font-bold">สถานะรออนุมัติ: สามารถแก้ไขข้อมูลทั่วไปและรายการพัสดุได้</p>
+              <p class="text-slate-600 mt-0.5">สามารถเพิ่ม ลบ หรือปรับจำนวนที่ต้องการขอเบิกได้ตามความเหมาะสม</p>
+            </div>
+          </div>
+        `}
+
+        <div class="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
+          <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">ข้อมูลผู้ขอเบิกและรายละเอียด</p>
+          <div class="grid sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">ชื่อ-นามสกุล ผู้ขอเบิก <span class="text-rose2">*</span></label>
+              <input id="editReqName" value="${esc(q.FullName || '')}" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">ตำแหน่ง</label>
+              <input id="editReqPos" value="${esc(q.Position || '')}" placeholder="เช่น เจ้าหน้าที่บริหารงานทั่วไป" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose2">*</span></label>
+              <input id="editReqDept" value="${esc(q.Department || '')}" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">วันที่ขอเบิก <span class="text-rose2">*</span></label>
+              <input id="editReqDate" type="date" value="${q.RequestDate ? q.RequestDate.slice(0, 10) : ''}" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">ความจำเป็นต้องเบิกพัสดุเพื่อ (วัตถุประสงค์) <span class="text-rose2">*</span></label>
+            <textarea id="editReqPurpose" rows="2" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition text-sm">${esc(q.Purpose || '')}</textarea>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">ลิงก์เอกสารแนบ (URL)</label>
+              <input id="editReqAttach" type="url" placeholder="https://..." value="${esc(q.AttachUrl || '')}" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-brand-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">หมายเหตุเพิ่มเติม</label>
+              <input id="editReqNote" value="${esc(q.Note || '')}" placeholder="ระบุหมายเหตุถ้ามี" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-brand-500 outline-none transition">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">รายการพัสดุที่ขอเบิก</label>
+            ${!isApproved ? `
+              <button type="button" id="btnAddEditItem" class="px-3 py-1.5 rounded-xl bg-brand-50 text-brand-600 hover:bg-brand-100 font-bold text-xs transition flex items-center gap-1.5">
+                <i class="fa-solid fa-plus"></i> เพิ่มรายการพัสดุ
+              </button>
+            ` : ''}
+          </div>
+
+          ${isApproved ? `
+            <div class="overflow-x-auto border border-slate-200 rounded-2xl">
+              <table class="w-full text-sm min-w-[500px]">
+                <thead><tr class="bg-slate-100/80 text-xs text-slate-600">
+                  <th class="px-3 py-2.5 text-center">#</th>
+                  <th class="px-3 py-2.5 text-left">รหัส / รายการ</th>
+                  <th class="px-3 py-2.5 text-center">จำนวน</th>
+                  <th class="px-3 py-2.5 text-left">หมายเหตุ</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-100">${items.map((it, idx) => `
+                  <tr>
+                    <td class="px-3 py-2.5 text-center text-xs text-slate-400">${idx + 1}</td>
+                    <td class="px-3 py-2.5"><span class="font-bold text-slate-800">${esc(it.Name)}</span> <span class="text-xs text-brand-600 font-semibold block">${esc(it.Code)}</span></td>
+                    <td class="px-3 py-2.5 text-center font-bold text-slate-700">${nf(it.Qty)} ${esc(it.Unit || '')}</td>
+                    <td class="px-3 py-2.5 text-xs text-slate-500">${esc(it.Remark || '-')}</td>
+                  </tr>
+                `).join('')}</tbody>
+              </table>
+            </div>
+          ` : `
+            <div id="editItemRowsContainer" class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              ${items.map(it => createItemRowHtml(it)).join('')}
+            </div>
+          `}
+        </div>
+      </form>
+    `,
+    foot: `
+      <button type="button" id="mCancelEdit" class="px-5 py-2.5 rounded-2xl bg-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-300 transition">ยกเลิก</button>
+      <button type="button" id="mSaveEdit" class="px-5 py-2.5 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-soft hover:bg-brand-700 transition flex items-center gap-2">
+        <i class="fa-solid fa-floppy-disk"></i> บันทึกการแก้ไข
+      </button>
+    `
+  });
+
+  $('#mCancelEdit').addEventListener('click', closeModal);
+
+  if(!isApproved){
+    const container = $('#editItemRowsContainer');
+    const bindRowEvents = (row) => {
+      const sel = row.querySelector('.edit-mat-sel');
+      const unitEl = row.querySelector('.edit-mat-unit');
+      const delBtn = row.querySelector('.btn-del-item-row');
+      sel.addEventListener('change', () => {
+        const opt = sel.options[sel.selectedIndex];
+        unitEl.textContent = opt ? (opt.dataset.unit || '') : '';
+      });
+      delBtn.addEventListener('click', () => {
+        if(container.querySelectorAll('.edit-item-row').length <= 1){
+          return toast('warning', 'ต้องมีรายการพัสดุอย่างน้อย 1 รายการ');
+        }
+        row.remove();
+      });
+    };
+
+    container.querySelectorAll('.edit-item-row').forEach(bindRowEvents);
+
+    $('#btnAddEditItem').addEventListener('click', () => {
+      const div = document.createElement('div');
+      div.innerHTML = createItemRowHtml({});
+      const newRow = div.firstElementChild;
+      container.appendChild(newRow);
+      bindRowEvents(newRow);
+    });
+  }
+
+  $('#mSaveEdit').addEventListener('click', async () => {
+    const fullName = $('#editReqName').value.trim();
+    const position = $('#editReqPos').value.trim();
+    const department = $('#editReqDept').value.trim();
+    const requestDate = $('#editReqDate').value.trim();
+    const purpose = $('#editReqPurpose').value.trim();
+    const note = $('#editReqNote').value.trim();
+    const attachUrl = $('#editReqAttach').value.trim();
+
+    if(!fullName) return toast('warning', 'กรุณาระบุชื่อผู้ขอเบิก');
+    if(!department) return toast('warning', 'กรุณาระบุหลักสูตร/ฝ่ายงาน/โครงการ');
+    if(!requestDate) return toast('warning', 'กรุณาระบุวันที่ขอเบิก');
+    if(!purpose) return toast('warning', 'กรุณาระบุความจำเป็นต้องเบิกพัสดุเพื่อ');
+
+    const payload = {
+      ID: id,
+      FullName: fullName,
+      Position: position,
+      Department: department,
+      RequestDate: requestDate,
+      Purpose: purpose,
+      Note: note,
+      AttachUrl: attachUrl,
+    };
+
+    if(!isApproved){
+      const rows = $$('#editItemRowsContainer .edit-item-row');
+      const newItems = [];
+      for(const row of rows){
+        const sel = row.querySelector('.edit-mat-sel');
+        const qtyInp = row.querySelector('.edit-mat-qty');
+        const remarkInp = row.querySelector('.edit-mat-remark');
+        const matId = sel.value;
+        const qty = Number(qtyInp.value);
+        const remark = remarkInp.value.trim();
+
+        if(!matId) return toast('warning', 'กรุณาเลือกรายการพัสดุให้ครบทุกแถว');
+        if(!qty || qty <= 0) return toast('warning', 'จำนวนพัสดุต้องมากกว่า 0');
+
+        newItems.push({
+          MaterialID: matId,
+          Qty: qty,
+          Remark: remark
+        });
+      }
+      if(!newItems.length) return toast('warning', 'ต้องมีรายการพัสดุอย่างน้อย 1 รายการ');
+      payload.items = newItems;
+    }
+
+    const saveBtn = $('#mSaveEdit');
+    saveBtn.disabled = true;
+    const oldHtml = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+    const res = await api('apiUpdateRequest', payload);
+    if(!res.ok){
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = oldHtml;
+      return alertErr(res.message);
+    }
+
+    closeModal();
+    await alertOk(res.message);
+    go('a-request', true);
+  });
 }
 
 
