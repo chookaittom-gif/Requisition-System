@@ -21,9 +21,20 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Bugfix openApproveModal & Pagination)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Notification Item Breakdown & Bugfix)
 
-### 0. fix(requests): แก้ไข TypeError $(...).forEach ใน modal พิจารณาอนุมัติคำขอเบิก
+### 0. feat(notifications) & fix(requests): แสดงรายการพัสดุและสรุปอนุมัติ/ไม่อนุมัติใน Telegram & LINE
+- **ปัญหาเดิม:** การอนุมัติใบขอเบิกบางครั้งแจ้งเตือน `จำนวน: 0 รายการ | มูลค่ารวม: 0.00 บาท` เนื่องจาก `apiGetRequestForPrint` ไม่ได้ส่งฟิลด์ `ID` ของแต่ละรายการพัสดุ ทำให้ตอนส่งบันทึกจาก Modal ฝั่ง Backend จับคู่ ID ไม่เจอและคำนวณ `approvedCount` เป็น 0 รวมถึงข้อความแจ้งเตือนไม่แสดงรายการพัสดุที่ขอเบิก
+- **การแก้ไข:**
+  - `cloudflare/src/api/requests.ts`: เพิ่ม `ID: str(it.id)` ใน `apiGetRequestForPrint` และเพิ่ม Fallback ให้จับคู่ด้วย `Code` ใน `apiUpdateRequestStatus`
+  - `cloudflare/src/lib/telegram.ts`:
+    - ปรับ `newRequestText`: เพิ่มรายการพัสดุที่ขอเบิก (`📦 รายการพัสดุที่ขอเบิก:`) สูงสุด 10 รายการ
+    - ปรับ `approvedRequestText`: แสดงสรุป `อนุมัติ X รายการ | ไม่อนุมัติ Y รายการ` พร้อมแจกแจง `📦 รายการที่อนุมัติ:` และ `❌ รายการที่ตัดออก:` สูงสุด 10 รายการ
+  - `cloudflare/src/lib/lineFlex.ts`:
+    - ปรับ `newRequestFlex` และ `approvedRequestFlex` เพิ่มกล่องสรุปและรายการพัสดุในรูปแบบ Flex Bubble
+  - `cloudflare/test/admin.test.ts` & `cloudflare/test/requests.test.ts`: เพิ่มและอัปเดตชุดการทดสอบครอบคลุมการจัดรูปแบบข้อความ
+
+### 0.1 fix(requests): แก้ไข TypeError $(...).forEach ใน modal พิจารณาอนุมัติคำขอเบิก
 - **Root Cause:** ใน `cloudflare/public/index.html` ภายในฟังก์ชัน `openApproveModal(id)` มีการเรียกใช้ Selector `$('#tblApItems .item-approve-row')` (ใช้ `$` เดี่ยว ซึ่งคือ `querySelector` ส่งคืน Element เดี่ยว) แล้วนำไปเรียก `.forEach` ทำให้เกิด `TypeError: $(...).forEach is not a function at openApproveModal`
 - **การแก้ไข:**
   - เปลี่ยนการเรียกแถวตารางพัสดุเป็น `$$('#tblApItems .item-approve-row')` (ใช้ `$$` ซึ่งคือ `querySelectorAll` ส่งคืน Array) ทั้งหมด 3 จุดใน `openApproveModal` (ใน `updateSummary()`, การผูก Event Listener เช็คบ็อกซ์/จำนวน, และตอนกดปุ่มยืนยันบันทึกการอนุมัติ)

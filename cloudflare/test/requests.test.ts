@@ -330,7 +330,7 @@ describe('reads', () => {
 
     const pr = await rpc('apiGetRequestForPrint', [a.id]);
     expect(pr.data.request).toMatchObject({ ID: a.id, Status: 'REJECTED' });
-    expect(pr.data.items).toEqual([{ Code: 'A-1', Name: 'ปากกา', Unit: 'ชิ้น', Qty: 2, UnitPrice: 10, TotalPrice: 20 }]);
+    expect(pr.data.items).toMatchObject([{ Code: 'A-1', Name: 'ปากกา', Unit: 'ชิ้น', Qty: 2, UnitPrice: 10, TotalPrice: 20 }]);
     expect(pr.data.printedAt).toMatch(/^\d{4}-\d{2}-\d{2} /);
     expect(await rpc('apiGetRequestForPrint', ['nope'])).toEqual({ ok: false, message: 'ไม่พบใบขอเบิกนี้' });
   });

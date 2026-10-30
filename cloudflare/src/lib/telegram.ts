@@ -89,10 +89,10 @@ export async function getNotifyConfig(env: Env): Promise<NotifyConfig> {
 
 type Obj = Record<string, unknown>;
 
-/** New-request Telegram text: short on purpose (no item list, note or attachment). */
+/** New-request Telegram text with item list (capped at 10 items). */
 export function newRequestText(req: Obj): string {
   const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-  return (
+  let text = (
     `🔔 <b>มีใบขอเบิกพัสดุใหม่</b>\n` +
     `📄 <b>เลขที่:</b> <code>${esc(req.DocNo)}</code>\n` +
     `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}\n` +
@@ -100,41 +100,64 @@ export function newRequestText(req: Obj): string {
     `🎯 <b>วัตถุประสงค์:</b> ${esc(req.Purpose || '-')}\n` +
     `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`
   );
+
+  const items = Array.isArray(req.Items) ? (req.Items as Obj[]) : [];
+  if (items.length > 0) {
+    const lines = items.slice(0, 10).map((it) => {
+      const unit = it.Unit ? ` ${it.Unit}` : '';
+      return `  • ${esc(it.Name)}: <b>${it.Qty}</b>${unit}`;
+    });
+    if (items.length > 10) lines.push(`  <i>...และอีก ${items.length - 10} รายการ</i>`);
+    text += `\n\n📦 <b>รายการพัสดุที่ขอเบิก:</b>\n` + lines.join('\n');
+  }
+  return text;
 }
 
-/** Approved-request Telegram text: same short shape as newRequestText. */
+/** Approved-request Telegram text with approved and rejected breakdown (capped at 10 items). */
 export function approvedRequestText(req: Obj): string {
   const total = Number(req.TotalAmount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-  const isPartial = Boolean(req.IsPartial || (Array.isArray(req.Items) && req.Items.some((it: any) => it.ApprovedQty !== undefined && it.ApprovedQty < it.Qty)));
+  const items = Array.isArray(req.Items) ? (req.Items as Obj[]) : [];
+  let approvedCount = 0;
+  let rejectedCount = 0;
+  const approvedLines: string[] = [];
+  const rejectedLines: string[] = [];
+
+  for (const it of items) {
+    const aQty = Number(it.ApprovedQty ?? it.Qty ?? 0);
+    const reqQty = Number(it.Qty ?? 0);
+    const unit = it.Unit ? ` ${it.Unit}` : '';
+    if (aQty > 0) {
+      approvedCount++;
+      approvedLines.push(`  • ${esc(it.Name)}: <b>${aQty}</b>${unit}${aQty < reqQty ? ` (ขอ ${reqQty})` : ''}`);
+    } else {
+      rejectedCount++;
+      rejectedLines.push(`  • ${esc(it.Name)} (ขอ ${reqQty}${unit} - ไม่อนุมัติ)`);
+    }
+  }
+
+  const isPartial = Boolean(req.IsPartial || rejectedCount > 0 || (items.length > 0 && items.some((it: any) => it.ApprovedQty !== undefined && it.ApprovedQty < it.Qty)));
   const title = isPartial ? '✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว (อนุมัติบางส่วน)</b>\n' : '✅ <b>อนุมัติใบขอเบิกพัสดุแล้ว</b>\n';
+  const summaryLine = items.length > 0
+    ? `📊 <b>สรุปผล:</b> อนุมัติ ${approvedCount} รายการ | ไม่อนุมัติ ${rejectedCount} รายการ (<b>มูลค่ารวม:</b> ${total} บาท)`
+    : `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`;
+
   let text = (
     title +
     `📄 <b>เลขที่:</b> <code>${esc(req.DocNo)}</code>\n` +
     `👤 <b>ผู้ขอเบิก:</b> ${esc(req.FullName)}\n` +
     `🏢 <b>หลักสูตร / ฝ่ายงาน / โครงการ:</b> ${esc(req.Department || '-')}\n` +
-    `📊 <b>จำนวน:</b> ${esc(req.ItemCount)} รายการ | <b>มูลค่ารวม:</b> ${total} บาท`
+    summaryLine
   );
 
-  if (isPartial && Array.isArray(req.Items) && req.Items.length > 0) {
-    const approvedLines: string[] = [];
-    const rejectedLines: string[] = [];
-    for (const it of req.Items as Obj[]) {
-      const aQty = Number(it.ApprovedQty ?? it.Qty ?? 0);
-      const reqQty = Number(it.Qty ?? 0);
-      const unit = it.Unit ? ` ${it.Unit}` : '';
-      if (aQty > 0) {
-        approvedLines.push(`  • ${esc(it.Name)}: <b>${aQty}</b>${unit}${aQty < reqQty ? ` (ขอ ${reqQty})` : ''}`);
-      }
-      if (aQty === 0) {
-        rejectedLines.push(`  • ${esc(it.Name)} (ขอ ${reqQty}${unit} - ไม่อนุมัติ)`);
-      }
-    }
-    if (approvedLines.length) {
-      text += `\n\n📦 <b>รายการที่อนุมัติ:</b>\n` + approvedLines.join('\n');
-    }
-    if (rejectedLines.length) {
-      text += `\n\n❌ <b>รายการที่ตัดออก:</b>\n` + rejectedLines.join('\n');
-    }
+  if (approvedLines.length > 0) {
+    const disp = approvedLines.slice(0, 10);
+    if (approvedLines.length > 10) disp.push(`  <i>...และอีก ${approvedLines.length - 10} รายการ</i>`);
+    text += `\n\n📦 <b>รายการที่อนุมัติ:</b>\n` + disp.join('\n');
+  }
+  if (rejectedLines.length > 0) {
+    const disp = rejectedLines.slice(0, 10);
+    if (rejectedLines.length > 10) disp.push(`  <i>...และอีก ${rejectedLines.length - 10} รายการ</i>`);
+    text += `\n\n❌ <b>รายการที่ตัดออก:</b>\n` + disp.join('\n');
   }
 
   return text;

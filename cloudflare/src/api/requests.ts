@@ -454,6 +454,7 @@ registerRpc('apiGetRequestForPrint', 'officer', async (ctx, args) => {
   const items = results.map((it) => {
     const l = toLegacy('request_items', it);
     return {
+      ID: str(it.id),
       Code: l.Code,
       Name: l.Name,
       Unit: l.Unit,
@@ -509,13 +510,15 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
       let approvedCount = 0;
 
       if (next === 'APPROVED' && partialItems) {
-        const { results: dbItems } = await db.prepare('SELECT id, qty, unit_price FROM request_items WHERE request_id = ?').bind(id).all<{ id: string; qty: number; unit_price: number }>();
+        const { results: dbItems } = await db.prepare('SELECT id, code, qty, unit_price FROM request_items WHERE request_id = ?').bind(id).all<{ id: string; code: string; qty: number; unit_price: number }>();
         const mapReqItem = new Map(dbItems.map((x) => [x.id, x]));
+        const mapReqCode = new Map(dbItems.map((x) => [x.code, x]));
 
         for (const pIt of partialItems) {
           const rawIt = asObj(pIt);
           const itId = str(rawIt.ID || rawIt.id);
-          const orig = mapReqItem.get(itId);
+          const itCode = str(rawIt.Code || rawIt.code);
+          const orig = mapReqItem.get(itId) || mapReqCode.get(itCode);
           if (!orig) continue;
           let aQty = Number(rawIt.ApprovedQty ?? rawIt.approved_qty ?? orig.qty);
           if (isNaN(aQty) || aQty < 0) aQty = 0;
@@ -525,7 +528,7 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
             approvedCount++;
             approvedTotal += aQty * orig.unit_price;
           }
-          await db.prepare('UPDATE request_items SET approved_qty = ? WHERE id = ?').bind(aQty, itId).run();
+          await db.prepare('UPDATE request_items SET approved_qty = ? WHERE id = ?').bind(aQty, orig.id).run();
         }
       }
 

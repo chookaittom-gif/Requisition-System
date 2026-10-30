@@ -239,6 +239,36 @@ describe('line flex', () => {
     expect(String((newRequestFlex({ ...REQ, FullName: 'x'.repeat(900) }) as any).altText).length).toBe(400);
   });
 
+  it('notification builders format requested items and approved/rejected breakdown correctly', () => {
+    const reqWithItems = {
+      ...REQ,
+      Items: [
+        { Name: 'คอมพิวเตอร์', Qty: 2, ApprovedQty: 1, Unit: 'เครื่อง' },
+        { Name: 'ปลั๊กไฟ', Qty: 3, ApprovedQty: 0, Unit: 'อัน' },
+      ],
+    };
+    const tgNew = newRequestText(reqWithItems);
+    expect(tgNew).toContain('รายการพัสดุที่ขอเบิก:');
+    expect(tgNew).toContain('คอมพิวเตอร์: <b>2</b> เครื่อง');
+    expect(tgNew).toContain('ปลั๊กไฟ: <b>3</b> อัน');
+
+    const tgAp = approvedRequestText(reqWithItems);
+    expect(tgAp).toContain('อนุมัติ 1 รายการ | ไม่อนุมัติ 1 รายการ');
+    expect(tgAp).toContain('รายการที่อนุมัติ:');
+    expect(tgAp).toContain('คอมพิวเตอร์: <b>1</b> เครื่อง (ขอ 2)');
+    expect(tgAp).toContain('รายการที่ตัดออก:');
+    expect(tgAp).toContain('ปลั๊กไฟ (ขอ 3 อัน - ไม่อนุมัติ)');
+
+    const lineNew = newRequestFlex(reqWithItems);
+    expect(cardText(lineNew)).toContain('รายการพัสดุที่ขอเบิก:');
+    expect(cardText(lineNew)).toContain('คอมพิวเตอร์: 2 เครื่อง');
+
+    const lineAp = approvedRequestFlex(reqWithItems);
+    expect(cardText(lineAp)).toContain('สรุป: อนุมัติ 1 | ไม่อนุมัติ 1 รายการ');
+    expect(cardText(lineAp)).toContain('คอมพิวเตอร์: 1 เครื่อง (ขอ 2)');
+    expect(cardText(lineAp)).toContain('ปลั๊กไฟ: ❌ ไม่อนุมัติ');
+  });
+
   it('sendLineMessages posts the given messages; sendLinePush still posts text', async () => {
     expect(await sendLineMessages('', 'C', [])).toMatchObject({ ok: false });
     expect(await sendLineMessages('LT', 'C1', [newRequestFlex(REQ)])).toEqual({ ok: true, message: 'ส่งข้อความสำเร็จ' });
