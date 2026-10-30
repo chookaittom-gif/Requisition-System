@@ -10,7 +10,8 @@ export type TableName =
   | 'audit_log'
   | 'settings'
   | 'shops'
-  | 'material_lots';
+  | 'material_lots'
+  | 'personnel';
 
 type ColumnMap = Record<string, string>; // D1 column -> legacy header
 
@@ -87,6 +88,15 @@ const MAPS: Record<TableName, ColumnMap> = {
     remaining_qty: 'RemainingQty',
     status: 'Status',
     created_at: 'CreatedAt',
+  },
+  personnel: {
+    code: 'Code',
+    full_name: 'FullName',
+    position: 'Position',
+    department: 'Department',
+    active: 'Active',
+    created_at: 'CreatedAt',
+    updated_at: 'UpdatedAt',
   },
 };
 

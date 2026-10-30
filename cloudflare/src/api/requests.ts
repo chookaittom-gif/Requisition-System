@@ -286,9 +286,20 @@ registerRpc('apiCreateRequest', 'public', (ctx, args) =>
     const docNo = await nextDocNo(db);
     const now = nowBkk();
     const userId = ctx.session ? ctx.session.id : null;
-    const fullName = str(p.FullName);
-    const position = str(p.Position);
-    const department = str(p.Department);
+    let fullName = str(p.FullName);
+    let position = str(p.Position);
+    let department = str(p.Department);
+    const personnelCode = str(p.PersonnelCode);
+    if (personnelCode) {
+      const pRow = await db
+        .prepare('SELECT full_name, position, department FROM personnel WHERE LOWER(code) = LOWER(?) AND active = 1')
+        .bind(personnelCode)
+        .first<{ full_name: string; position: string; department: string }>();
+      if (!pRow) throw new ValidationError('ไม่พบรหัสบุคลากรนี้ในระบบ');
+      fullName = pRow.full_name;
+      position = pRow.position || position;
+      department = pRow.department || department;
+    }
     const purpose = str(p.Purpose);
     const note = str(p.Note);
 

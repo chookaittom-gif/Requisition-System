@@ -5,6 +5,7 @@ import './api/materials';
 import './api/requests';
 import './api/reports';
 import './api/shops';
+import './api/personnel';
 import { handleChunk } from './api/uploads';
 import { runLowStockCron } from './cron';
 import { fail, json } from './http';
