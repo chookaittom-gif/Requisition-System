@@ -8128,7 +8128,7 @@ async function viewRequestForm(){
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อ - สกุล <span class="text-rose2">*</span></label>
         ${S.user && S.user.Role !== 'guest' && S.user.FullName
           ? `<input id="rName" value="${esc(S.user.FullName)}" readonly class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed">`
-          : `<input id="rName" required placeholder="ระบุชื่อ - นามสกุล ผู้ขอเบิก" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">`
+          : `<input id="rName" required placeholder="ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">`
         }</div>
 
       <div class="relative"><label class="block text-sm font-bold text-slate-700 mb-1.5">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose2">*</span></label>
@@ -8713,14 +8713,23 @@ async function submitRequest(e){
   if(!reqPos) return toast('warning','กรุณาเลือกตำแหน่ง (อาจารย์ หรือ เจ้าหน้าที่)');
   if(!$('#rPurpose').value.trim()) return toast('warning','กรุณาระบุความจำเป็นในการเบิกพัสดุ');
 
+  const reqName = (S.reqPersonnel && S.reqPersonnel.FullName) || ($('#rName') && $('#rName').value.trim()) || (S.user && S.user.FullName) || '';
+  if(!reqName) {
+    if($('#rName')) $('#rName').focus();
+    return toast('warning','กรุณากรอกชื่อ-นามสกุลผู้ขอเบิก');
+  }
+  const nameParts = reqName.split(/\s+/).filter(Boolean);
+  if(nameParts.length < 2){
+    if($('#rName')) $('#rName').focus();
+    return toast('warning','กรุณาระบุชื่อและนามสกุลเต็ม (เช่น สมรักษ์ คำดี)');
+  }
+
   const cfm = await Swal.fire({ icon:'question', title:'ยืนยันบันทึกใบขอเบิก?', text:'รายการทั้งหมด '+items.length+' รายการ',
     showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#0284c7', cancelButtonColor:'#94a3b8', reverseButtons:true });
   if(!cfm.isConfirmed) return;
 
   showLoader('กำลังบันทึกใบขอเบิก...');
   try{
-    const reqName = (S.reqPersonnel && S.reqPersonnel.FullName) || ($('#rName') && $('#rName').value.trim()) || (S.user && S.user.FullName) || '';
-    if(!reqName) { hideLoader(); return toast('warning','กรุณากรอกชื่อ-นามสกุลผู้ขอเบิก'); }
 
     const attachUrl = await uploadPicked_($('#rFile'), 'request_attachment', 'กำลังอัปโหลดไฟล์แนบ');
     const res = await api('apiCreateRequest', {

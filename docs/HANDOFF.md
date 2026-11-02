@@ -1,9 +1,8 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-10-30)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-02)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
 **Branch:** `main`
-**Latest Deployment:** Live at https://supply-requisition.chookait-tom.workers.dev (Version: `2e931a5f-2060-4780-89b4-01c668c66e15`)
 
 ---
 
@@ -21,7 +20,22 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-10-30 Edit Requisition for Admin/Officer)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-02 Full Name Placeholder & Validation)
+
+### feat(form): ปรับ Placeholder และเพิ่มการตรวจสอบ (Validation) ชื่อ-นามสกุลเต็มในแบบฟอร์มขอเบิก
+- **ความต้องการ:** ผู้ใช้งานต้องการให้ช่องระบุชื่อ-สกุล มี Placeholder แสดงตัวอย่างชัดเจน และมีระบบตรวจจับ (Validation) บังคับให้ต้องกรอกทั้งชื่อและนามสกุลเต็ม (เช่น สมรักษ์ คำดี)
+- **การเปลี่ยนแปลงในโค้ด:**
+  - `cloudflare/public/index.html`:
+    - ปรับ Placeholder ในช่อง `#rName` สำหรับ Guest/ผู้ขอเบิกทั่วไป เป็น `"ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)"`
+    - ในฟังก์ชัน `submitRequest`: เพิ่มการตรวจสอบ `nameParts = reqName.split(/\s+/).filter(Boolean)` ว่าต้องมีอย่างน้อย 2 คำ (`nameParts.length >= 2`) ก่อนเปิด Confirmation Modal
+    - หากไม่ผ่าน: แสดง Warning Toast `"กรุณาระบุชื่อและนามสกุลเต็ม (เช่น สมรักษ์ คำดี)"` พร้อมสั่ง focus ไปที่ช่อง `#rName` ทันที
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest + Node Frontend Static Tests ผ่านครบ 212/212 tests (100%)
+  - การจัดการ Skill: ปรับปรุง `grill-me` ลบตัวซ้ำซ้อน และใช้ Built-in Slash Command ร่วมกับโฟลเดอร์กลางอย่างเป็นระเบียบ
+
+---
+
+## 3. ประวัติสิ่งที่ทำสำเร็จก่อนหน้า
 
 ### 0. feat(requests): เพิ่มไอคอนและระบบแก้ไขใบขอเบิกสำหรับผู้ดูแลระบบและเจ้าหน้าที่ (Edit Requisition)
 - **ความต้องการ:** เพิ่มปุ่มไอคอนแก้ไขข้อมูลใบขอเบิกในหน้ารายการขอเบิก (`a-request`) สำหรับผู้ดูแลระบบ (Admin) และเจ้าหน้าที่ (Officer) เพื่อให้สามารถแก้ไขข้อมูลที่ผู้ใช้งานกรอกผิดได้โดยตรง
