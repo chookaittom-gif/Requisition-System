@@ -6897,13 +6897,11 @@ function registerPersonnelModal(prefillCode, onRegistered){
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">ตำแหน่ง <span class="text-rose-500">*</span></label>
-          <input id="regPosition" list="regPosSuggestions" required placeholder="เช่น อาจารย์ หรือ เจ้าหน้าที่" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
-          <datalist id="regPosSuggestions">
-            <option value="อาจารย์">
-            <option value="เจ้าหน้าที่">
-            <option value="ผู้ช่วยศาสตราจารย์">
-            <option value="รองศาสตราจารย์">
-          </datalist>
+          <select id="regPosition" required class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition cursor-pointer">
+            <option value="">-- เลือกตำแหน่ง --</option>
+            <option value="อาจารย์">อาจารย์</option>
+            <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
+          </select>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose-500">*</span></label>
@@ -6921,6 +6919,12 @@ function registerPersonnelModal(prefillCode, onRegistered){
             <option value="ฝ่ายอาคารสถานที่ สิ่งแวดล้อม และแหล่งเรียนรู้">
             <option value="สำนักงานศูนย์การศึกษา">
           </datalist>
+        </div>
+        <div class="pt-1">
+          <p class="text-[11px] text-slate-400 flex items-center gap-1.5 leading-relaxed">
+            <i class="fa-solid fa-circle-info text-sky-500 shrink-0"></i>
+            <span>หมายเหตุ: หากต้องการแก้ไขหรือลบข้อมูลในภายหลัง สามารถแจ้งเจ้าหน้าที่พัสดุหรือผู้ดูแลระบบได้</span>
+          </p>
         </div>
         <div class="pt-2 flex items-center justify-end gap-2">
           <button type="button" onclick="closeModal()" class="min-h-[44px] px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition cursor-pointer">ยกเลิก</button>
