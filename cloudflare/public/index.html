@@ -283,7 +283,7 @@ tailwind.config = {
         <!-- Guest Quick Actions -->
         <div class="mb-5 p-4 rounded-2xl bg-sky-50/90 border border-sky-100 flex flex-col gap-2.5 shadow-sm">
           <p class="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-            <i class="fa-solid fa-users text-sky-600"></i> สำหรับอาจารย์ / บุคลากร / ผู้ขอเบิก (ไม่ต้องเข้าสู่ระบบ)
+            <i class="fa-solid fa-users text-sky-600"></i> สำหรับอาจารย์ / บุคลากร (ทำรายการได้ทันที)
           </p>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" id="btnGuestReq" class="px-3 py-2.5 rounded-xl bg-teal text-white font-bold text-xs shadow-sm hover:brightness-105 active:scale-95 transition flex items-center justify-center gap-1.5">
@@ -6878,6 +6878,114 @@ function personnelModal(person){
   });
 }
 
+function registerPersonnelModal(prefillCode, onRegistered){
+  const defaultCode = (prefillCode || '').trim();
+  openModal({
+    title: 'เพิ่มประวัติผู้ขอเบิกใหม่',
+    sub: 'บันทึกข้อมูลเพื่อใช้ดึงชื่อ ตำแหน่ง และหลักสูตรอัตโนมัติในครั้งต่อไป (ไม่ต้องใช้รหัสผ่าน)',
+    icon: 'fa-address-card',
+    staticBackdrop: true,
+    body: `
+      <form id="frmRegisterPersonnel" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">รหัสบุคลากร <span class="text-rose-500">*</span></label>
+          <input id="regCode" value="${esc(defaultCode)}" required placeholder="เช่น EMP001 หรือ รหัสประจำตัว" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อ - นามสกุล <span class="text-rose-500">*</span></label>
+          <input id="regFullName" required placeholder="เช่น ดร.สมชาย ใจดี" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ตำแหน่ง <span class="text-rose-500">*</span></label>
+            <input id="regPosition" list="regPosSuggestions" required placeholder="เช่น อาจารย์ หรือ เจ้าหน้าที่" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+            <datalist id="regPosSuggestions">
+              <option value="อาจารย์">
+              <option value="เจ้าหน้าที่">
+              <option value="ผู้ช่วยศาสตราจารย์">
+              <option value="รองศาสตราจารย์">
+            </datalist>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">สถานะ</label>
+            <input value="เปิดใช้งาน (Active)" disabled class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 text-sm cursor-not-allowed">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose-500">*</span></label>
+          <input id="regDepartment" list="regDeptSuggestions" required placeholder="คลิกเพื่อเลือก หรือพิมพ์ เช่น สาขาวิชาเทคโนโลยีการประกอบอาหาร..." class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+          <datalist id="regDeptSuggestions">
+            <option value="สาขาวิชาเทคโนโลยีการประกอบอาหารและการบริการ">
+            <option value="สาขาวิชาธุรกิจการบิน">
+            <option value="สาขาวิชาการศึกษาปฐมวัย">
+            <option value="สาขาวิชาการประถมศึกษา">
+            <option value="โรงเรียนสาธิตละอออุทิศ ลำปาง">
+            <option value="ฝ่ายงานส่งเสริมวิชาการและงานทะเบียน">
+            <option value="ฝ่ายงานพัฒนานักศึกษา">
+            <option value="ฝ่ายพัฒนางานวิจัยและนวัตกรรม">
+            <option value="ฝ่ายส่งเสริมถ่ายทอดองค์ความรู้ เทคโนโลยีและนวัตกรรม">
+            <option value="ฝ่ายอาคารสถานที่ สิ่งแวดล้อม และแหล่งเรียนรู้">
+            <option value="สำนักงานศูนย์การศึกษา">
+          </datalist>
+        </div>
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="min-h-[44px] px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition cursor-pointer">ยกเลิก</button>
+          <button type="submit" id="btnSubmitRegisterPersonnel" class="min-h-[44px] px-5 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow transition flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50">
+            <i class="fa-solid fa-save"></i> <span>บันทึกประวัติ</span>
+          </button>
+        </div>
+      </form>`
+  });
+
+  $('#frmRegisterPersonnel').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = ($('#regCode')?.value || '').trim();
+    const fullName = ($('#regFullName')?.value || '').trim();
+    const position = ($('#regPosition')?.value || '').trim();
+    const department = ($('#regDepartment')?.value || '').trim();
+
+    if(!code) return toast('warning', 'กรุณาระบุรหัสบุคลากร');
+    if(!fullName) return toast('warning', 'กรุณาระบุชื่อ-นามสกุล');
+    if(!position) return toast('warning', 'กรุณาระบุตำแหน่ง');
+    if(!department) return toast('warning', 'กรุณาระบุหลักสูตร / ฝ่ายงาน / โครงการ');
+
+    const btnSubmit = $('#btnSubmitRegisterPersonnel');
+    if(btnSubmit){
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>กำลังบันทึก...</span>';
+    }
+
+    try {
+      const res = await api('apiRegisterPersonnel', {
+        Code: code,
+        FullName: fullName,
+        Position: position,
+        Department: department
+      });
+
+      if(res && res.ok){
+        closeModal();
+        toast('success', 'บันทึกประวัติผู้ขอเบิกเรียบร้อยแล้ว');
+        if(typeof onRegistered === 'function'){
+          onRegistered(res.data);
+        }
+      } else {
+        if(btnSubmit){
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = '<i class="fa-solid fa-save"></i> <span>บันทึกประวัติ</span>';
+        }
+        alertErr((res && res.message) || 'บันทึกข้อมูลไม่สำเร็จ');
+      }
+    } catch(err){
+      if(btnSubmit){
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="fa-solid fa-save"></i> <span>บันทึกประวัติ</span>';
+      }
+      alertErr(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    }
+  });
+}
+
 function parseCsvText_(text){
   const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
   if (!lines.length) return [];
@@ -8103,6 +8211,9 @@ async function viewRequestForm(){
             <button type="button" id="btnLookupPersonnel" class="min-h-[44px] px-5 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none">
               <i class="fa-solid fa-magnifying-glass"></i> <span>ค้นหา</span>
             </button>
+            <button type="button" id="btnRegisterPersonnel" class="min-h-[44px] px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95">
+              <i class="fa-solid fa-address-card"></i> <span>+ เพิ่มประวัติผู้เบิก</span>
+            </button>
             <button type="button" id="btnClearPersonnel" class="hidden min-h-[44px] px-4 py-2.5 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-sm flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95">
               <i class="fa-solid fa-rotate-left"></i> <span>เปลี่ยนรหัส</span>
             </button>
@@ -8227,72 +8338,24 @@ async function viewRequestForm(){
         if(badgeEl) badgeEl.classList.add('hidden');
         if(msgEl){
           msgEl.className = 'mt-2 text-xs font-medium text-rose-600 block animate-fadeUp';
-          msgEl.textContent = (res && res.message) || 'ไม่พบข้อมูลบุคลากรสำหรับรหัสดังกล่าว';
+          msgEl.innerHTML = `<span>${esc((res && res.message) || 'ไม่พบข้อมูลบุคลากรสำหรับรหัสดังกล่าว')}</span> 
+            <button type="button" id="btnQuickRegisterPersonnel" class="ml-1.5 underline font-bold text-sky-700 hover:text-sky-900 cursor-pointer inline-flex items-center gap-1">
+              <i class="fa-solid fa-address-card"></i> คลิกเพื่อเพิ่มประวัติผู้เบิกใหม่
+            </button>`;
           msgEl.classList.remove('hidden');
+          const quickBtn = $('#btnQuickRegisterPersonnel');
+          if(quickBtn){
+            quickBtn.addEventListener('click', () => {
+              registerPersonnelModal(code, applyPersonnelToReqForm_);
+            });
+          }
         }
         if(!silent) toast('warning', (res && res.message) || 'ไม่พบข้อมูลบุคลากรสำหรับรหัสดังกล่าว');
         return false;
       }
 
-      const p = res.data;
-      S.reqPersonnel = p;
-
-      // 1. Fill and lock FullName
-      const nameInp = $('#rName');
-      if(nameInp){
-        nameInp.value = p.FullName;
-        nameInp.readOnly = true;
-        nameInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
-      }
-
-      // 2. Fill and lock Position
-      const posEl = $('#rPos');
-      if(posEl){
-        if(posEl.tagName === 'SELECT'){
-          let opt = Array.from(posEl.options).find(o => o.value === p.Position);
-          if(!opt && p.Position){
-            opt = document.createElement('option');
-            opt.value = p.Position;
-            opt.textContent = p.Position;
-            posEl.appendChild(opt);
-          }
-          posEl.value = p.Position || '';
-          posEl.disabled = true;
-          posEl.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
-        } else {
-          posEl.value = p.Position || '';
-          posEl.readOnly = true;
-          posEl.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
-        }
-      }
-
-      // 3. Fill and lock Department
-      const deptInp = $('#rDept');
-      if(deptInp){
-        deptInp.value = p.Department || '';
-        deptInp.readOnly = true;
-        deptInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
-      }
-      if($('#btnToggleDept')) $('#btnToggleDept').classList.add('hidden');
-      if($('#deptMenu')) $('#deptMenu').classList.add('hidden');
-
-      // Lock PersonnelCode input & toggle buttons
-      if(codeInp){
-        codeInp.value = p.Code;
-        codeInp.readOnly = true;
-        codeInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
-      }
-      if(btnLookup) btnLookup.classList.add('hidden');
-      if(btnClear) btnClear.classList.remove('hidden');
-      if(badgeEl) badgeEl.classList.remove('hidden');
-
-      if(msgEl){
-        msgEl.className = 'mt-2 text-xs font-medium text-emerald-700 block animate-fadeUp';
-        msgEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจสอบพบข้อมูล: <b>${esc(p.FullName)}</b> (${esc(p.Position || '-')}, ${esc(p.Department || '-')})`;
-        msgEl.classList.remove('hidden');
-      }
-      if(!silent) toast('success', `พบข้อมูลบุคลากร: ${p.FullName}`);
-      saveReqDraft(false);
+      applyPersonnelToReqForm_(res.data);
+      if(!silent) toast('success', `พบข้อมูลบุคลากร: ${res.data.FullName}`);
       return true;
     } catch(err){
       if(btnLookup){
@@ -8308,10 +8371,78 @@ async function viewRequestForm(){
     }
   }
 
+  function applyPersonnelToReqForm_(p){
+    S.reqPersonnel = p;
+    const codeInp = $('#rPersonnelCode');
+    const btnLookup = $('#btnLookupPersonnel');
+    const btnRegister = $('#btnRegisterPersonnel');
+    const btnClear = $('#btnClearPersonnel');
+    const badgeEl = $('#personnelBadge');
+    const msgEl = $('#personnelMsg');
+
+    // 1. Fill and lock FullName
+    const nameInp = $('#rName');
+    if(nameInp){
+      nameInp.value = p.FullName;
+      nameInp.readOnly = true;
+      nameInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+    }
+
+    // 2. Fill and lock Position
+    const posEl = $('#rPos');
+    if(posEl){
+      if(posEl.tagName === 'SELECT'){
+        let opt = Array.from(posEl.options).find(o => o.value === p.Position);
+        if(!opt && p.Position){
+          opt = document.createElement('option');
+          opt.value = p.Position;
+          opt.textContent = p.Position;
+          posEl.appendChild(opt);
+        }
+        posEl.value = p.Position || '';
+        posEl.disabled = true;
+        posEl.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+      } else {
+        posEl.value = p.Position || '';
+        posEl.readOnly = true;
+        posEl.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+      }
+    }
+
+    // 3. Fill and lock Department
+    const deptInp = $('#rDept');
+    if(deptInp){
+      deptInp.value = p.Department || '';
+      deptInp.readOnly = true;
+      deptInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+    }
+    if($('#btnToggleDept')) $('#btnToggleDept').classList.add('hidden');
+    if($('#deptMenu')) $('#deptMenu').classList.add('hidden');
+
+    // Lock PersonnelCode input & toggle buttons
+    if(codeInp){
+      codeInp.value = p.Code;
+      codeInp.readOnly = true;
+      codeInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+    }
+    if(btnLookup) btnLookup.classList.add('hidden');
+    if(btnRegister) btnRegister.classList.add('hidden');
+    if(btnClear) btnClear.classList.remove('hidden');
+    if(badgeEl) badgeEl.classList.remove('hidden');
+
+    if(msgEl){
+      msgEl.className = 'mt-2 text-xs font-medium text-emerald-700 block animate-fadeUp';
+      msgEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> ตรวจสอบพบข้อมูล: <b>${esc(p.FullName)}</b> (${esc(p.Position || '-')}, ${esc(p.Department || '-')})`;
+      msgEl.classList.remove('hidden');
+    }
+    saveReqDraft(false);
+  }
+
   function doClearPersonnel_(){
     S.reqPersonnel = null;
     const codeInp = $('#rPersonnelCode');
     const btnLookup = $('#btnLookupPersonnel');
+    const btnRegister = $('#btnRegisterPersonnel');
     const btnClear = $('#btnClearPersonnel');
     const badgeEl = $('#personnelBadge');
     const msgEl = $('#personnelMsg');
@@ -8322,6 +8453,7 @@ async function viewRequestForm(){
       codeInp.classList.remove('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
     }
     if(btnLookup) btnLookup.classList.remove('hidden');
+    if(btnRegister) btnRegister.classList.remove('hidden');
     if(btnClear) btnClear.classList.add('hidden');
     if(badgeEl) badgeEl.classList.add('hidden');
     if(msgEl) msgEl.classList.add('hidden');
@@ -8370,6 +8502,10 @@ async function viewRequestForm(){
   }
 
   $('#btnLookupPersonnel')?.addEventListener('click', () => doLookupPersonnel_());
+  $('#btnRegisterPersonnel')?.addEventListener('click', () => {
+    const currentCode = ($('#rPersonnelCode')?.value || '').trim();
+    registerPersonnelModal(currentCode, applyPersonnelToReqForm_);
+  });
   $('#btnClearPersonnel')?.addEventListener('click', () => doClearPersonnel_());
   $('#rPersonnelCode')?.addEventListener('keydown', (e) => {
     if(e.key === 'Enter'){

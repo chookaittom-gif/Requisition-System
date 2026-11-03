@@ -49,6 +49,57 @@ registerRpc('apiLookupPersonnel', 'public', (ctx, args) =>
   })
 );
 
+registerRpc('apiRegisterPersonnel', 'public', (ctx, args) =>
+  guarded(async () => {
+    const db = ctx.env.DB;
+    const p = asObj(args[0]);
+    const code = str(p.Code);
+    if (!code) return fail('กรุณาระบุรหัสบุคลากร');
+    const fullName = str(p.FullName);
+    if (!fullName) return fail('กรุณาระบุชื่อ-นามสกุลบุคลากร');
+    const position = str(p.Position);
+    if (!position) return fail('กรุณาระบุตำแหน่ง');
+    const department = str(p.Department);
+    if (!department) return fail('กรุณาระบุหลักสูตร / ฝ่ายงาน / โครงการ');
+    const now = nowBkk();
+
+    const existing = await db
+      .prepare('SELECT code FROM personnel WHERE LOWER(code) = LOWER(?)')
+      .bind(code)
+      .first<{ code: string }>();
+
+    if (existing) {
+      return fail(`รหัสบุคลากร "${code}" มีอยู่ในระบบแล้ว กรุณากดค้นหารหัสเพื่อดึงข้อมูล`);
+    }
+
+    await db.batch([
+      db
+        .prepare(
+          'INSERT INTO personnel (code, full_name, position, department, active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)'
+        )
+        .bind(code, fullName, position, department, now, now),
+      logAudit(db, {
+        action: 'CREATE',
+        entity: 'Personnel',
+        entityId: code,
+        detail: `[Public Registration] ${fullName} (${position}, ${department})`,
+        actor: 'public_requester',
+      }),
+    ]);
+
+    return {
+      ok: true,
+      message: 'ลงทะเบียนบุคลากรเรียบร้อยแล้ว',
+      data: {
+        Code: code,
+        FullName: fullName,
+        Position: position,
+        Department: department,
+      },
+    };
+  })
+);
+
 registerRpc('apiGetPersonnel', 'officer', async (ctx) => {
   const { results } = await ctx.env.DB.prepare(
     'SELECT code, full_name, position, department, active, created_at, updated_at FROM personnel ORDER BY code ASC'

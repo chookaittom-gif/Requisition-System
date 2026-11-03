@@ -196,4 +196,43 @@ describe('personnel API', () => {
     expect(res.ok).toBe(false);
     expect(res.message).toContain('ไม่พบรหัสบุคลากรนี้ในระบบ');
   });
+
+  it('apiRegisterPersonnel creates new personnel via public RPC', async () => {
+    const res = await publicRpc('apiRegisterPersonnel', [
+      {
+        Code: 'EMP999',
+        FullName: 'อาจารย์ใหม่ ใจดี',
+        Position: 'อาจารย์',
+        Department: 'สาขาการตลาด',
+      },
+    ]);
+    expect(res.ok).toBe(true);
+    expect(res.data.Code).toBe('EMP999');
+
+    // Can lookup immediately
+    const lookup = await publicRpc('apiLookupPersonnel', ['emp999']);
+    expect(lookup.ok).toBe(true);
+    expect(lookup.data.FullName).toBe('อาจารย์ใหม่ ใจดี');
+
+    // Reject duplicate
+    const dupRes = await publicRpc('apiRegisterPersonnel', [
+      {
+        Code: 'emp999',
+        FullName: 'คนอื่น แอบอ้าง',
+        Position: 'เจ้าหน้าที่',
+        Department: 'ฝ่ายอื่น',
+      },
+    ]);
+    expect(dupRes.ok).toBe(false);
+    expect(dupRes.message).toContain('มีอยู่ในระบบแล้ว');
+
+    // Reject missing fields
+    const missingRes = await publicRpc('apiRegisterPersonnel', [
+      {
+        Code: '',
+        FullName: 'ไม่มีรหัส',
+      },
+    ]);
+    expect(missingRes.ok).toBe(false);
+  });
 });
