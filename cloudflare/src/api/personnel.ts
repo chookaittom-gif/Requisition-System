@@ -55,6 +55,7 @@ registerRpc('apiRegisterPersonnel', 'public', (ctx, args) =>
     const p = asObj(args[0]);
     const code = str(p.Code);
     if (!code) return fail('กรุณาระบุรหัสบุคลากร');
+    if (!/^\d+$/.test(code)) return fail('รหัสบุคลากรต้องเป็นตัวเลขเท่านั้น (เช่น 4216125)');
     const fullName = str(p.FullName);
     if (!fullName) return fail('กรุณาระบุชื่อ-นามสกุลบุคลากร');
     const position = str(p.Position);

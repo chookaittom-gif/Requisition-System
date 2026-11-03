@@ -198,7 +198,8 @@ describe('personnel API', () => {
   });
 
   it('apiRegisterPersonnel creates new personnel via public RPC', async () => {
-    const res = await publicRpc('apiRegisterPersonnel', [
+    // Reject non-numeric code
+    const nonNumRes = await publicRpc('apiRegisterPersonnel', [
       {
         Code: 'EMP999',
         FullName: 'อาจารย์ใหม่ ใจดี',
@@ -206,18 +207,29 @@ describe('personnel API', () => {
         Department: 'สาขาการตลาด',
       },
     ]);
+    expect(nonNumRes.ok).toBe(false);
+    expect(nonNumRes.message).toContain('ตัวเลขเท่านั้น');
+
+    const res = await publicRpc('apiRegisterPersonnel', [
+      {
+        Code: '4216125',
+        FullName: 'อาจารย์ใหม่ ใจดี',
+        Position: 'อาจารย์',
+        Department: 'สาขาการตลาด',
+      },
+    ]);
     expect(res.ok).toBe(true);
-    expect(res.data.Code).toBe('EMP999');
+    expect(res.data.Code).toBe('4216125');
 
     // Can lookup immediately
-    const lookup = await publicRpc('apiLookupPersonnel', ['emp999']);
+    const lookup = await publicRpc('apiLookupPersonnel', ['4216125']);
     expect(lookup.ok).toBe(true);
     expect(lookup.data.FullName).toBe('อาจารย์ใหม่ ใจดี');
 
     // Reject duplicate
     const dupRes = await publicRpc('apiRegisterPersonnel', [
       {
-        Code: 'emp999',
+        Code: '4216125',
         FullName: 'คนอื่น แอบอ้าง',
         Position: 'เจ้าหน้าที่',
         Department: 'ฝ่ายอื่น',

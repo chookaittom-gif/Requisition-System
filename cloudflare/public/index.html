@@ -6879,7 +6879,7 @@ function personnelModal(person){
 }
 
 function registerPersonnelModal(prefillCode, onRegistered){
-  const defaultCode = (prefillCode || '').trim();
+  const defaultCode = (prefillCode || '').replace(/\D/g, '').trim();
   openModal({
     title: 'เพิ่มประวัติผู้ขอเบิกใหม่',
     sub: 'บันทึกข้อมูลเพื่อใช้ดึงชื่อ ตำแหน่ง และหลักสูตรอัตโนมัติในครั้งต่อไป (ไม่ต้องใช้รหัสผ่าน)',
@@ -6889,27 +6889,21 @@ function registerPersonnelModal(prefillCode, onRegistered){
       <form id="frmRegisterPersonnel" class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">รหัสบุคลากร <span class="text-rose-500">*</span></label>
-          <input id="regCode" value="${esc(defaultCode)}" required placeholder="เช่น EMP001 หรือ รหัสประจำตัว" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+          <input id="regCode" type="text" inputmode="numeric" pattern="[0-9]*" value="${esc(defaultCode)}" required placeholder="เช่น 4216125 (ตัวเลขเท่านั้น)" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition font-medium">
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อ - นามสกุล <span class="text-rose-500">*</span></label>
           <input id="regFullName" required placeholder="เช่น ดร.สมชาย ใจดี" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
         </div>
-        <div class="grid sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">ตำแหน่ง <span class="text-rose-500">*</span></label>
-            <input id="regPosition" list="regPosSuggestions" required placeholder="เช่น อาจารย์ หรือ เจ้าหน้าที่" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
-            <datalist id="regPosSuggestions">
-              <option value="อาจารย์">
-              <option value="เจ้าหน้าที่">
-              <option value="ผู้ช่วยศาสตราจารย์">
-              <option value="รองศาสตราจารย์">
-            </datalist>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">สถานะ</label>
-            <input value="เปิดใช้งาน (Active)" disabled class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 text-sm cursor-not-allowed">
-          </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ตำแหน่ง <span class="text-rose-500">*</span></label>
+          <input id="regPosition" list="regPosSuggestions" required placeholder="เช่น อาจารย์ หรือ เจ้าหน้าที่" class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+          <datalist id="regPosSuggestions">
+            <option value="อาจารย์">
+            <option value="เจ้าหน้าที่">
+            <option value="ผู้ช่วยศาสตราจารย์">
+            <option value="รองศาสตราจารย์">
+          </datalist>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose-500">*</span></label>
@@ -6937,6 +6931,13 @@ function registerPersonnelModal(prefillCode, onRegistered){
       </form>`
   });
 
+  const regCodeInp = $('#regCode');
+  if(regCodeInp){
+    regCodeInp.addEventListener('input', () => {
+      regCodeInp.value = regCodeInp.value.replace(/\D/g, '');
+    });
+  }
+
   $('#frmRegisterPersonnel').addEventListener('submit', async (e) => {
     e.preventDefault();
     const code = ($('#regCode')?.value || '').trim();
@@ -6945,6 +6946,7 @@ function registerPersonnelModal(prefillCode, onRegistered){
     const department = ($('#regDepartment')?.value || '').trim();
 
     if(!code) return toast('warning', 'กรุณาระบุรหัสบุคลากร');
+    if(!/^\d+$/.test(code)) return toast('warning', 'รหัสบุคลากรต้องเป็นตัวเลขเท่านั้น (เช่น 4216125)');
     if(!fullName) return toast('warning', 'กรุณาระบุชื่อ-นามสกุล');
     if(!position) return toast('warning', 'กรุณาระบุตำแหน่ง');
     if(!department) return toast('warning', 'กรุณาระบุหลักสูตร / ฝ่ายงาน / โครงการ');
@@ -8205,7 +8207,7 @@ async function viewRequestForm(){
         </div>
         <div class="flex flex-col sm:flex-row gap-2">
           <div class="relative flex-1">
-            <input id="rPersonnelCode" type="text" autocomplete="off" placeholder="พิมพ์รหัสบุคลากร เช่น EMP001 แล้วกดค้นหา หรือกด Enter..." class="w-full px-4 py-3 min-h-[44px] rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium text-slate-800 text-sm transition">
+            <input id="rPersonnelCode" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="พิมพ์รหัสบุคลากร เช่น 4216125 แล้วกดค้นหา หรือกด Enter..." class="w-full px-4 py-3 min-h-[44px] rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium text-slate-800 text-sm transition">
           </div>
           <div class="flex gap-2 shrink-0">
             <button type="button" id="btnLookupPersonnel" class="min-h-[44px] px-5 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none">
@@ -8512,6 +8514,9 @@ async function viewRequestForm(){
       e.preventDefault();
       doLookupPersonnel_();
     }
+  });
+  $('#rPersonnelCode')?.addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '');
   });
 
   // ponytail: searchable combobox dropdown for department with full-width text display
