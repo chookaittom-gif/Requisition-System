@@ -4821,18 +4821,14 @@ async function viewAuditLog(){
       ? 'bg-purple-50 text-purple-700 border border-purple-200/80'
       : (isOff ? 'bg-sky-50 text-sky-700 border border-sky-200/80' : 'bg-slate-50 text-slate-600 border border-slate-200/80');
     const icon = isAdm ? '<i class="fa-solid fa-shield-halved text-[9px] mr-1"></i>' : (isOff ? '<i class="fa-solid fa-user-tie text-[9px] mr-1"></i>' : '');
+    // ponytail: audit log ผู้ทำ แสดงป้ายสิทธิ์ + ชื่อภาษาไทย ซ่อน @username ไว้ใน title tooltip
     const displayName = user?.FullName ? user.FullName : actor;
-    const subUsername = user?.Username && user.Username.toLowerCase() !== String(displayName).toLowerCase()
-      ? `<span class="text-[10px] text-slate-400 font-mono block">@${esc(user.Username)}</span>`
-      : '';
-    return `<div class="inline-flex items-center gap-1.5 flex-wrap">
+    const userTooltip = user?.Username ? ` title="@${esc(user.Username)}"` : '';
+    return `<div class="inline-flex items-center gap-1.5 flex-wrap"${userTooltip}>
       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${roleCls}">
         ${icon}${esc(roleLabel)}
       </span>
-      <div class="inline-block leading-tight">
-        <span class="font-medium text-slate-700">${esc(displayName)}</span>
-        ${subUsername}
-      </div>
+      <span class="font-medium text-slate-700">${esc(displayName)}</span>
     </div>`;
   };
 
