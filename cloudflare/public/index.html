@@ -8395,6 +8395,26 @@ async function viewRequestForm(){
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ไฟล์แนบ (ไม่บังคับ)</label>
         <input id="rFile" type="file" class="block w-full text-xs file:mr-3 file:py-2.5 file:px-4 file:rounded-2xl file:border-0 file:bg-slate-700 file:text-white file:font-bold"></div>
 
+      ${S.user && S.user.Role !== 'guest' ? `
+      <div class="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between gap-3 transition">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg flex-shrink-0">
+            <i class="fa-solid fa-stamp"></i>
+          </div>
+          <div>
+            <p class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+              <span>อนุมัติและตัดสต็อกทันที</span>
+              <span class="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-200 text-emerald-900">สิทธิ์ผู้ดูแล</span>
+            </p>
+            <p class="text-xs text-slate-500 mt-0.5">บันทึกเป็นรายการอนุมัติแล้ว พร้อมตัดสต็อกทันทีโดยไม่ต้องไปกดอนุมัติซ้ำ</p>
+          </div>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer flex-shrink-0 min-h-[44px] min-w-[44px] justify-center">
+          <input type="checkbox" id="chkAutoApprove" class="sr-only peer" checked>
+          <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[12px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+        </label>
+      </div>` : ''}
+
       <div class="flex flex-col sm:flex-row gap-3">
         <button type="submit" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-light text-white font-bold shadow-soft hover:brightness-110 active:scale-[.99] transition">
           <i class="fa-solid fa-paper-plane"></i> บันทึกใบขอเบิก
@@ -8979,12 +8999,14 @@ async function submitRequest(e){
   try{
 
     const attachUrl = await uploadPicked_($('#rFile'), 'request_attachment', 'กำลังอัปโหลดไฟล์แนบ');
+    const autoApprove = Boolean($('#chkAutoApprove') && $('#chkAutoApprove').checked);
     const res = await api('apiCreateRequest', {
       PersonnelCode: (S.reqPersonnel && S.reqPersonnel.Code) || pCode || undefined,
       RequestDate: $('#rDate').value, Department: reqDept,
       UserID: (S.user && S.user.ID) || 'GUEST', FullName: reqName, Position: reqPos,
       Purpose: $('#rPurpose').value.trim(), Note: ($('#rNote') ? $('#rNote').value.trim() : ''),
-      AttachUrl: attachUrl || '', items, actor: (S.user && S.user.Username) || reqName
+      AttachUrl: attachUrl || '', items, actor: (S.user && S.user.Username) || reqName,
+      autoApprove
     });
     hideLoader();
     if(!res.ok) return alertErr(res.message);

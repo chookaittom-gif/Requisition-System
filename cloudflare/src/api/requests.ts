@@ -319,34 +319,70 @@ registerRpc('apiCreateRequest', 'public', (ctx, args) =>
       logAudit(db, { action: 'CREATE', entity: 'Request', entityId: reqId, detail: docNo, actor: str(p.actor) }),
     ]);
 
-    const hook = notifyHooks.onNewRequest;
-    if (hook) {
-      const snapshot = {
-        ID: reqId,
-        DocNo: docNo,
-        FullName: fullName,
-        Position: position,
-        Department: department,
-        Purpose: purpose,
-        Note: note,
-        AttachUrl: attachUrl,
-        RequestDate: requestDate,
-        ItemCount: items.length,
-        TotalAmount: total,
-        Items: items.map((i) => ({
-          MaterialID: i.m.id,
-          Code: i.m.code,
-          Name: i.m.name,
-          Unit: i.m.unit,
-          Qty: i.qty,
-          UnitPrice: i.m.unit_price,
-          TotalPrice: i.totalPrice,
-          Remark: i.remark,
-        })),
-      };
-      runHook(ctx, () => hook(ctx.env, snapshot));
+    // ponytail: auto-approve directly on creation for admin/approver/officer when requested
+    const userRole = String(ctx.session?.role || '').toLowerCase();
+    const canAutoApprove = Boolean(
+      p.autoApprove && ctx.session && (userRole === 'admin' || userRole === 'officer' || userRole === 'approver'),
+    );
+    const approverName = ctx.session?.username || fullName || 'ผู้ดูแลระบบ';
+
+    if (canAutoApprove) {
+      const extra = [
+        db
+          .prepare(
+            "UPDATE requests SET status = 'APPROVED', approved_date = ?, approved_by = ?, updated_at = ? WHERE id = ?",
+          )
+          .bind(todayBkk(), approverName, now, reqId),
+        logAudit(db, { action: 'STATUS', entity: 'Request', entityId: reqId, detail: `${docNo} → APPROVED (อนุมัติอัตโนมัติ)`, actor: approverName }),
+      ];
+      const stockRes = await applyRequestStock(ctx.env, reqId, -1, approverName, extra);
+      if (!stockRes.ok) {
+        await db.prepare('DELETE FROM requests WHERE id = ?').bind(reqId).run();
+        return fail(shortageMessage(stockRes.shortages));
+      }
     }
-    return { ok: true, message: `บันทึกใบขอเบิกพัสดุเรียบร้อยแล้ว เลขที่ ${docNo}` };
+
+    const snapshot = {
+      ID: reqId,
+      DocNo: docNo,
+      FullName: fullName,
+      Position: position,
+      Department: department,
+      Purpose: purpose,
+      Note: note,
+      AttachUrl: attachUrl,
+      RequestDate: requestDate,
+      ItemCount: items.length,
+      TotalAmount: total,
+      Items: items.map((i) => ({
+        MaterialID: i.m.id,
+        Code: i.m.code,
+        Name: i.m.name,
+        Unit: i.m.unit,
+        Qty: i.qty,
+        UnitPrice: i.m.unit_price,
+        TotalPrice: i.totalPrice,
+        Remark: i.remark,
+      })),
+    };
+
+    if (canAutoApprove) {
+      const hook = notifyHooks.onStatusChange;
+      if (hook) runHook(ctx, () => hook(ctx.env, snapshot, 'APPROVED', ''));
+    } else {
+      const hook = notifyHooks.onNewRequest;
+      if (hook) runHook(ctx, () => hook(ctx.env, snapshot));
+    }
+
+    return {
+      ok: true,
+      id: reqId,
+      docNo,
+      status: canAutoApprove ? 'APPROVED' : 'PENDING',
+      message: canAutoApprove
+        ? `บันทึกและอนุมัติใบขอเบิกพัสดุเรียบร้อยแล้ว เลขที่ ${docNo}`
+        : `บันทึกใบขอเบิกพัสดุเรียบร้อยแล้ว เลขที่ ${docNo}`,
+    };
   }),
 );
 

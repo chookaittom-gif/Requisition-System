@@ -20,7 +20,31 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-03 Excel Import Support for Personnel)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-04 Admin Self-Requisition Auto-Approve & No Password Decision)
+
+### feat(requisition): ระบบอนุมัติและตัดสต็อกทันทีเมื่อผู้ดูแลเบิกพัสดุเอง
+- **ความต้องการ:**
+  1. ในกรณีที่ผู้ดูแลระบบหรือเจ้าหน้าที่พัสดุ (`ADMIN` / `APPROVER` / `OFFICER`) เป็นผู้เปิดใบเบิกพัสดุเพื่อใช้งานเอง ให้มีตัวเลือก "[✓] อนุมัติและตัดสต็อกทันที" โดยไม่ต้องสลับไปหน้า "จัดการรายการขอเบิก" เพื่อกดอนุมัติตนเองซ้ำซ้อน
+  2. สรุปความชัดเจนเรื่องรหัสผ่าน: เว้นไว้แบบเดิม (ไม่มีช่องกรอกรหัสผ่านในแบบฟอร์มเบิกพัสดุ) เพื่อคงความสะดวก รวดเร็ว (Zero-friction) ของอาจารย์และบุคลากรทั่วไป และรักษาความปลอดภัยผ่านกระบวนการตรวจสอบอนุมัติของผู้ดูแลระบบ
+- **การเปลี่ยนแปลงในโค้ด:**
+  - `cloudflare/src/api/requests.ts`:
+    - ปรับปรุง `apiCreateRequest`: ตรวจสอบพารามิเตอร์ `p.autoApprove` ร่วมกับสิทธิ์ใน Session (`ctx.session.role`)
+    - หากเป็น Admin/Approver/Officer และเปิดใช้งาน autoApprove: เรียกใช้ `applyRequestStock` ตัดสต็อกแบบ FIFO ทันทีใน Transaction เดียวกัน บันทึก `approved_by` และ `approved_date` พร้อมส่ง Notification การอนุมัติ (`notifyHooks.onStatusChange`) แทนคำขอใหม่
+    - หากเกิดข้อผิดพลาดด้านสต็อกไม่พอ จะทำการลบคำขอและแจ้งเตือนอย่างปลอดภัย
+  - `cloudflare/public/index.html`:
+    - ใน `renderRequisition`: แสดงกล่อง Toggle Switch สีเขียวมรกต (`emerald-600`) ขนาด Touch target $\ge 44$px เหนือปุ่มส่งคำขอ เฉพาะกรณีที่ล็อกอินอยู่ (`S.user.Role !== 'guest'`) และตั้งค่าเริ่มต้นเปิดใช้งาน (`checked = true`)
+    - ใน `submitRequest`: แนบแฟล็ก `autoApprove: Boolean($('#chkAutoApprove')?.checked)` ส่งไปยัง API
+  - `cloudflare/test/requests.test.ts`:
+    - เพิ่ม Unit Test ตรวจสอบ:
+      1. Officer สั่งเบิกพร้อม `autoApprove: true` จะได้สถานะ `APPROVED`, ตัดสต็อกทันที และบันทึก `approved_by`
+      2. Guest สั่งเบิกพร้อม `autoApprove: true` ระบบจะปฏิเสธการตัดสต็อกอัตโนมัติและคงสถานะเป็น `PENDING`
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Backend: 11 test files, 176 tests ผ่าน 100%
+  - Frontend Static Checks: 39 tests ผ่าน 100%
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-03 Excel Import Support for Personnel)
 
 ### feat(personnel): เพิ่มการรองรับการนำเข้าไฟล์ Excel (.xlsx) สำหรับข้อมูลบุคลากร
 - **ความต้องการ:** ผู้ใช้งานต้องการนำเข้าข้อมูลบุคลากรด้วยไฟล์ Excel (.xlsx) นอกเหนือจากไฟล์ CSV เพื่อป้องกันปัญหาตัวอักษรภาษาไทยกลายเป็นภาษาต่างด้าว (Encoding เพี้ยน) และปัญหาตัวคั่นเครื่องหมายจุลภาคในชื่อตำแหน่ง/ฝ่ายงาน

@@ -82,6 +82,27 @@ describe('create', () => {
     expect((await lastReq()).total_amount).toBe(20);
   });
 
+  it('auto-approves and deducts stock when officer requests with autoApprove: true', async () => {
+    const r = await createReq([{ MaterialID: 'M-A', Qty: 3 }], { autoApprove: true }, 'officer');
+    expect(r.ok).toBe(true);
+    expect(r.status).toBe('APPROVED');
+    const req = await lastReq();
+    expect(req.status).toBe('APPROVED');
+    expect(req.stock_applied).toBe(1);
+    expect(req.approved_by).toBe('off1');
+    expect(await stock('M-A')).toBe(7);
+  });
+
+  it('ignores autoApprove when guest requests and keeps status as PENDING', async () => {
+    const r = await createReq([{ MaterialID: 'M-A', Qty: 2 }], { autoApprove: true }, 'guest');
+    expect(r.ok).toBe(true);
+    expect(r.status).toBe('PENDING');
+    const req = await lastReq();
+    expect(req.status).toBe('PENDING');
+    expect(req.stock_applied).toBe(0);
+    expect(await stock('M-A')).toBe(10);
+  });
+
   it('rejects bad qty, unknown material, bad attach', async () => {
     for (const qty of [0, -1, 'abc', '']) {
       expect(await createReq([{ MaterialID: 'M-A', Qty: qty }])).toMatchObject({ ok: false, code: 'VALIDATION' });
