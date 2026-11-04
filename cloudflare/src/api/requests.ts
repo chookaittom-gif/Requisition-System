@@ -641,6 +641,7 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
     const db = ctx.env.DB;
     const list = Array.isArray(args[0]) ? args[0] : args[0] ? [args[0]] : [];
     const results: StatusResult[] = [];
+    const userRole = String(ctx.session?.role || '').toLowerCase();
     for (const raw of list) {
       const item = asObj(raw);
       const id = str(item.ID);
@@ -661,6 +662,12 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
         results.push({ ...base, ok: true, unchanged: true, message: 'สถานะไม่เปลี่ยนแปลง' });
         continue;
       }
+      // ponytail: guard revert of approved requests to admin role only
+      if (prev === 'APPROVED' && next === 'PENDING' && userRole !== 'admin') {
+        results.push({ ...base, ok: false, message: 'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถส่งกลับเพื่อแก้ไขใบขอเบิกที่อนุมัติแล้ว' });
+        continue;
+      }
+      const revertReason = next === 'PENDING' && prev === 'APPROVED' ? str(item.RejectReason || item.Reason || item.reason) : '';
       const reason = next === 'REJECTED' ? str(item.RejectReason) : '';
       const now = nowBkk();
       const partialItems = Array.isArray(item.Items) ? item.Items : Array.isArray(item.items) ? item.items : null;
@@ -691,6 +698,10 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
         }
       }
 
+      const statusDetail = revertReason
+        ? `${r.doc_no} → PENDING (ส่งกลับเพื่อแก้ไข: ${revertReason})`
+        : `${r.doc_no} → ${next}${isPartial ? ' (อนุมัติบางส่วน)' : ''}`;
+
       const extra = [
         db
           .prepare(
@@ -703,7 +714,7 @@ registerRpc('apiUpdateRequestStatus', 'officer', (ctx, args) =>
               ? [next, reason, now, actor, isPartial, approvedTotal, approvedCount, now, id]
               : [next, reason, now, actor, 0, now, id]),
           ),
-        logAudit(db, { action: 'STATUS', entity: 'Request', entityId: id, detail: `${r.doc_no} → ${next}${isPartial ? ' (อนุมัติบางส่วน)' : ''}`, actor }),
+        logAudit(db, { action: 'STATUS', entity: 'Request', entityId: id, detail: statusDetail, actor }),
         ...(next !== 'APPROVED' ? [db.prepare('UPDATE request_items SET approved_qty = NULL WHERE request_id = ?').bind(id)] : []),
       ];
       // Every non-approve move also goes through applyRequestStock(+1): it is a guarded no-op when

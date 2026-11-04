@@ -3387,12 +3387,19 @@ async function openEditReqModal(id){
     body: `
       <form id="frmEditReq" class="space-y-4 text-slate-700">
         ${isApproved ? `
-          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900">
-            <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm flex-shrink-0"></i>
-            <div>
-              <p class="font-bold">ใบขอเบิกนี้ได้รับการอนุมัติแล้ว</p>
-              <p class="text-amber-800 mt-0.5">สามารถแก้ไขได้เฉพาะข้อมูลทั่วไป (ชื่อผู้ขอเบิก/ฝ่าย/วัตถุประสงค์) เพื่อรักษาความถูกต้องของยอดสต็อกและประวัติการตัดล็อต</p>
+          <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+            <div class="flex items-start gap-2.5">
+              <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm flex-shrink-0"></i>
+              <div>
+                <p class="font-bold">ใบขอเบิกนี้ได้รับการอนุมัติแล้ว</p>
+                <p class="text-amber-800 mt-0.5">สามารถแก้ไขได้เฉพาะข้อมูลทั่วไป เพื่อรักษาความถูกต้องของยอดสต็อกและประวัติการตัดล็อต</p>
+              </div>
             </div>
+            ${S.user && S.user.Role === 'admin' ? `
+              <button type="button" id="btnRevertReq" class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5 flex-shrink-0 min-h-[44px] touch-manipulation cursor-pointer">
+                <i class="fa-solid fa-arrow-rotate-left"></i> ส่งกลับเพื่อแก้ไข
+              </button>
+            ` : ''}
           </div>
         ` : `
           <div class="p-3.5 rounded-2xl bg-brand-50 border border-brand-100 flex items-start gap-2.5 text-xs text-brand-800">
@@ -3486,6 +3493,39 @@ async function openEditReqModal(id){
   });
 
   $('#mCancelEdit').addEventListener('click', closeModal);
+
+  const btnRevert = $('#btnRevertReq');
+  if(btnRevert){
+    btnRevert.addEventListener('click', async () => {
+      const r = await Swal.fire({
+        icon: 'warning',
+        title: 'ส่งกลับเพื่อแก้ไข?',
+        text: 'ระบบจะคืนสต็อกและล็อตพัสดุเข้าคลังอัตโนมัติ และเปลี่ยนสถานะเป็น "รออนุมัติ" เพื่อให้สามารถเพิ่ม ลด หรือแก้ไขรายการพัสดุได้',
+        input: 'textarea',
+        inputLabel: 'ระบุเหตุผลในการส่งกลับแก้ไข *',
+        inputPlaceholder: 'เช่น ผู้เบิกแจ้งเปลี่ยนรายการ/ขนาดพัสดุ, ระบุจำนวนผิด...',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยันส่งกลับแก้ไข',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#d97706',
+        cancelButtonColor: '#94a3b8',
+        reverseButtons: true,
+        inputValidator: v => !v?.trim() && 'กรุณาระบุเหตุผลในการส่งกลับแก้ไข'
+      });
+      if(!r.isConfirmed) return;
+      showLoader('กำลังส่งกลับเพื่อแก้ไขและคืนสต็อก...');
+      const res = await api('apiUpdateRequestStatus', [{
+        ID: id,
+        Status: 'PENDING',
+        RejectReason: r.value.trim(),
+        actor: S.user.Username
+      }]);
+      hideLoader();
+      if(!res.ok) return alertErr(res.message);
+      toast('success', 'ส่งกลับเพื่อแก้ไขเรียบร้อยแล้ว คืนสต็อกเข้าคลังแล้ว');
+      openEditReqModal(id);
+    });
+  }
 
   if(!isApproved){
     const container = $('#editItemRowsContainer');
@@ -4741,24 +4781,39 @@ async function viewAuditLog(){
     return `<span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${cls}">${esc(a)}</span>`;
   };
 
-  const getActorRole = (actor, detail)=>{
-    if(!actor || actor === '-') return '';
+  const findUser = (actor)=>{
+    if(!actor || actor === '-') return null;
     const a = String(actor).toLowerCase();
-    const user = (S.cache.users || []).find(u =>
+    return (S.cache.users || []).find(u =>
       String(u.Username||'').toLowerCase() === a ||
       String(u.FullName||'').toLowerCase() === a
-    );
+    ) || null;
+  };
+
+  const getActorRole = (actor, detail)=>{
+    if(!actor || actor === '-') return '';
+    const user = findUser(actor);
     if(user && user.Role) return String(user.Role).toLowerCase();
     const m = String(detail||'').match(/\((admin|officer|staff|user)\)/i);
     if(m) return m[1].toLowerCase();
+    const a = String(actor).toLowerCase();
     if(a.includes('admin') || a === 'adm1') return 'admin';
     return '';
   };
 
   const actorBadge = (actor, detail)=>{
     if(!actor || actor === '-') return '<span class="text-slate-400">-</span>';
-    const role = getActorRole(actor, detail);
-    if(!role) return `<span class="text-slate-700">${esc(actor)}</span>`;
+    const user = findUser(actor);
+    const role = user?.Role ? String(user.Role).toLowerCase() : getActorRole(actor, detail);
+    if(!role && !user){
+      // ponytail: guest requester who created a request without login gets badge ผู้เบิก
+      return `<div class="inline-flex items-center gap-1.5 flex-wrap">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+          <i class="fa-solid fa-user-pen text-[9px] mr-1"></i>ผู้เบิก
+        </span>
+        <span class="font-medium text-slate-700">${esc(actor)}</span>
+      </div>`;
+    }
     const isAdm = role === 'admin';
     const isOff = role === 'officer' || role === 'staff';
     const roleLabel = isAdm ? 'ผู้ดูแลระบบ' : (isOff ? 'เจ้าหน้าที่' : 'ผู้ใช้');
@@ -4766,11 +4821,18 @@ async function viewAuditLog(){
       ? 'bg-purple-50 text-purple-700 border border-purple-200/80'
       : (isOff ? 'bg-sky-50 text-sky-700 border border-sky-200/80' : 'bg-slate-50 text-slate-600 border border-slate-200/80');
     const icon = isAdm ? '<i class="fa-solid fa-shield-halved text-[9px] mr-1"></i>' : (isOff ? '<i class="fa-solid fa-user-tie text-[9px] mr-1"></i>' : '');
+    const displayName = user?.FullName ? user.FullName : actor;
+    const subUsername = user?.Username && user.Username.toLowerCase() !== String(displayName).toLowerCase()
+      ? `<span class="text-[10px] text-slate-400 font-mono block">@${esc(user.Username)}</span>`
+      : '';
     return `<div class="inline-flex items-center gap-1.5 flex-wrap">
       <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${roleCls}">
         ${icon}${esc(roleLabel)}
       </span>
-      <span class="font-medium text-slate-700">${esc(actor)}</span>
+      <div class="inline-block leading-tight">
+        <span class="font-medium text-slate-700">${esc(displayName)}</span>
+        ${subUsername}
+      </div>
     </div>`;
   };
 
@@ -4827,10 +4889,15 @@ async function viewAuditLog(){
     const to = $('#audTo').value;
     let list = S.cache.audit || [];
     if(q) list = list.filter(x => {
+      const u = findUser(x.Actor);
       const role = getActorRole(x.Actor, x.Detail);
-      const roleTh = role === 'admin' ? 'ผู้ดูแลระบบ' : (role === 'officer' || role === 'staff' ? 'เจ้าหน้าที่' : 'ผู้ใช้');
+      const roleTh = role === 'admin' ? 'ผู้ดูแลระบบ' : (role === 'officer' || role === 'staff' ? 'เจ้าหน้าที่' : (u ? 'ผู้ใช้' : 'ผู้เบิก'));
+      const fn = String(u?.FullName || '').toLowerCase();
+      const un = String(u?.Username || '').toLowerCase();
       return String(x.Detail||'').toLowerCase().indexOf(q)>=0 ||
         String(x.Actor||'').toLowerCase().indexOf(q)>=0 ||
+        fn.indexOf(q)>=0 ||
+        un.indexOf(q)>=0 ||
         String(x.Entity||'').toLowerCase().indexOf(q)>=0 ||
         role.indexOf(q)>=0 ||
         roleTh.indexOf(q)>=0;

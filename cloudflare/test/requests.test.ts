@@ -250,6 +250,49 @@ describe('approve / stock', () => {
     expect(await status(id, 'BOGUS')).toMatchObject({ ok: false, message: 'สถานะไม่ถูกต้อง' });
   });
 
+  it('officer cannot revert approved request to pending; admin can revert and return stock', async () => {
+    await createReq([{ MaterialID: 'M-A', Qty: 3 }]);
+    const { id } = await lastReq();
+    await status(id, 'APPROVED');
+    expect(await stock('M-A')).toBe(7);
+
+    // officer attempts to revert approved -> pending
+    const offRes = await status(id, 'PENDING', { RejectReason: 'ขอแก้' });
+    expect(offRes.ok).toBe(false);
+    expect(offRes.message).toBe('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถส่งกลับเพื่อแก้ไขใบขอเบิกที่อนุมัติแล้ว');
+    expect(await stock('M-A')).toBe(7);
+
+    // admin logs in and reverts approved -> pending
+    await env.DB.prepare(
+      "INSERT INTO users (id, username, password_hash, full_name, role, created_at, updated_at) VALUES ('U-AD1', 'adm1', ?, 'Admin', 'admin', ?, ?)",
+    ).bind(await legacyHash('1234'), T, T).run();
+    const resAd = await post('apiLogin', [{ username: 'adm1', password: '1234' }]);
+    const admCookie = (resAd.headers.get('set-cookie') ?? '').split(';')[0];
+    const oldCookie = cookie;
+    cookie = admCookie;
+
+    const admRes = await status(id, 'PENDING', { RejectReason: 'เปลี่ยนจำนวน' });
+    expect(admRes.ok).toBe(true);
+    expect(await stock('M-A')).toBe(10);
+    const reqAfter = await lastReq();
+    expect(reqAfter.status).toBe('PENDING');
+    expect(reqAfter.stock_applied).toBe(0);
+
+    const audit = await rows("SELECT * FROM audit_log WHERE action='STATUS' ORDER BY rowid DESC LIMIT 1");
+    expect(audit[0].detail).toContain('ส่งกลับเพื่อแก้ไข: เปลี่ยนจำนวน');
+
+    // now admin can edit items because request is PENDING
+    const editRes = await rpc('apiUpdateRequest', [{
+      ID: id,
+      items: [{ MaterialID: 'M-A', Qty: 5 }],
+    }]);
+    expect(editRes.ok).toBe(true);
+    const updated = await lastReq();
+    expect(updated.total_amount).toBe(50);
+
+    cookie = oldCookie;
+  });
+
   it('partial approval approves selected items and adjusted qty, deducting stock accurately', async () => {
     await createReq([
       { MaterialID: 'M-A', Qty: 2 },

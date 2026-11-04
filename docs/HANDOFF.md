@@ -20,7 +20,35 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-04 Admin Self-Requisition Auto-Approve & No Password Decision)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-04 Admin Revert to Pending & Thai Audit Log)
+
+### feat(requisition & audit): ระบบส่งกลับเพื่อแก้ไขสำหรับ Admin และแสดงชื่อภาษาไทยใน Audit Log
+- **ความต้องการ:**
+  1. แก้ไขรายการพัสดุสำหรับ Admin: เมื่อใบขอเบิกอนุมัติแล้ว (`APPROVED`) หากพบข้อผิดพลาด ให้มีระบบ "ส่งกลับเพื่อแก้ไข (Revert to Pending)" เฉพาะบทบาท Admin เพื่อคืนสต็อกและล็อตพัสดุเข้าคลังอัตโนมัติอย่างถูกต้องตามหลักบัญชีและ FIFO พร้อมระบุเหตุผลลง Audit Log จากนั้นปลดล็อกฟอร์มให้แก้รายการ/จำนวนได้ทันที
+  2. แสดงชื่อผู้ทำเป็นภาษาไทยใน Audit Log: คอลัมน์ "ผู้ทำ" แสดงชื่อ-นามสกุลภาษาไทย (`FullName`) ตัวหนาเป็นหลัก พร้อม `@username` ตัวเล็กกำกับด้านล่าง และเพิ่ม badge **"ผู้เบิก"** (สีส้ม/amber) สำหรับผู้ขอเบิกภายนอกที่ไม่ได้ล็อกอิน รวมถึงปรับปรุงตัวกรองค้นหาให้ค้นได้ทั้งชื่อไทยและ username
+- **การเปลี่ยนแปลงในโค้ด:**
+  - `cloudflare/src/api/requests.ts`:
+    - ใน `apiUpdateRequestStatus`: เพิ่ม Guard ตรวจสอบว่าหากสถานะเดิมคือ `APPROVED` และเปลี่ยนเป็น `PENDING` ต้องเป็นบทบาท `admin` เท่านั้น (ป้องกัน officer ดำเนินการ)
+    - รองรับการรับเหตุผลการส่งกลับแก้ไข (`item.RejectReason`) และบันทึกลง Audit Log: `${r.doc_no} → PENDING (ส่งกลับเพื่อแก้ไข: ${revertReason})`
+    - เรียก `applyRequestStock(+1)` คืนสต็อกคงคลังและล็อต FIFO อัตโนมัติใน Database Batch เดียวกัน
+  - `cloudflare/public/index.html`:
+    - ใน `openEditReqModal`: แสดงปุ่ม **"ส่งกลับเพื่อแก้ไข"** (`#btnRevertReq`) สีส้ม Touch target $\ge 44$px ในกล่องเตือนสีเหลือง เฉพาะเมื่อเป็น Admin
+    - เมื่อกด จะแสดง SweetAlert2 ให้ระบุเหตุผลในการส่งกลับแก้ไข (บังคับกรอก) แล้วส่งคำขอไปที่ `apiUpdateRequestStatus` เมื่อสำเร็จจะเปิด Modal ใหม่ในโหมดแก้ไขรายการพัสดุได้ทันที
+    - ใน `viewAuditLog`:
+      - ปรับปรุง `actorBadge`: ดึงข้อมูลผู้ใช้จาก `S.cache.users` แสดงชื่อภาษาไทยเป็นหลัก พร้อม `@username` ด้านล่าง หากไม่พบบัญชีผู้ใช้ (ผู้เบิกภายนอก) จะติด badge **"ผู้เบิก"** (`fa-user-pen`)
+      - ปรับปรุง `filterAud`: กรองข้อมูล Audit Log โดยค้นหาได้ทั้ง `FullName`, `Username`, และคำว่า `ผู้เบิก`
+  - `cloudflare/test/requests.test.ts`:
+    - เพิ่ม Unit Test ตรวจสอบ:
+      1. Officer ไม่สามารถเปลี่ยนสถานะคำขอที่อนุมัติแล้วกลับเป็น `PENDING` ได้ (ถูกปฏิเสธด้วยข้อความเฉพาะ Admin)
+      2. Admin สามารถเปลี่ยนสถานะกลับเป็น `PENDING` ได้ คืนสต็อกเข้าคลังถูกต้อง บันทึกเหตุผลลง Audit Log และสามารถแก้ไขรายการพัสดุผ่าน `apiUpdateRequest` ต่อได้
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Backend: 11 test files, 177 tests ผ่าน 100%
+  - Frontend Static Checks: 39 tests ผ่าน 100%
+  - Graft: context graph ซิงค์สมบูรณ์ (303 nodes, 802 edges)
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-04 Admin Self-Requisition Auto-Approve & No Password Decision)
 
 ### feat(requisition): ระบบอนุมัติและตัดสต็อกทันทีเมื่อผู้ดูแลเบิกพัสดุเอง
 - **ความต้องการ:**
