@@ -1113,6 +1113,99 @@ function emptyBox(text){
   </div>`;
 }
 
+/* ---------------- PAGINATION HELPERS (Mobile >= 44px + Desktop pills) ---------------- */
+function paginateList(list, page, pageSize){
+  const totalItems = list ? list.length : 0;
+  const pSize = pageSize === 'all' ? totalItems : Number(pageSize || 10);
+  const totalPages = Math.max(1, Math.ceil(totalItems / (pSize || 1)));
+  let curPage = Number(page) || 1;
+  if(curPage > totalPages) curPage = totalPages;
+  if(curPage < 1) curPage = 1;
+  const startIdx = pageSize === 'all' ? 0 : (curPage - 1) * pSize;
+  const endIdx = pageSize === 'all' ? totalItems : Math.min(startIdx + pSize, totalItems);
+  const pageItems = (list || []).slice(startIdx, endIdx);
+  return { totalItems, pageSize: pSize, totalPages, page: curPage, startIdx, endIdx, pageItems };
+}
+
+function renderPaginationHeader({ key, totalItems, startIdx, endIdx, pageSize, customSizes }){
+  const sizes = customSizes || [10, 20, 50, 'all'];
+  const pSizeStr = String(pageSize);
+  return `
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <div class="font-medium text-slate-500">
+        ${totalItems ? `แสดงรายการที่ <b>${startIdx + 1}</b> ถึง <b>${endIdx}</b> จากทั้งหมด <b>${nf(totalItems)}</b> รายการ` : `ไม่พบรายการ`}
+      </div>
+      <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-xl">
+        <span class="font-semibold text-slate-600">แสดง:</span>
+        <select data-pg-size="${key}" class="bg-transparent font-bold text-slate-700 outline-none text-xs cursor-pointer">
+          ${sizes.map(s => {
+            const val = String(s);
+            const label = s === 'all' ? 'ทั้งหมด' : s;
+            const sel = val === pSizeStr ? 'selected' : '';
+            return `<option value="${val}" ${sel}>${label}</option>`;
+          }).join('')}
+        </select>
+      </div>
+    </div>`;
+}
+
+function renderPaginationBar({ key, page, totalPages }){
+  if(totalPages <= 1) return '';
+  return `
+    <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+      <div class="hidden sm:block font-medium text-slate-500">
+        หน้า <b>${page}</b> / <b>${totalPages}</b>
+      </div>
+      <!-- Mobile View (<640px): Touch target >= 44px, no horizontal overflow -->
+      <div class="flex sm:hidden items-center justify-between w-full gap-2">
+        <button type="button" data-pg-key="${key}" data-pg-to="${page - 1}" class="flex-1 min-h-[44px] px-3 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 active:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center gap-1.5" ${page <= 1 ? 'disabled' : ''}>
+          <i class="fa-solid fa-chevron-left text-xs"></i>
+          <span>ก่อนหน้า</span>
+        </button>
+        <div class="min-h-[44px] px-3 py-2 text-xs font-bold text-slate-600 whitespace-nowrap bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-center">
+          ${page} / ${totalPages}
+        </div>
+        <button type="button" data-pg-key="${key}" data-pg-to="${page + 1}" class="flex-1 min-h-[44px] px-3 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 active:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center gap-1.5" ${page >= totalPages ? 'disabled' : ''}>
+          <span>ถัดไป</span>
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+      </div>
+      <!-- Desktop View (>=640px): Standard Prev / Pills / Next -->
+      <div class="hidden sm:flex items-center gap-1">
+        <button type="button" data-pg-key="${key}" data-pg-to="${page - 1}" class="w-9 h-9 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center" title="ก่อนหน้า" ${page <= 1 ? 'disabled' : ''}>
+          <i class="fa-solid fa-chevron-left text-[11px]"></i>
+        </button>
+        <div class="flex items-center gap-1">
+          ${renderPagePillsHtml(key, page, totalPages)}
+        </div>
+        <button type="button" data-pg-key="${key}" data-pg-to="${page + 1}" class="w-9 h-9 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center" title="ถัดไป" ${page >= totalPages ? 'disabled' : ''}>
+          <i class="fa-solid fa-chevron-right text-[11px]"></i>
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderPagePillsHtml(key, page, totalPages){
+  if(totalPages <= 1) return '';
+  let pages = [];
+  if(totalPages <= 7){
+    for(let p = 1; p <= totalPages; p++) pages.push(p);
+  } else {
+    if(page <= 4){
+      pages = [1, 2, 3, 4, 5, '...', totalPages];
+    } else if(page >= totalPages - 3){
+      pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    } else {
+      pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+    }
+  }
+  return pages.map(p => {
+    if(p === '...') return '<span class="px-1.5 py-1 text-slate-400 font-bold">…</span>';
+    const active = p === page;
+    return `<button type="button" data-pg-key="${key}" data-pg-to="${p}" class="min-w-[34px] h-[34px] px-2 rounded-xl font-bold text-xs transition ${active ? 'bg-brand-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}">${p}</button>`;
+  }).join('');
+}
+
 /* ---------------- MODAL ---------------- */
 function openModal({title, sub, icon, body, foot, size, staticBackdrop = true}){
   $('#modalTitle').textContent = title||'';
@@ -3146,6 +3239,11 @@ async function viewRequests(){
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   S.cache.requests = r.data;
 
+  S.reqPendPage = S.reqPendPage || 1;
+  S.reqPendPageSize = S.reqPendPageSize || 10;
+  S.reqApprPage = S.reqApprPage || 1;
+  S.reqApprPageSize = S.reqApprPageSize || 10;
+
   const pend = r.data.filter(x=>String(x.Status).toUpperCase()==='PENDING');
   const appr = r.data.filter(x=>String(x.Status).toUpperCase()==='APPROVED');
 
@@ -3160,21 +3258,19 @@ async function viewRequests(){
     </div>
 
     <div class="mt-5">${cardWrap('รายการที่รออนุมัติ','fa-hourglass-half',
-      `<div data-req-section="pend">${reqTable(pend,'pend',true)}</div>`,
+      `<div data-req-section="pend"></div>`,
       viewToggle('pend') + btn('btnApproveSel','fa-check-double','อนุมัติที่เลือก','bg-teal text-white hover:brightness-110'))}</div>
 
     <div class="mt-5">${cardWrap('รายการที่อนุมัติแล้ว','fa-circle-check',
-      `<div data-req-section="appr">${reqTable(appr,'appr',false)}</div>`,
+      `<div data-req-section="appr"></div>`,
       viewToggle('appr'))}</div>`;
 
-  bindReqEvents();
   const bs = $('#btnApproveSel');
   if(bs) bs.addEventListener('click', batchApprove);
 
-  const filterReqs = ()=>{
-    const q = ($('#reqQ').value || '').toLowerCase().trim();
+  const getFiltered = () => {
+    const q = ($('#reqQ')?.value || '').toLowerCase().trim();
     const all = S.cache.requests || [];
-
     const match = (x) => {
       if(!q) return true;
       return String(x.DocNo).toLowerCase().indexOf(q) >= 0 ||
@@ -3182,22 +3278,73 @@ async function viewRequests(){
              String(x.Department).toLowerCase().indexOf(q) >= 0 ||
              String(x.Purpose).toLowerCase().indexOf(q) >= 0;
     };
+    return {
+      pend: all.filter(x => String(x.Status).toUpperCase() === 'PENDING' && match(x)),
+      appr: all.filter(x => String(x.Status).toUpperCase() === 'APPROVED' && match(x))
+    };
+  };
 
-    const pend2 = all.filter(x => String(x.Status).toUpperCase() === 'PENDING' && match(x));
-    const appr2 = all.filter(x => String(x.Status).toUpperCase() === 'APPROVED' && match(x));
+  const renderReqSection = (key, showChk) => {
+    const filtered = getFiltered();
+    const list = key === 'pend' ? filtered.pend : filtered.appr;
+    const pageKey = key === 'pend' ? 'reqPendPage' : 'reqApprPage';
+    const sizeKey = key === 'pend' ? 'reqPendPageSize' : 'reqApprPageSize';
 
-    const pendEl = document.querySelector('[data-req-section="pend"]');
-    const apprEl = document.querySelector('[data-req-section="appr"]');
+    const el = document.querySelector(`[data-req-section="${key}"]`);
+    if(!el) return;
 
-    if(pendEl) pendEl.innerHTML = reqTable(pend2, 'pend', true);
-    if(apprEl) apprEl.innerHTML = reqTable(appr2, 'appr', false);
-    if(rejEl)  rejEl.innerHTML  = reqTable(rej2,  'rej',  false);
+    if(!list.length){
+      el.innerHTML = emptyBox('ไม่มีรายการในกลุ่มนี้');
+      return;
+    }
+
+    const paged = paginateList(list, S[pageKey], S[sizeKey]);
+    S[pageKey] = paged.page;
+
+    el.innerHTML = `
+      ${renderPaginationHeader({ key, totalItems: paged.totalItems, startIdx: paged.startIdx, endIdx: paged.endIdx, pageSize: S[sizeKey] })}
+      ${reqTable(paged.pageItems, key, showChk)}
+      ${renderPaginationBar({ key, page: paged.page, totalPages: paged.totalPages })}
+    `;
+
+    const sel = el.querySelector(`[data-pg-size="${key}"]`);
+    if(sel){
+      sel.addEventListener('change', (e)=>{
+        const v = e.target.value;
+        S[sizeKey] = v === 'all' ? 'all' : parseInt(v, 10);
+        S[pageKey] = 1;
+        renderReqSection(key, showChk);
+      });
+    }
+
+    el.querySelectorAll(`[data-pg-key="${key}"]`).forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const to = parseInt(btn.dataset.pgTo, 10);
+        if(!isNaN(to) && to >= 1 && to <= paged.totalPages){
+          S[pageKey] = to;
+          renderReqSection(key, showChk);
+        }
+      });
+    });
 
     bindReqEvents();
   };
 
+  const renderAll = () => {
+    renderReqSection('pend', true);
+    renderReqSection('appr', false);
+  };
+
   const reqQ = $('#reqQ');
-  if(reqQ) reqQ.addEventListener('input', filterReqs);
+  if(reqQ){
+    reqQ.addEventListener('input', ()=>{
+      S.reqPendPage = 1;
+      S.reqApprPage = 1;
+      renderAll();
+    });
+  }
+
+  renderAll();
 }
 
 function reqTable(list, key, showChk){
@@ -9093,21 +9240,62 @@ async function viewMyRequests(){
     const r = await api('apiGetMyRequests', S.user.ID);
     if(!r || !r.ok) return (c.innerHTML = emptyBox((r && r.message) || 'โหลดรายการขอเบิกไม่สำเร็จ'));
     S.cache.requests = r.data || [];
-    const key='my';
+    const key = 'my';
     const list = r.data || [];
+
+    S.myReqPage = S.myReqPage || 1;
+    S.myReqPageSize = S.myReqPageSize || 10;
 
     const ap = list.filter(x=>String(x.Status).toUpperCase()==='APPROVED').length;
     const pd = list.filter(x=>String(x.Status).toUpperCase()==='PENDING').length;
-    const rj = list.filter(x=>String(x.Status).toUpperCase()==='REJECTED').length;
 
     c.innerHTML = `
       <div class="grid grid-cols-2 gap-4 animate-fadeUp">
         ${statCardH('fa-circle-check','#26A69A','อนุมัติแล้ว', nf(ap),'ใบ')}
         ${statCardH('fa-clock','#FFCA28','รออนุมัติ', nf(pd),'ใบ')}
       </div>
-      <div class="mt-5">${cardWrap('รายการขอเบิกของฉัน','fa-list-check', myReqTable(list, true, key), viewToggle(key))}</div>`;
+      <div class="mt-5">${cardWrap('รายการขอเบิกของฉัน','fa-list-check', `<div id="myReqBox"></div>`, viewToggle(key))}</div>`;
 
-    bindReqEvents();
+    const renderMySection = () => {
+      const el = $('#myReqBox');
+      if(!el) return;
+      if(!list.length){
+        el.innerHTML = emptyBox('ยังไม่มีรายการขอเบิก');
+        return;
+      }
+      const paged = paginateList(list, S.myReqPage, S.myReqPageSize);
+      S.myReqPage = paged.page;
+
+      el.innerHTML = `
+        ${renderPaginationHeader({ key, totalItems: paged.totalItems, startIdx: paged.startIdx, endIdx: paged.endIdx, pageSize: S.myReqPageSize })}
+        ${myReqTable(paged.pageItems, true, key)}
+        ${renderPaginationBar({ key, page: paged.page, totalPages: paged.totalPages })}
+      `;
+
+      const sel = el.querySelector(`[data-pg-size="${key}"]`);
+      if(sel){
+        sel.addEventListener('change', (e)=>{
+          const v = e.target.value;
+          S.myReqPageSize = v === 'all' ? 'all' : parseInt(v, 10);
+          S.myReqPage = 1;
+          renderMySection();
+        });
+      }
+
+      el.querySelectorAll(`[data-pg-key="${key}"]`).forEach(btn => {
+        btn.addEventListener('click', ()=>{
+          const to = parseInt(btn.dataset.pgTo, 10);
+          if(!isNaN(to) && to >= 1 && to <= paged.totalPages){
+            S.myReqPage = to;
+            renderMySection();
+          }
+        });
+      });
+
+      bindReqEvents();
+    };
+
+    renderMySection();
   }catch(err){ c.innerHTML = emptyBox('โหลดข้อมูลไม่สำเร็จ: '+(err.message||err)); }
 }
 

@@ -1,4 +1,4 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-03)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-05)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
@@ -20,7 +20,30 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-04 Audit Log Thai Actor & Unit Clarification)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-05 Requisition Pagination for Desktop & Mobile)
+
+### feat(requisition): ระบบแบ่งหน้า (Pagination) รองรับทั้งคอมพิวเตอร์และมือถือ (Mobile-first Touch Target >= 44px)
+- **ความต้องการ:**
+  1. เพิ่มการแบ่งหน้าในหน้า **จัดการรายการขอเบิก** (`viewRequests`): แบ่งหน้าแยกอิสระระหว่างกล่อง "รายการที่รออนุมัติ" (`pend`) และ "รายการที่อนุมัติแล้ว" (`appr`)
+  2. เพิ่มการแบ่งหน้าในหน้า **รายการขอเบิกของฉัน** (`viewMyRequests`): แบ่งหน้ารายการขอเบิกประวัติการเบิกของตนเอง
+  3. รองรับการใช้งานทั้งคอมพิวเตอร์และมือถือ:
+     - **Desktop (>=640px):** แสดงปุ่ม Prev/Next, ชุดปุ่มเลขหน้า (Page Pills) พร้อมสถานะ Active, Dropdown เลือกขนาดต่อหน้า (10, 20, 50, ทั้งหมด), และข้อความสรุปช่วงรายการ
+     - **Mobile (<640px):** ออกแบบปุ่ม Prev/Next ขนาดใหญ่ Touch Target ไม่ต่ำกว่า 44px ขนาบข้างป้าย "หน้า X / Y" แบบกระชับ ป้องกันปัญหาปุ่มล้นจอ (No Horizontal Overflow) 100%
+  4. ปลอดภัยตามหลัก UX:
+     - เมื่อพิมพ์ค้นหาในกล่องค้นหา ระบบจะรีเซ็ตกลับหน้า 1 อัตโนมัติ
+     - การสลับมุมมอง Grid / Table ยังคงรักษาสถานะหน้าที่เปิดอยู่
+     - ปุ่ม Check All ในกล่องรออนุมัติเลือกเฉพาะแถวในหน้าปัจจุบัน ป้องกันการเผลออนุมัติหน้าที่มองไม่เห็น
+- **การเปลี่ยนแปลงในโค้ด:**
+  - `cloudflare/public/index.html`:
+    - เพิ่ม Reusable Helpers: `paginateList`, `renderPaginationHeader`, `renderPaginationBar`, `renderPagePillsHtml`
+    - อัปเดต `viewRequests`: ผูก State `S.reqPendPage`, `S.reqPendPageSize`, `S.reqApprPage`, `S.reqApprPageSize` และรองรับการค้นหา `#reqQ`
+    - อัปเดต `viewMyRequests`: ผูก State `S.myReqPage`, `S.myReqPageSize`
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Backend: 13 test files, 216 tests ผ่าน 100%
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-04 Audit Log Thai Actor & Unit Clarification)
 
 ### feat(audit): ปรับการแสดงผลชื่อผู้ทำใน Audit Log แสดงชื่อไทยและป้ายสิทธิ์ ซ่อน @username
 - **ความต้องการ:**
