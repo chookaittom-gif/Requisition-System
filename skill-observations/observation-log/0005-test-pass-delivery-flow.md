@@ -1,7 +1,7 @@
 ---
 id: 5
 title: "Standard delivery sequence: test, handoff update, git commit, push, and cloudflare deployment sync"
-status: open
+status: actioned
 type: internal
 skill: []
 proposes_skill: [continuous-delivery-workflow]
@@ -11,8 +11,8 @@ area: "delivery / handoff automation"
 date: 2026-11-02
 session_context: "Requisition form placeholder and validation update with automated handoff and deploy"
 parked_until:
-resolved:
-resolution:
+resolved: 2026-11-06
+resolution: "Documented as Rule 7 (Standard Delivery & Completion Pipeline) in AGENTS.md enforcing the 4-step completion sequence (test pass -> handoff update -> git commit -> git push -> deploy verification)."
 reference:
 commands_verified: none
 ---

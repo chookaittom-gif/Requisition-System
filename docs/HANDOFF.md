@@ -42,6 +42,11 @@
   - TypeScript typecheck: 0 errors
   - Graft: context graph ซิงค์สมบูรณ์ (303 nodes, 802 edges)
 
+### chore(governance): บันทึกกฎ Standard Delivery Pipeline ลงใน AGENTS.md (Task Observer 0005)
+- Actioned Observation `0005-test-pass-delivery-flow.md`
+- บันทึกเป็น Rule 7 ใน `AGENTS.md`: กำหนดขั้นตอนส่งมอบงานมาตรฐานเมื่อเทสต์ผ่าน 100% ต้องทำ 4 ขั้นตอนเสมอ (อัปเดต HANDOFF -> Commit -> Push -> ตรวจสอบ Deploy)
+- อัปเดต `checkpoints.log` และ `last-review-date.txt` เป็นวันที่ `2026-11-06`
+
 ---
 
 ## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-05 Requisition Pagination for Desktop & Mobile)

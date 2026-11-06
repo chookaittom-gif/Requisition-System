@@ -30,6 +30,13 @@
    - รันคำสั่ง CLI อัตโนมัติด้วย flag ยืนยัน (`--yes`, `-y`) เสมอเพื่อป้องกันคำสั่งรอ Interactive TTY
    - หลีกเลี่ยงการใช้ RTK กับ Unix-native binary alias (`ls`, `find`) ที่ไม่มีใน Windows PATH ให้ใช้ PowerShell cmdlet หรือ RTK subcommands ที่รองรับแทน (`rtk git`, `rtk rg`, `rtk test`)
 
+7. **Standard Delivery & Completion Pipeline:**
+   - เมื่อดำเนินการเสร็จสิ้นและการทดสอบทั้งหมดผ่าน (`npm test` 100%):
+     1. อัปเดตบันทึกความคืบหน้าและประวัติการเปลี่ยนแปลงลงใน `docs/HANDOFF.md` เสมอ
+     2. บันทึก Git Commit ตามมาตรฐาน Conventional Commits (Sentry style)
+     3. ส่งการเปลี่ยนแปลงขึ้นรีโมท (`git push origin main`)
+     4. ติดตามและตรวจสอบผลการ Deploy ผ่าน GitHub Actions หรือ Cloudflare Deployment ให้ผ่านสมบูรณ์ทุกครั้ง
+
 ## Project Context
 - **เทคโนโลยี:** Cloudflare Workers (TypeScript, RPC), Cloudflare D1 (SQLite), Single-Page Frontend (Vanilla JS, Tailwind), Google Apps Script (Legacy/Sync)
 - **ทางเข้าหลัก:** `cloudflare/public/index.html`, Backend `cloudflare/src/api/*.ts`
