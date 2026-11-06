@@ -326,4 +326,30 @@ describe('upload helpers (executed from the page source)', () => {
     expect(html).toContain("sessionStorage.setItem('supply_last_view', view)");
     expect(html).toContain('saveSession_(S.user)');
   });
+
+  it('groups materials by category and sorts alphabetically in requisition dropdown', () => {
+    expect(html).toContain('function renderGroupedMaterialOptions');
+    expect(html).toContain('<optgroup label=');
+    expect(html).toContain("order = ['วัสดุสำนักงาน','วัสดุงานบ้านงานครัว','วัสดุงานช่าง','วัสดุการเกษตร','วัสดุคอมพิวเตอร์','วัสดุจราจร']");
+
+    const fnMatch = html.match(/function renderGroupedMaterialOptions[\s\S]*?\n\}/);
+    expect(fnMatch).not.toBeNull();
+    const fn = new Function('esc', 'nf', `${fnMatch![0]}; return renderGroupedMaterialOptions;`)(
+      (s: any) => String(s ?? ''),
+      (n: any) => String(n ?? '0'),
+    );
+
+    const sampleMats = [
+      { ID: '1', Code: '001-0002', Name: 'มีดคัตเตอร์', StockQty: 5, Category: 'วัสดุสำนักงาน', Unit: 'อัน' },
+      { ID: '2', Code: '001-0001', Name: 'กรรไกร', StockQty: 10, Category: 'วัสดุสำนักงาน', Unit: 'เล่ม' },
+      { ID: '3', Code: '001-0003', Name: 'ดินสอ (หมด)', StockQty: 0, Category: 'วัสดุสำนักงาน', Unit: 'แท่ง' },
+      { ID: '4', Code: '002-0001', Name: 'ไขควง', StockQty: 3, Category: 'วัสดุงานช่าง', Unit: 'ตัว' },
+    ];
+
+    const out = fn(sampleMats, '', { onlyInStock: true });
+    expect(out).not.toContain('ดินสอ (หมด)');
+    expect(out).toContain('<optgroup label="วัสดุสำนักงาน">');
+    expect(out).toContain('<optgroup label="วัสดุงานช่าง">');
+    expect(out.indexOf('กรรไกร')).toBeLessThan(out.indexOf('มีดคัตเตอร์'));
+  });
 });

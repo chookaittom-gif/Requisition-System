@@ -1206,6 +1206,53 @@ function renderPagePillsHtml(key, page, totalPages){
   }).join('');
 }
 
+/* ---------------- MATERIAL DROPDOWN HELPERS (Grouped by Category + Thai A-Z) ---------------- */
+// ponytail: native optgroup and Intl.Collator/localeCompare for zero-dep grouping & Thai sort
+function renderGroupedMaterialOptions(mats, selectedId = '', { onlyInStock = true, includeCodeInLabel = false, selectedCode = '' } = {}){
+  const list = (mats || []).filter(m => {
+    const isSel = (selectedId && String(m.ID) === String(selectedId)) || (selectedCode && String(m.Code) === String(selectedCode));
+    if(isSel) return true;
+    if(!onlyInStock) return true;
+    return Number(m.StockQty) > 0;
+  });
+
+  if(!list.length) return '<option value="" disabled>-- ไม่มีพัสดุพร้อมเบิก --</option>';
+
+  const order = ['วัสดุสำนักงาน','วัสดุงานบ้านงานครัว','วัสดุงานช่าง','วัสดุการเกษตร','วัสดุคอมพิวเตอร์','วัสดุจราจร'];
+  const groups = new Map();
+
+  for(const m of list){
+    const cat = m.Category || 'วัสดุสำนักงาน';
+    if(!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(m);
+  }
+
+  const sortedCats = Array.from(groups.keys()).sort((a, b) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    if(ia >= 0 && ib >= 0) return ia - ib;
+    if(ia >= 0) return -1;
+    if(ib >= 0) return 1;
+    return a.localeCompare(b, 'th');
+  });
+
+  let html = `<option value="">-- เลือกรายการ${includeCodeInLabel ? 'พัสดุ' : ''} --</option>`;
+  for(const cat of sortedCats){
+    const items = groups.get(cat) || [];
+    items.sort((a, b) => (a.Name || '').localeCompare(b.Name || '', 'th'));
+    html += `<optgroup label="${esc(cat)}">`;
+    for(const m of items){
+      const isSel = (selectedId && String(m.ID) === String(selectedId)) || (selectedCode && String(m.Code) === String(selectedCode));
+      const label = includeCodeInLabel
+        ? `${esc(m.Code)} - ${esc(m.Name)} (คงเหลือ: ${nf(m.StockQty)} ${esc(m.Unit || '')})`
+        : `${esc(m.Name)} (คงเหลือ ${nf(m.StockQty)} ${esc(m.Unit || '')})`;
+      html += `<option value="${esc(m.ID)}" data-code="${esc(m.Code || '')}" data-unit="${esc(m.Unit || '')}" data-stock="${m.StockQty || 0}" ${isSel ? 'selected' : ''}>${label}</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  return html;
+}
+
 /* ---------------- MODAL ---------------- */
 function openModal({title, sub, icon, body, foot, size, staticBackdrop = true}){
   $('#modalTitle').textContent = title||'';
@@ -3481,12 +3528,7 @@ async function openEditReqModal(id){
   const matCodeMap = new Map(allMats.map(m => [m.Code, m]));
 
   const renderMatOptions = (selectedId, selectedCode) => {
-    let opts = '<option value="">-- เลือกรายการพัสดุ --</option>';
-    for(const m of activeMats){
-      const isSel = (selectedId && m.ID === selectedId) || (selectedCode && m.Code === selectedCode);
-      opts += `<option value="${esc(m.ID)}" data-unit="${esc(m.Unit||'')}" data-stock="${m.StockQty||0}" ${isSel ? 'selected' : ''}>${esc(m.Code)} - ${esc(m.Name)} (คงเหลือ: ${nf(m.StockQty)} ${esc(m.Unit||'')})</option>`;
-    }
-    return opts;
+    return renderGroupedMaterialOptions(activeMats, selectedId, { onlyInStock: false, includeCodeInLabel: true, selectedCode });
   };
 
   const createItemRowHtml = (it = {}) => {
@@ -8994,7 +9036,7 @@ async function viewRequestForm(){
             if(!target && sel && !sel.value) target = row;
           });
           if(!target){
-            addItemRow();
+            addItemRow(m.ID);
             target = $$('#itemRows > div').pop();
           }
           const i = target.dataset.row;
@@ -9036,7 +9078,7 @@ async function viewRequestForm(){
       $('#itemRows').innerHTML = '';
       S.reqItemSeq = 0;
       d.items.forEach(it => {
-        addItemRow();
+        addItemRow(it.MaterialID);
         const curRow = $$('#itemRows > div').pop();
         if(curRow){
           const i = curRow.dataset.row;
@@ -9102,7 +9144,7 @@ async function viewRequestForm(){
 }
 
 
-function addItemRow(){
+function addItemRow(selectedId = ''){
   const i = ++S.reqItemSeq;
   const mats = S.cache.materials || [];
   const html = `<div class="rounded-2xl bg-white border border-slate-200 p-3.5" data-row="${i}">
@@ -9110,8 +9152,7 @@ function addItemRow(){
       <div class="sm:col-span-5">
         <label class="block text-xs font-bold text-slate-600 mb-1">เลือกพัสดุ</label>
         <select data-sel="${i}" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm">
-          <option value="">-- เลือกรายการ --</option>
-          ${mats.map(m=>`<option value="${esc(m.ID)}" data-code="${esc(m.Code)}" data-unit="${esc(m.Unit)}" data-stock="${m.StockQty}" ${m.StockQty<=0?'disabled':''}>${esc(m.Name)} (คงเหลือ ${nf(m.StockQty)} ${esc(m.Unit)})${m.StockQty<=0?' - หมด':''}</option>`).join('')}
+          ${renderGroupedMaterialOptions(mats, selectedId, { onlyInStock: true })}
         </select>
       </div>
       <div class="sm:col-span-2">

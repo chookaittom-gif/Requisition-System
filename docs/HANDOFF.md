@@ -1,4 +1,4 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-05)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-06)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
@@ -20,7 +20,31 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-05 Requisition Pagination for Desktop & Mobile)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-06 Grouped Material Options by Category & Thai Alphabetical Sort)
+
+### feat(requisition): ตัวเลือกพัสดุจัดกลุ่มตามหมวดหมู่ (<optgroup>) เรียงตามตัวอักษร ก-ฮ และซ่อนรายการหมดสต็อก
+- **ความต้องการ:**
+  1. จัดกลุ่มตัวเลือกพัสดุในแบบฟอร์มขอเบิกพัสดุแยกตามหมวดหมู่ (`<optgroup>`) เพื่อให้ค้นหาตามกลุ่มงานได้ง่าย
+  2. เรียงลำดับชื่อพัสดุภายในแต่ละหมวดหมู่ตามตัวอักษรภาษาไทย **ก-ฮ** (`localeCompare('th')`)
+  3. ในแบบฟอร์มขอเบิกพัสดุใหม่ ซ่อนรายการพัสดุที่หมดสต็อก (`StockQty <= 0`) ออกจากตัวเลือก และซ่อนหัวข้อหมวดหมู่ที่ไม่มีของพร้อมเบิก เพื่อความกระชับและไม่ให้ผู้ใช้สับสน
+  4. ใน Modal แก้ไขใบขอเบิกเดิมสำหรับ Admin (`openEditReqModal`) ยังคงแสดงรายการเดิมที่เคยถูกเลือกไว้เพื่อความปลอดภัยของข้อมูล
+- **การเปลี่ยนแปลงในโค้ด:**
+  - `cloudflare/public/index.html`:
+    - เพิ่ม Helper `renderGroupedMaterialOptions(mats, selectedId, options)` ใช้ native `<optgroup label="...">` ร่วมกับ `localeCompare('th')`
+    - เรียงลำดับหมวดหมู่ตามมาตรฐาน (`วัสดุสำนักงาน` -> `วัสดุงานบ้านงานครัว` -> `วัสดุงานช่าง` -> `วัสดุการเกษตร` -> `วัสดุคอมพิวเตอร์` -> `วัสดุจราจร`)
+    - อัปเดต `addItemRow(selectedId)` ให้เรียกใช้ `renderGroupedMaterialOptions(mats, selectedId, { onlyInStock: true })`
+    - อัปเดต `openEditReqModal` ให้เรียกใช้ `renderGroupedMaterialOptions(activeMats, selectedId, { onlyInStock: false, includeCodeInLabel: true, selectedCode })`
+  - `cloudflare/test/node/frontend.test.ts`:
+    - เพิ่ม Unit Test ตรวจสอบ `renderGroupedMaterialOptions` การกรองของหมดสต็อก การจัดกลุ่ม `<optgroup>` และการเรียง ก-ฮ ถูกต้อง 100%
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Worker: 11 test files, 177 tests ผ่าน 100%
+  - Node Frontend Static Tests: 35 tests ผ่าน 100% (รวมทั้งสิ้น 217 tests)
+  - TypeScript typecheck: 0 errors
+  - Graft: context graph ซิงค์สมบูรณ์ (303 nodes, 802 edges)
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-05 Requisition Pagination for Desktop & Mobile)
 
 ### feat(requisition): ระบบแบ่งหน้า (Pagination) รองรับทั้งคอมพิวเตอร์และมือถือ (Mobile-first Touch Target >= 44px)
 - **ความต้องการ:**
