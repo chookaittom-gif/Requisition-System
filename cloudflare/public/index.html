@@ -1208,6 +1208,14 @@ function renderPagePillsHtml(key, page, totalPages){
 
 /* ---------------- MATERIAL DROPDOWN HELPERS (Grouped by Category + Thai A-Z) ---------------- */
 // ponytail: native optgroup and Intl.Collator/localeCompare for zero-dep grouping & Thai sort
+function filterMats(mats, q){
+  const s = String(q || '').trim().toLowerCase();
+  if(!s) return mats || [];
+  return (mats || []).filter(m =>
+    String(m.Name || '').toLowerCase().includes(s) ||
+    String(m.Code || '').toLowerCase().includes(s));
+}
+
 function renderGroupedMaterialOptions(mats, selectedId = '', { onlyInStock = true, includeCodeInLabel = false, selectedCode = '' } = {}){
   const list = (mats || []).filter(m => {
     const isSel = (selectedId && String(m.ID) === String(selectedId)) || (selectedCode && String(m.Code) === String(selectedCode));
@@ -9151,6 +9159,7 @@ function addItemRow(selectedId = ''){
     <div class="grid sm:grid-cols-12 gap-3 items-end">
       <div class="sm:col-span-5">
         <label class="block text-xs font-bold text-slate-600 mb-1">เลือกพัสดุ</label>
+        <input data-mq="${i}" type="text" placeholder="ค้นหาพัสดุ (ชื่อหรือรหัส)..." class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 text-sm mb-1.5">
         <select data-sel="${i}" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm">
           ${renderGroupedMaterialOptions(mats, selectedId, { onlyInStock: true })}
         </select>
@@ -9176,6 +9185,16 @@ function addItemRow(selectedId = ''){
   $('#itemRows').insertAdjacentHTML('beforeend', html);
 
   const sel = $(`[data-sel="${i}"]`);
+  const mq = $(`[data-mq="${i}"]`);
+  mq.addEventListener('input', ()=>{
+    const cur = sel.value;
+    sel.innerHTML = renderGroupedMaterialOptions(filterMats(mats, mq.value), cur, { onlyInStock: true });
+    if(sel.value !== cur){
+      const o = sel.selectedOptions[0];
+      $(`[data-code="${i}"]`).value  = o && o.value ? o.dataset.code : '';
+      $(`[data-stock="${i}"]`).value = o && o.value ? nf(o.dataset.stock) : '';
+    }
+  });
   sel.addEventListener('change', ()=>{
     const o = sel.selectedOptions[0];
     $(`[data-code="${i}"]`).value  = o && o.value ? o.dataset.code : '';

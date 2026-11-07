@@ -352,4 +352,35 @@ describe('upload helpers (executed from the page source)', () => {
     expect(out).toContain('<optgroup label="วัสดุงานช่าง">');
     expect(out.indexOf('กรรไกร')).toBeLessThan(out.indexOf('มีดคัตเตอร์'));
   });
+
+  it('filters materials by name or code with filterMats and wires a search input in addItemRow', () => {
+    expect(html).toContain('function filterMats');
+    expect(html).toContain('data-mq="${i}"');
+    expect(html).toContain('ค้นหาพัสดุ (ชื่อหรือรหัส)');
+    expect(html).toContain('renderGroupedMaterialOptions(filterMats(');
+    // touch target >= 44px on the search input
+    expect(html).toMatch(/data-mq="\$\{i\}"[^>]*min-h-\[44px\]/);
+
+    const fnMatch = html.match(/function filterMats[\s\S]*?\n\}/);
+    expect(fnMatch).not.toBeNull();
+    const filterMats = new Function(`${fnMatch![0]}; return filterMats;`)();
+
+    const sampleMats = [
+      { ID: '1', Code: '001-0001', Name: 'กระดาษ A4 แพ็ค', StockQty: 10, Unit: 'แพ็ค' },
+      { ID: '2', Code: '001-0002', Name: 'กรรไกร', StockQty: 5, Unit: 'เล่ม' },
+      { ID: '3', Code: '002-0001', Name: 'ปากกา', StockQty: 3, Unit: 'ด้าม' },
+    ];
+
+    // mixed-case name match
+    expect(filterMats(sampleMats, 'a4').map((m: any) => m.ID)).toEqual(['1']);
+    // code match
+    expect(filterMats(sampleMats, '002-0001').map((m: any) => m.ID)).toEqual(['3']);
+    // no match
+    expect(filterMats(sampleMats, 'ไม่มีจริง')).toEqual([]);
+    // empty / whitespace query returns the full list
+    expect(filterMats(sampleMats, '')).toBe(sampleMats);
+    expect(filterMats(sampleMats, '   ').length).toBe(3);
+    // null safety
+    expect(filterMats(null, 'a')).toEqual([]);
+  });
 });
