@@ -9207,6 +9207,8 @@ function addItemRow(selectedId = ''){
       const o = sel.selectedOptions[0];
       $(`[data-code="${i}"]`).value  = o && o.value ? o.dataset.code : '';
       $(`[data-stock="${i}"]`).value = o && o.value ? nf(o.dataset.stock) : '';
+      const qEl = $(`[data-qty="${i}"]`);
+      qEl.value = ''; qEl.max = '';
     }
   });
   sel.addEventListener('change', ()=>{

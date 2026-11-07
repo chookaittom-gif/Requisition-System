@@ -30,10 +30,10 @@
     - `addItemRow`: เพิ่มช่องค้นหา (`data-mq`, Touch target `min-h-[44px]`) เหนือ select รายการพัสดุ พิมพ์แล้ว re-render options ผ่าน `renderGroupedMaterialOptions(filterMats(...))` คง optgroup 6 หมวด + เรียง ก-ฮ + ซ่อนหมดสต็อก และ sync รหัส/คงเหลือเมื่อรายการที่เลือกถูกกรองออก
     - `openEditReqModal`: เพิ่มช่องค้นหา (`edit-mat-search`, `min-h-[44px]`) ต่อแถวเฉพาะโหมดแก้ไขได้ (`!isApproved`), ใช้ `filterMats(activeMats, query)` ต่อ `renderGroupedMaterialOptions` โดยคง `onlyInStock: false` + `includeCodeInLabel` + `selectedCode` เพื่อรักษารายการเดิม (รวมของหมดสต็อก) ที่เคยเลือกไว้ และ sync หน่วยนับเมื่อ selection เปลี่ยน
   - `cloudflare/test/node/frontend.test.ts`:
-    - เพิ่ม 2 Unit Tests: (1) execute `filterMats` ตรวจกรองชื่อ/รหัส/ตัวพิมพ์ผสม/trim/null + static wiring ของ `data-mq` (2) static wiring ช่องค้นหา Modal แก้ไข (`edit-mat-search` + path `renderGroupedMaterialOptions(filterMats(activeMats, query), selectedId, ...)`)
+    - เพิ่ม 3 Unit Tests: (1) execute `filterMats` ตรวจกรองชื่อ/รหัส/ตัวพิมพ์ผสม/trim/null + static wiring ของ `data-mq` (2) static wiring ช่องค้นหา Modal แก้ไข (`edit-mat-search` + path `renderGroupedMaterialOptions(filterMats(activeMats, query), selectedId, ...)`) (3) ตรวจว่าเมื่อ filter กรองรายการที่เลือกไว้ออก handler ต้องล้าง `data-qty` และ `max` ให้ด้วย (แก้ deferred minor จาก final review)
 - **ผลลัพธ์การทดสอบ:**
   - Vitest Worker: 11 test files, 177 tests ผ่าน 100%
-  - Node Frontend/Seed Static Tests: 42 tests ผ่าน 100% (รวมทั้งสิ้น 219 tests)
+  - Node Frontend/Seed Static Tests: 43 tests ผ่าน 100% (รวมทั้งสิ้น 220 tests)
   - TypeScript typecheck (`tsc --noEmit`): 0 errors
   - Final Review (fresh reviewer subagent): ไม่พบ Critical/Important — deferred minors บันทึกใน `.superpowers/sdd/2026-11-07-material-search-filter/progress.md`
   - Design Doc: `docs/superpowers/specs/2026-11-07-material-search-combobox-design.md` / Plan: `docs/superpowers/plans/2026-11-07-material-search-filter.md`

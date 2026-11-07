@@ -394,4 +394,12 @@ describe('upload helpers (executed from the page source)', () => {
     // search input only for editable (not approved) rows
     expect(html).toMatch(/\$\{isApproved \? '' : `<input[^`]*edit-mat-search/);
   });
+
+  it('clears qty and max when the material filter resets the selection in addItemRow', () => {
+    const mqBlock = html.match(/mq\.addEventListener\('input'[\s\S]*?\n  \}\);/);
+    expect(mqBlock).not.toBeNull();
+    expect(mqBlock![0]).toContain('data-qty="${i}"]');
+    expect(mqBlock![0]).toContain(".value = ''");
+    expect(mqBlock![0]).toContain(".max = ''");
+  });
 });
