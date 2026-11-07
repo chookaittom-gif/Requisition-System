@@ -1,4 +1,46 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-06)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-07)
+
+**Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
+**Repository:** https://github.com/chookaittom-gif/Requisition-System
+**Branch:** `main`
+
+---
+
+## 1. ข้อมูลสถาปัตยกรรมและโครงสร้างระบบ (Architecture Overview)
+
+- **Production Stack:** Cloudflare Workers + Cloudflare D1 Database (SQLite at edge) + Single-Page Static Frontend
+  - **Worker Name:** `supply-requisition` (Account ID: `17abb4914aa1cbfcf03edddedbaea672`)
+  - **D1 Database:** `ims_db` (Database ID: `4c98cc16-6008-4880-9d38-99544c79b838`)
+  - **Frontend UI:** `cloudflare/public/index.html` ไฟล์เดียว (Tailwind CSS CDN, Vanilla JS, FontAwesome, SheetJS/ExcelJS)
+  - **Backend API:** `cloudflare/src/index.ts` และโมดูล RPC ใน `cloudflare/src/api/*.ts`
+- **CI/CD Pipeline (GitHub Actions):**
+  - Workflow: `.github/workflows/deploy.yml` ทำงานอัตโนมัติทุกครั้งที่ `push` ขึ้น branch `main`
+  - ตรวจสอบ Typecheck + Vitest + D1 Migrations Apply + Wrangler Deploy
+  - สคริปต์สั่ง Deploy แบบ Local: `deploy.ps1` หรือ `deploy.cmd` (รัน `deploy-cloudflare.ps1`)
+
+---
+
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-07 Material Search Filter in Requisition Form)
+
+### feat(requisition): ช่องค้นหาพัสดุแบบ Real-time ในฟอร์มขอเบิกและ Modal แก้ไขใบขอเบิก
+- **ความต้องการ:** Dropdown เลือกพัสดุมี 50+ รายการชื่อคล้ายกัน ผู้ใช้ต้องเลื่อนไล่หาเอง เสี่ยงเลือกผิด — เพิ่มช่องพิมพ์ค้นหา (ชื่อหรือรหัส) กรองรายการแบบ Real-time ตามหลัก UI (list > 20 รายการควรมีช่องค้นหา)
+- **การเปลี่ยนแปลงในโค้ด:**
+  - `cloudflare/public/index.html`:
+    - เพิ่ม Helper `filterMats(mats, q)` — กรองตาม `Name`/`Code` case-insensitive, trim, null-safe, คืน list เดิมเมื่อ query ว่าง
+    - `addItemRow`: เพิ่มช่องค้นหา (`data-mq`, Touch target `min-h-[44px]`) เหนือ select รายการพัสดุ พิมพ์แล้ว re-render options ผ่าน `renderGroupedMaterialOptions(filterMats(...))` คง optgroup 6 หมวด + เรียง ก-ฮ + ซ่อนหมดสต็อก และ sync รหัส/คงเหลือเมื่อรายการที่เลือกถูกกรองออก
+    - `openEditReqModal`: เพิ่มช่องค้นหา (`edit-mat-search`, `min-h-[44px]`) ต่อแถวเฉพาะโหมดแก้ไขได้ (`!isApproved`), ใช้ `filterMats(activeMats, query)` ต่อ `renderGroupedMaterialOptions` โดยคง `onlyInStock: false` + `includeCodeInLabel` + `selectedCode` เพื่อรักษารายการเดิม (รวมของหมดสต็อก) ที่เคยเลือกไว้ และ sync หน่วยนับเมื่อ selection เปลี่ยน
+  - `cloudflare/test/node/frontend.test.ts`:
+    - เพิ่ม 2 Unit Tests: (1) execute `filterMats` ตรวจกรองชื่อ/รหัส/ตัวพิมพ์ผสม/trim/null + static wiring ของ `data-mq` (2) static wiring ช่องค้นหา Modal แก้ไข (`edit-mat-search` + path `renderGroupedMaterialOptions(filterMats(activeMats, query), selectedId, ...)`)
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Worker: 11 test files, 177 tests ผ่าน 100%
+  - Node Frontend/Seed Static Tests: 42 tests ผ่าน 100% (รวมทั้งสิ้น 219 tests)
+  - TypeScript typecheck (`tsc --noEmit`): 0 errors
+  - Final Review (fresh reviewer subagent): ไม่พบ Critical/Important — deferred minors บันทึกใน `.superpowers/sdd/2026-11-07-material-search-filter/progress.md`
+  - Design Doc: `docs/superpowers/specs/2026-11-07-material-search-combobox-design.md` / Plan: `docs/superpowers/plans/2026-11-07-material-search-filter.md`
+
+---
+
+## 2. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-06 Grouped Material Options by Category & Thai Alphabetical Sort)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
