@@ -383,4 +383,15 @@ describe('upload helpers (executed from the page source)', () => {
     // null safety
     expect(filterMats(null, 'a')).toEqual([]);
   });
+
+  it('adds a material search filter to the edit request modal rows', () => {
+    expect(html).toContain('edit-mat-search');
+    expect(html).toContain('renderGroupedMaterialOptions(filterMats(activeMats');
+    // keep the previously selected material (out-of-stock included) while filtering
+    expect(html).toContain("renderGroupedMaterialOptions(filterMats(activeMats, query), selectedId, { onlyInStock: false, includeCodeInLabel: true, selectedCode }");
+    // touch target >= 44px on the edit-modal search input
+    expect(html).toMatch(/edit-mat-search[^>]*min-h-\[44px\]/);
+    // search input only for editable (not approved) rows
+    expect(html).toMatch(/\$\{isApproved \? '' : `<input[^`]*edit-mat-search/);
+  });
 });
