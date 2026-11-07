@@ -20,7 +20,24 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-07 Material Search Filter in Requisition Form)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-07 Remove Attachment Field from Request Form)
+
+### refactor(requisition): ลบช่องไฟล์แนบ (ไม่บังคับ) ออกจากฟอร์มขอเบิกและ Modal แก้ไขใบขอเบิก
+- **ความต้องการ:** ช่องไฟล์แนบในฟอร์มยืนยันออกใบเบิกถูกอัปโหลดเข้า storage และเก็บ `AttachUrl` ลง DB จริง แต่ไม่มีหน้าจอใดแสดงผลไฟล์เลย (ไม่โชว์ในหน้าอนุมัติ/ติดตาม/พิมพ์ใบเบิก) และในการใช้งานจริงตลอดที่ผ่านมาไม่เคยมีการแนบไฟล์เลย — ลบออกเพื่อลดภาระ UI และตัดขั้นตอนรออัปโหลดตอน submit โดยคงช่อง "หมายเหตุ (ไม่บังคับ)" ไว้จุดเดิม (ใช้จริง: เก็บใน draft และพิมพ์ออกใบเบิก)
+- **การเปลี่ยนแปลงในโค้ด (`cloudflare/public/index.html` เท่านั้น — Backend ไม่แตะ):**
+  - ลบ label + `<input id="rFile" type="file">` ออกจากฟอร์มสร้างใบเบิก
+  - ลบบรรทัด `uploadPicked_($('#rFile'), 'request_attachment', ...)` และฟิลด์ `AttachUrl` ออกจาก payload `apiCreateRequest` (backend รับค่าว่าง/ไม่ส่งได้ — `AttachUrl` validation ทนค่าว่างอยู่แล้ว)
+  - ลบ label + `<input id="editReqAttach" type="url">` ออกจาก Modal แก้ไขใบขอเบิก (เดิมเป็น grid 2 คอลัมน์คู่กับหมายเหตุ — ปรับเป็นหมายเหตุเต็มความกว้าง)
+  - ลบการอ่าน `$('#editReqAttach')` และฟิลด์ `AttachUrl` ออกจาก payload ของ Modal แก้ไข (ไม่ส่ง `AttachUrl` = backend คงค่าเดิมของ record ไว้ ปลอดภัยต่อข้อมูลเก่า)
+  - **ไม่แตะ:** ฟิลด์ `FileUrl` ไฟล์แนบพัสดุ (`mFile`) เป็น feature คนละตัว — แสดงผลจริงในตารางจัดการพัสดุ / purpose `request_attachment` ใน `uploads.ts` / ฟิลด์ `attach_url` ใน schema และ backend validation ทั้งหมดคงไว้ (ข้อมูลเก่าไม่พัง กลับมาทำใหม่ได้จาก git history)
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Worker: 11 test files, 177 tests ผ่าน 100%
+  - Node Frontend/Seed Static Tests: 2 test files, 43 tests ผ่าน 100% (รวมทั้งสิ้น 220 tests)
+  - ตรวจยืนยันไม่เหลือ reference `rFile` / `editReqAttach` ใน `index.html`
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-07 Material Search Filter in Requisition Form)
 
 ### feat(requisition): ช่องค้นหาพัสดุแบบ Real-time ในฟอร์มขอเบิกและ Modal แก้ไขใบขอเบิก
 - **ความต้องการ:** Dropdown เลือกพัสดุมี 50+ รายการชื่อคล้ายกัน ผู้ใช้ต้องเลื่อนไล่หาเอง เสี่ยงเลือกผิด — เพิ่มช่องพิมพ์ค้นหา (ชื่อหรือรหัส) กรองรายการแบบ Real-time ตามหลัก UI (list > 20 รายการควรมีช่องค้นหา)

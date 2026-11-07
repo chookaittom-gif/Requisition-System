@@ -3633,15 +3633,9 @@ async function openEditReqModal(id){
             <label class="block text-xs font-semibold text-slate-600 mb-1">ความจำเป็นต้องเบิกพัสดุเพื่อ (วัตถุประสงค์) <span class="text-rose2">*</span></label>
             <textarea id="editReqPurpose" rows="2" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition text-sm">${esc(q.Purpose || '')}</textarea>
           </div>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">ลิงก์เอกสารแนบ (URL)</label>
-              <input id="editReqAttach" type="url" placeholder="https://..." value="${esc(q.AttachUrl || '')}" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-brand-500 outline-none transition">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">หมายเหตุเพิ่มเติม</label>
-              <input id="editReqNote" value="${esc(q.Note || '')}" placeholder="ระบุหมายเหตุถ้ามี" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-brand-500 outline-none transition">
-            </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">หมายเหตุเพิ่มเติม</label>
+            <input id="editReqNote" value="${esc(q.Note || '')}" placeholder="ระบุหมายเหตุถ้ามี" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-brand-500 outline-none transition">
           </div>
         </div>
 
@@ -3774,7 +3768,6 @@ async function openEditReqModal(id){
     const requestDate = $('#editReqDate').value.trim();
     const purpose = $('#editReqPurpose').value.trim();
     const note = $('#editReqNote').value.trim();
-    const attachUrl = $('#editReqAttach').value.trim();
 
     if(!fullName) return toast('warning', 'กรุณาระบุชื่อผู้ขอเบิก');
     if(!department) return toast('warning', 'กรุณาระบุหลักสูตร/ฝ่ายงาน/โครงการ');
@@ -3789,7 +3782,6 @@ async function openEditReqModal(id){
       RequestDate: requestDate,
       Purpose: purpose,
       Note: note,
-      AttachUrl: attachUrl,
     };
 
     if(!isApproved){
@@ -8666,9 +8658,6 @@ async function viewRequestForm(){
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">หมายเหตุ (ไม่บังคับ)</label>
         <textarea id="rNote" rows="2" placeholder="หมายเหตุเพิ่มเติม..." class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 resize-none"></textarea></div>
 
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ไฟล์แนบ (ไม่บังคับ)</label>
-        <input id="rFile" type="file" class="block w-full text-xs file:mr-3 file:py-2.5 file:px-4 file:rounded-2xl file:border-0 file:bg-slate-700 file:text-white file:font-bold"></div>
-
       ${S.user && S.user.Role !== 'guest' ? `
       <div class="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between gap-3 transition">
         <div class="flex items-center gap-3">
@@ -9284,14 +9273,13 @@ async function submitRequest(e){
   showLoader('กำลังบันทึกใบขอเบิก...');
   try{
 
-    const attachUrl = await uploadPicked_($('#rFile'), 'request_attachment', 'กำลังอัปโหลดไฟล์แนบ');
     const autoApprove = Boolean($('#chkAutoApprove') && $('#chkAutoApprove').checked);
     const res = await api('apiCreateRequest', {
       PersonnelCode: (S.reqPersonnel && S.reqPersonnel.Code) || pCode || undefined,
       RequestDate: $('#rDate').value, Department: reqDept,
       UserID: (S.user && S.user.ID) || 'GUEST', FullName: reqName, Position: reqPos,
       Purpose: $('#rPurpose').value.trim(), Note: ($('#rNote') ? $('#rNote').value.trim() : ''),
-      AttachUrl: attachUrl || '', items, actor: (S.user && S.user.Username) || reqName,
+      items, actor: (S.user && S.user.Username) || reqName,
       autoApprove
     });
     hideLoader();
