@@ -1839,8 +1839,7 @@ function drawChart(id, type, labels, data, opts){
   const safeLabels = (labels && labels.length) ? labels : ['ไม่มีข้อมูล'];
   const safeData   = (data && data.length) ? data : [0];
   const colors = (opts&&opts.colors) || safeLabels.map((_,i)=>PALETTE[i%PALETTE.length]);
-  const horiz = !!(opts && opts.horizontal) && type === 'bar';
-  if(horiz){ safeLabels.reverse(); safeData.reverse(); colors.reverse(); }  // แท่งนอน: อันดับ 1 อยู่บนสุด
+  const horiz = !!(opts && opts.horizontal) && type === 'bar';  // แกน y วาง label แรกบนสุดอยู่แล้ว — อันดับ 1 ส่งมาก่อน ไม่ต้อง reverse
   S.charts[id] = new Chart(el.getContext('2d'), {
     type,
     data: {
@@ -2393,8 +2392,7 @@ async function viewAdminDash(){
     S.dashItems = [...(d.chartByItem||[])].sort((a,b)=>Number(b.value)-Number(a.value));
     drawChart('chTop10','bar', S.dashItems.slice(0,10).map(x=>x.label), S.dashItems.slice(0,10).map(x=>x.value), {
       label:'จำนวนที่เบิก',
-      horizontal:true,
-      colors: S.dashItems.slice(0,10).map((_,i)=> i===0 ? '#075985' : '#0284c7')
+      horizontal:true
     });
   }catch(err){ c.innerHTML = emptyBox('โหลดข้อมูลไม่สำเร็จ: '+(err.message||err)); }
 }
@@ -4967,8 +4965,7 @@ async function viewTeacherDash(){
     const tTop10 = S.dashItems.slice(0,10);
     drawChart('tChItem','bar', tTop10.map(x=>x.label), tTop10.map(x=>x.value), {
       label:'จำนวนที่เบิก',
-      horizontal:true,
-      colors: tTop10.map((_,i)=> i===0 ? '#075985' : '#0284c7')
+      horizontal:true
     });
     drawChart('tChStatus','doughnut', d.chartStatus.map(x=>x.label), d.chartStatus.map(x=>x.value), { colors:['#26A69A','#FFCA28'] });
   }catch(err){ c.innerHTML = emptyBox('โหลดข้อมูลไม่สำเร็จ: '+(err.message||err)); }
