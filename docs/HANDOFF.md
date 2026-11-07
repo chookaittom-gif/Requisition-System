@@ -20,7 +20,24 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-07 Remove Attachment Field from Request Form)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-07 Remove Note Fields from Request Form)
+
+### refactor(requisition): ลบช่อง "หมายเหตุทั้งใบ" และ "หมายเหตุรายการ" ออกจากฟอร์มขอเบิก — เก็บไว้เฉพาะ Modal แก้ไขใบขอเบิก
+- **ความต้องการ:** ในการใช้งานจริงไม่มีผู้เบิกคนใดกรอกหมายเหตุเลย (ทั้งระดับใบและระดับรายการ) ฟิลด์ที่ไม่มีใครกรอกเป็นต้นทุน UI ล้วน ๆ (ฟอร์มยาว, input ต่อบรรทัดทำให้รกบนมือถือ) — ตัดออกจากฟอร์มผู้เบิกตามหลัก form minimization แต่คงช่องทางฉุกเฉิน: ผู้เบิกแจ้งเจ้าหน้าที่พัสดุแล้วกรอกแทนผ่าน Modal แก้ไขใบขอเบิก (ข้อความ "แจ้งเจ้าหน้าที่ได้" มีอยู่แล้วท้ายฟอร์ม)
+- **การเปลี่ยนแปลงในโค้ด (`cloudflare/public/index.html` เท่านั้น — Backend ไม่แตะ):**
+  - ลบ label + `<textarea id="rNote">` ("หมายเหตุทั้งใบ (ไม่บังคับ)") ออกจากฟอร์มสร้างใบเบิก
+  - ลบ `<input data-remark>` ("หมายเหตุรายการนี้ (ไม่บังคับ)") ออกจาก template `addItemRow`
+  - `doSaveReqDraft_`: ลบการอ่าน `data-remark` ออกจากเงื่อนไข has-content และส่ง `Remark: ''` / `Note: ''` คง draft schema เดิมไว้
+  - ฟังก์ชันกู้คืน draft: ลบการ restore `Note` และ `Remark` ที่อ้าง element ที่ถูกลบ (dead code)
+  - submit `apiCreateRequest`: ส่ง `Remark: ''` ต่อรายการและ `Note: ''` (แทนการอ่าน element ที่ไม่มีแล้ว — จุดเดิมจะ crash ถ้าปล่อยอ้าง `$('[data-remark]').value`)
+  - **คงไว้:** ช่อง "หมายเหตุทั้งใบ" (`editReqNote`) + "หมายเหตุรายการ" ใน Modal แก้ไขใบขอเบิก (พัสดุ/แอดมินใช้), backend ฟิลด์ `Note`/`Remark` ทั้งหมด (ใบเก่าที่เคยกรอกแสดงผลตามจริงทุกจุดเดิม: ใบพิมพ์, LINE, ตาราง)
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Worker: 11 test files, 177 tests ผ่าน 100%
+  - Node Frontend/Seed Static Tests: 2 test files, 43 tests ผ่าน 100% (รวมทั้งสิ้น 220 tests)
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-07 Remove Attachment Field from Request Form)
 
 ### refactor(requisition): ลบช่องไฟล์แนบ (ไม่บังคับ) ออกจากฟอร์มขอเบิกและ Modal แก้ไขใบขอเบิก
 - **ความต้องการ:** ช่องไฟล์แนบในฟอร์มยืนยันออกใบเบิกถูกอัปโหลดเข้า storage และเก็บ `AttachUrl` ลง DB จริง แต่ไม่มีหน้าจอใดแสดงผลไฟล์เลย (ไม่โชว์ในหน้าอนุมัติ/ติดตาม/พิมพ์ใบเบิก) และในการใช้งานจริงตลอดที่ผ่านมาไม่เคยมีการแนบไฟล์เลย — ลบออกเพื่อลดภาระ UI และตัดขั้นตอนรออัปโหลดตอน submit โดยคงช่อง "หมายเหตุ (ไม่บังคับ)" ไว้จุดเดิม (ใช้จริง: เก็บใน draft และพิมพ์ออกใบเบิก)
@@ -38,7 +55,7 @@
 
 ---
 
-## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-07 Material Search Filter in Requisition Form)
+## 4. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-07 Material Search Filter in Requisition Form)
 
 ### feat(requisition): ช่องค้นหาพัสดุแบบ Real-time ในฟอร์มขอเบิกและ Modal แก้ไขใบขอเบิก
 - **ความต้องการ:** Dropdown เลือกพัสดุมี 50+ รายการชื่อคล้ายกัน ผู้ใช้ต้องเลื่อนไล่หาเอง เสี่ยงเลือกผิด — เพิ่มช่องพิมพ์ค้นหา (ชื่อหรือรหัส) กรองรายการแบบ Real-time ตามหลัก UI (list > 20 รายการควรมีช่องค้นหา)
@@ -496,19 +513,19 @@
 
 ---
 
-## 4. สถานะการทดสอบและ Production ล่าสุด (Current Verified Status)
+## 5. สถานะการทดสอบและ Production ล่าสุด (Current Verified Status)
 
 - **Test Suite Results (Vitest):**
-  - Worker Tests: **162 passed** (10 test files)
-  - Node Tests: **38 passed** (2 test files)
-  - **รวมทั้งสิ้น: 200 passed (100% PASS)**
+  - Worker Tests: **177 passed** (11 test files)
+  - Node Tests: **43 passed** (2 test files)
+  - **รวมทั้งสิ้น: 220 passed (100% PASS)**
 - **TypeScript Typecheck:** 0 errors
 - **Git State:**
   - Branch: `main`
 
 ---
 
-## 5. Suggested Skills สำหรับรอบถัดไป (Recommended Skills for Next Agent)
+## 6. Suggested Skills สำหรับรอบถัดไป (Recommended Skills for Next Agent)
 
 1. **`caveman` (lite)**: รักษารูปแบบการตอบที่กระชับ ตรงประเด็น ประหยัด token
 2. **`rtk`**: ใช้เป็น prefix รันคำสั่งเชลล์บน Windows (เช่น `rtk git status`, `rtk rg`) เพื่อกรอง output
