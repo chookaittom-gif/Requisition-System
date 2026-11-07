@@ -8505,12 +8505,11 @@ function doSaveReqDraft_(){
     const i = row.dataset.row;
     const sel = $(`[data-sel="${i}"]`);
     const qty = $(`[data-qty="${i}"]`);
-    const remark = $(`[data-remark="${i}"]`);
-    if(sel && (sel.value || (qty && qty.value) || (remark && remark.value))){
+    if(sel && (sel.value || (qty && qty.value))){
       items.push({
         MaterialID: sel.value || '',
         Qty: qty ? qty.value : '',
-        Remark: remark ? remark.value : ''
+        Remark: ''
       });
     }
   });
@@ -8523,7 +8522,7 @@ function doSaveReqDraft_(){
     FullName: $('#rName')?.value || '',
     Department: $('#rDept')?.value || '',
     Purpose: $('#rPurpose')?.value || '',
-    Note: $('#rNote')?.value || '',
+    Note: '',
     items
   };
 
@@ -8654,9 +8653,6 @@ async function viewRequestForm(){
         </div>
         <div id="itemRows" class="space-y-3"></div>
       </div>
-
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">หมายเหตุทั้งใบ (ไม่บังคับ)</label>
-        <textarea id="rNote" rows="2" placeholder="หมายเหตุสำหรับทั้งใบเบิก เช่น ความด่วน, แหล่งงบประมาณ..." class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 resize-none"></textarea></div>
 
       ${S.user && S.user.Role !== 'guest' ? `
       <div class="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between gap-3 transition">
@@ -9083,7 +9079,6 @@ async function viewRequestForm(){
     if($('#rName') && !$('#rName').readOnly && d.FullName) $('#rName').value = d.FullName;
     if($('#rDept') && d.Department) $('#rDept').value = d.Department;
     if($('#rPurpose') && d.Purpose) $('#rPurpose').value = d.Purpose;
-    if($('#rNote') && d.Note) $('#rNote').value = d.Note;
 
     if(Array.isArray(d.items) && d.items.length){
       $('#itemRows').innerHTML = '';
@@ -9100,9 +9095,6 @@ async function viewRequestForm(){
           }
           if($(`[data-qty="${i}"]`) && (it.Qty !== undefined && it.Qty !== '')){
             $(`[data-qty="${i}"]`).value = it.Qty;
-          }
-          if($(`[data-remark="${i}"]`) && it.Remark){
-            $(`[data-remark="${i}"]`).value = it.Remark;
           }
         }
       });
@@ -9183,7 +9175,6 @@ function addItemRow(selectedId = ''){
         <button type="button" data-rm="${i}" class="w-full h-[42px] rounded-2xl bg-red2/10 text-red2 hover:bg-red2 hover:text-white transition"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
-    <div class="mt-2"><input data-remark="${i}" placeholder="หมายเหตุรายการนี้ (ไม่บังคับ)" class="w-full px-3.5 py-2 rounded-2xl border border-slate-200 bg-slate-50/50 text-xs"></div>
   </div>`;
   $('#itemRows').insertAdjacentHTML('beforeend', html);
 
@@ -9233,7 +9224,7 @@ async function submitRequest(e){
     const qty = parseFloat($(`[data-qty="${i}"]`).value||0);
     if(!id) return;
     if(!(qty>0)){ valid = false; return; }
-    items.push({ MaterialID:id, Qty:qty, Remark: $(`[data-remark="${i}"]`).value.trim() });
+    items.push({ MaterialID:id, Qty:qty, Remark: '' });
   });
 
   if(!items.length) return toast('warning','กรุณาเลือกพัสดุอย่างน้อย 1 รายการ');
@@ -9278,7 +9269,7 @@ async function submitRequest(e){
       PersonnelCode: (S.reqPersonnel && S.reqPersonnel.Code) || pCode || undefined,
       RequestDate: $('#rDate').value, Department: reqDept,
       UserID: (S.user && S.user.ID) || 'GUEST', FullName: reqName, Position: reqPos,
-      Purpose: $('#rPurpose').value.trim(), Note: ($('#rNote') ? $('#rNote').value.trim() : ''),
+      Purpose: $('#rPurpose').value.trim(), Note: '',
       items, actor: (S.user && S.user.Username) || reqName,
       autoApprove
     });
