@@ -20,6 +20,22 @@
 
 ---
 
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-08 Dashboard Item Charts Redesign)
+
+### feat(dashboard): เปลี่ยนกราฟ "รายการที่เบิก" เป็นแท่งแนวนอน Top 10 + ปุ่มดูทั้งหมด
+- **ความต้องการ:** เมื่อจำนวนพัสดุในระบบเพิ่มขึ้น กราฟแท่งตั้งที่วาด "ทุกรายการ" (`chItem`) ไม่รองรับ — ชื่อพัสดุไทยยาวหมุน 45° อ่านยาก แท่งเล็กลงจนอ่านไม่ได้ (ตัดสินใจผ่าน grilling 5+3 คำถาม: แท่งนอน Top 10 + modal ตารางเต็ม, ยุบ chItem, สีเดียวอันดับ 1 เข้มสุด, max-height + scroll)
+- **การเปลี่ยนแปลงในโค้ด (`cloudflare/public/index.html` เท่านั้น — Backend ไม่แตะ):**
+  - `drawChart` (L~1829): เพิ่ม `opts.horizontal` → `indexAxis:'y'`, กลับลำดับ labels/data/colors ให้อันดับ 1 อยู่บนสุด, `maxBarThickness: 26`, scales แยกแนวนอน/แนวตั้ง
+  - `valueBadgePlugin` (L~1310): รองรับแท่งนอน — badge วางกลางความยาวแท่ง (กึ่งกลาง x↔base), guard ความยาวแท่ง <22px
+  - Admin dashboard: ยุบกราฟ `chItem` ("จำนวนแต่ละรายการที่เบิก") ออก, `chTop10` กลายเป็นการ์ดเต็มความกว้าง (h-[400px]) วาดแท่งนอนจาก `chartByItem` เรียง desc, ปุ่ม "ดูทั้งหมด" ใน card header
+  - Teacher dashboard: `tChItem` → "10 อันดับรายการที่ฉันเบิกมากที่สุด" แท่งนอน top 10 (slice จาก `chartByItem` client-side) + ปุ่มดูทั้งหมดเดียวกัน
+  - เพิ่ม `itemAllBtn()` (min-h-[44px], hover/focus-visible/active ครบ) และ `openItemRankModal()` — modal ตารางอันดับเต็ม (อันดับ/ชื่อพัสดุ/จำนวน, header sticky, max-h-[60vh] scroll, top-3 แถบสีทอง/เงิน/ทองแดง) ใช้ข้อมูล `S.dashItems` ร่วมกันทั้งสองฝั่ง
+- **ผลลัพธ์การทดสอบ:**
+  - Vitest Worker: 11 test files, 177 tests ผ่าน 100%
+  - Node Frontend/Seed Static Tests: 2 test files, 43 tests ผ่าน 100% (รวมทั้งสิ้น 220 tests)
+
+---
+
 ## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-07 Remove Note Fields from Request Form)
 
 ### refactor(requisition): ลบช่อง "หมายเหตุทั้งใบ" และ "หมายเหตุรายการ" ออกจากฟอร์มขอเบิก — เก็บไว้เฉพาะ Modal แก้ไขใบขอเบิก
