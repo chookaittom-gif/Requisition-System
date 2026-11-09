@@ -2435,7 +2435,7 @@ async function viewAdminDash(){
       </div>
 
       <div class="mt-5">
-        ${cardWrap('10 อันดับรายการที่เบิกมากที่สุด','fa-ranking-star','<div class="w-full h-[400px] relative"><canvas id="chTop10"></canvas></div>', itemAllBtn())}
+        ${cardWrap('5 อันดับรายการที่เบิกมากที่สุด','fa-ranking-star','<div class="w-full h-[220px] relative"><canvas id="chTop10"></canvas></div>', itemAllBtn())}
       </div>`;
 
     drawChart('chCategory','bar', (d.chartByCategory||[]).map(x=>x.label), (d.chartByCategory||[]).map(x=>x.value), {
@@ -2445,7 +2445,7 @@ async function viewAdminDash(){
     drawChart('chStatus','doughnut', d.chartStatus.map(x=>x.label), d.chartStatus.map(x=>x.value),
       { colors:['#26A69A','#FFCA28'] });
     S.dashItems = [...(d.chartByItem||[])].sort((a,b)=>Number(b.value)-Number(a.value));
-    drawChart('chTop10','bar', S.dashItems.slice(0,10).map(x=>x.label), S.dashItems.slice(0,10).map(x=>x.value), {
+    drawChart('chTop10','bar', S.dashItems.slice(0,5).map(x=>x.label), S.dashItems.slice(0,5).map(x=>x.value), {
       label:'จำนวนที่เบิก',
       horizontal:true
     });
@@ -5012,15 +5012,15 @@ async function viewTeacherDash(){
       </div>
 
       <div class="grid lg:grid-cols-3 gap-5 mt-5">
-        <div class="lg:col-span-2">${cardWrap('10 อันดับรายการที่ฉันเบิกมากที่สุด','fa-ranking-star','<div class="w-full h-[400px] relative"><canvas id="tChItem"></canvas></div>', itemAllBtn())}</div>
+        <div class="lg:col-span-2">${cardWrap('5 อันดับรายการที่ฉันเบิกมากที่สุด','fa-ranking-star','<div class="w-full h-[280px] relative"><canvas id="tChItem"></canvas></div>', itemAllBtn())}</div>
         <div>${cardWrap('สถานะคำขอของฉัน','fa-chart-pie','<div class="w-full h-[280px] relative"><canvas id="tChStatus"></canvas></div>')}</div>
       </div>
 
       <div class="mt-5">${cardWrap('ใบขอเบิกล่าสุด','fa-clock-rotate-left', myReqTable(d.recent, false))}</div>`;
 
     S.dashItems = [...(d.chartByItem||[])].sort((a,b)=>Number(b.value)-Number(a.value));
-    const tTop10 = S.dashItems.slice(0,10);
-    drawChart('tChItem','bar', tTop10.map(x=>x.label), tTop10.map(x=>x.value), {
+    const tTop5 = S.dashItems.slice(0,5);
+    drawChart('tChItem','bar', tTop5.map(x=>x.label), tTop5.map(x=>x.value), {
       label:'จำนวนที่เบิก',
       horizontal:true
     });
