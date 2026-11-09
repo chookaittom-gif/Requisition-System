@@ -931,6 +931,61 @@ const ST_META = {
   REJECTED:{ th:'ปฏิเสธ',     cls:'bg-rose2/15 text-rose2', ico:'fa-circle-xmark' }
 };
 
+const DEPT_GROUPS = [
+  {
+    group: '🏢 ฝ่ายงาน / สำนักงาน (ศูนย์ฯ ลำปาง)',
+    items: [
+      'สำนักงานศูนย์การศึกษา',
+      'ฝ่ายงานส่งเสริมวิชาการและงานทะเบียน',
+      'ฝ่ายงานพัฒนานักศึกษา',
+      'ฝ่ายพัฒนางานวิจัยและนวัตกรรม',
+      'ฝ่ายส่งเสริมถ่ายทอดองค์ความรู้ เทคโนโลยีและนวัตกรรม',
+      'ฝ่ายอาคารสถานที่ สิ่งแวดล้อม และแหล่งเรียนรู้'
+    ]
+  },
+  {
+    group: '🎓 สาขาวิชา / หลักสูตร (ศูนย์ฯ ลำปาง)',
+    items: [
+      'สาขาวิชาเทคโนโลยีการประกอบอาหารและการบริการ',
+      'สาขาวิชาธุรกิจการบิน',
+      'สาขาวิชาการศึกษาปฐมวัย',
+      'สาขาวิชาการประถมศึกษา'
+    ]
+  },
+  {
+    group: '🏫 โรงเรียนสาธิตละอออุทิศ',
+    items: [
+      'โรงเรียนสาธิตละอออุทิศ ลำปาง'
+    ]
+  },
+  {
+    group: '✨ โครงการพิเศษ',
+    items: [
+      'โครงการพิเศษ / กิจกรรมโครงการ'
+    ]
+  }
+];
+
+function renderDeptSelectOptions(selectedVal = '', placeholder = '-- เลือกสังกัด / ฝ่ายงาน / หลักสูตร --') {
+  let html = `<option value="" disabled ${!selectedVal ? 'selected' : ''}>${esc(placeholder)}</option>`;
+  let found = false;
+  DEPT_GROUPS.forEach(g => {
+    html += `<optgroup label="${esc(g.group)}">`;
+    g.items.forEach(item => {
+      const isSel = (item === selectedVal);
+      if (isSel) found = true;
+      html += `<option value="${esc(item)}" ${isSel ? 'selected' : ''}>${esc(item)}</option>`;
+    });
+    html += `</optgroup>`;
+  });
+  if (selectedVal && !found) {
+    html += `<optgroup label="📌 สังกัดเดิม / อื่นๆ">
+      <option value="${esc(selectedVal)}" selected>${esc(selectedVal)}</option>
+    </optgroup>`;
+  }
+  return html;
+}
+
 const MENUS = {
   admin: [
     { id:'a-dash',     title:'แดชบอร์ด',              sub:'ภาพรวมระบบพัสดุ',          icon:'fa-gauge-high',            color:'#0284c7' },
@@ -3659,8 +3714,10 @@ async function openEditReqModal(id){
               <input id="editReqPos" value="${esc(q.Position || '')}" placeholder="เช่น เจ้าหน้าที่บริหารงานทั่วไป" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition">
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose2">*</span></label>
-              <input id="editReqDept" value="${esc(q.Department || '')}" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
+              <select id="editReqDept" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-brand-500 outline-none transition font-medium">
+                ${renderDeptSelectOptions(q.Department || '', '-- เลือกสังกัด / ฝ่ายงาน / หลักสูตร --')}
+              </select>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">วันที่ขอเบิก <span class="text-rose2">*</span></label>
@@ -7141,8 +7198,10 @@ function personnelModal(person){
           </div>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ</label>
-          <input id="pDepartment" value="${esc(p.Department || '')}" placeholder="เช่น สาขาวิชาเทคโนโลยีการประกอบอาหาร..." class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
+          <label class="block text-xs font-bold text-slate-700 mb-1">สังกัด / ฝ่ายงาน / หลักสูตร</label>
+          <select id="pDepartment" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition font-medium">
+            ${renderDeptSelectOptions(p.Department || '', '-- เลือกสังกัด / ฝ่ายงาน / หลักสูตร --')}
+          </select>
         </div>
         <div class="pt-2 flex items-center justify-end gap-2">
           <button type="button" onclick="closeModal()" class="min-h-[44px] px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition cursor-pointer">ยกเลิก</button>
@@ -7213,21 +7272,10 @@ function registerPersonnelModal(prefillCode, onRegistered){
           </select>
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose-500">*</span></label>
-          <input id="regDepartment" list="regDeptSuggestions" required placeholder="คลิกเพื่อเลือก หรือพิมพ์ เช่น สาขาวิชาเทคโนโลยีการประกอบอาหาร..." class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition">
-          <datalist id="regDeptSuggestions">
-            <option value="สาขาวิชาเทคโนโลยีการประกอบอาหารและการบริการ">
-            <option value="สาขาวิชาธุรกิจการบิน">
-            <option value="สาขาวิชาการศึกษาปฐมวัย">
-            <option value="สาขาวิชาการประถมศึกษา">
-            <option value="โรงเรียนสาธิตละอออุทิศ ลำปาง">
-            <option value="ฝ่ายงานส่งเสริมวิชาการและงานทะเบียน">
-            <option value="ฝ่ายงานพัฒนานักศึกษา">
-            <option value="ฝ่ายพัฒนางานวิจัยและนวัตกรรม">
-            <option value="ฝ่ายส่งเสริมถ่ายทอดองค์ความรู้ เทคโนโลยีและนวัตกรรม">
-            <option value="ฝ่ายอาคารสถานที่ สิ่งแวดล้อม และแหล่งเรียนรู้">
-            <option value="สำนักงานศูนย์การศึกษา">
-          </datalist>
+          <label class="block text-xs font-bold text-slate-700 mb-1">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose-500">*</span></label>
+          <select id="regDepartment" required class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white text-sm outline-none transition cursor-pointer font-medium">
+            ${renderDeptSelectOptions('', '-- เลือกสังกัด / ฝ่ายงาน / หลักสูตร --')}
+          </select>
         </div>
         <div class="pt-1">
           <p class="text-[11px] text-slate-400 flex items-center gap-1.5 leading-relaxed">
@@ -8658,15 +8706,13 @@ async function viewRequestForm(){
           : `<input id="rName" required placeholder="ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">`
         }</div>
 
-      <div class="relative"><label class="block text-sm font-bold text-slate-700 mb-1.5">หลักสูตร / ฝ่ายงาน / โครงการ <span class="text-rose2">*</span></label>
-        <div class="relative">
-          <input id="rDept" autocomplete="off" required value="${esc((S.user && S.user.Role !== 'guest' && S.user.Department) || '')}" placeholder="คลิกเพื่อเลือก หรือพิมพ์ค้นหา เช่น เทคโนโลยีการประกอบอาหาร..." class="w-full px-4 py-3 pr-10 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
-          <button type="button" id="btnToggleDept" tabindex="-1" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-600 transition p-1">
-            <i class="fa-solid fa-chevron-down text-xs"></i>
-          </button>
-          <div id="deptMenu" class="hidden absolute left-0 top-full mt-1.5 min-w-full w-max max-w-[calc(100vw-2rem)] sm:max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 max-h-64 overflow-y-auto"></div>
-        </div>
-      </div>
+      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
+        ${S.user && S.user.Role !== 'guest' && S.user.Department
+          ? `<input id="rDept" value="${esc(S.user.Department)}" readonly class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed">`
+          : `<select id="rDept" required class="w-full px-4 py-3 min-h-[48px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 font-medium text-slate-800 text-sm outline-none transition cursor-pointer">
+               ${renderDeptSelectOptions((S.user && S.user.Role !== 'guest' && S.user.Department) || '')}
+             </select>`
+        }</div>
 
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">มีความจำเป็นต้องเบิกพัสดุเพื่อ <span class="text-rose2">*</span></label>
         <input id="rPurpose" list="purposeList" required placeholder="เช่น เพื่อจัดการเรียนการสอนรายวิชา..., กิจกรรมนักศึกษา, งานสำนักงานประจำวัน" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
@@ -8842,9 +8888,22 @@ async function viewRequestForm(){
     // 3. Fill and lock Department
     const deptInp = $('#rDept');
     if(deptInp){
-      deptInp.value = p.Department || '';
-      deptInp.readOnly = true;
-      deptInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+      const val = p.Department || '';
+      if(deptInp.tagName === 'SELECT'){
+        if(val && !Array.from(deptInp.options).some(o => o.value === val)){
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = val;
+          deptInp.appendChild(opt);
+        }
+        deptInp.value = val;
+        deptInp.disabled = true;
+        deptInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+      } else {
+        deptInp.value = val;
+        deptInp.readOnly = true;
+        deptInp.classList.add('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+      }
     }
     if($('#btnToggleDept')) $('#btnToggleDept').classList.add('hidden');
     if($('#deptMenu')) $('#deptMenu').classList.add('hidden');
@@ -8919,9 +8978,15 @@ async function viewRequestForm(){
     if(deptInp){
       if(S.user && S.user.Role !== 'guest' && S.user.Department){
         deptInp.value = S.user.Department;
+        if(deptInp.tagName === 'SELECT') deptInp.disabled = true;
+        else deptInp.readOnly = true;
       } else {
         deptInp.value = '';
-        deptInp.readOnly = false;
+        if(deptInp.tagName === 'SELECT'){
+          deptInp.disabled = false;
+        } else {
+          deptInp.readOnly = false;
+        }
         deptInp.classList.remove('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
       }
     }
@@ -8947,86 +9012,9 @@ async function viewRequestForm(){
     e.target.value = e.target.value.replace(/\D/g, '');
   });
 
-  // ponytail: searchable combobox dropdown for department with full-width text display
-  const deptList = [
-    { g: '🎓 หลักสูตร / โรงเรียน', items: [
-      'สาขาวิชาเทคโนโลยีการประกอบอาหารและการบริการ',
-      'สาขาวิชาธุรกิจการบิน',
-      'สาขาวิชาการศึกษาปฐมวัย',
-      'สาขาวิชาการประถมศึกษา',
-      'โรงเรียนสาธิตละอออุทิศ ลำปาง'
-    ]},
-    { g: '📂 6 โครงสร้างหลัก (ฝ่ายงาน / สำนักงาน)', items: [
-      'ฝ่ายงานส่งเสริมวิชาการและงานทะเบียน',
-      'ฝ่ายงานพัฒนานักศึกษา',
-      'ฝ่ายพัฒนางานวิจัยและนวัตกรรม',
-      'ฝ่ายส่งเสริมถ่ายทอดองค์ความรู้ เทคโนโลยีและนวัตกรรม',
-      'ฝ่ายอาคารสถานที่ สิ่งแวดล้อม และแหล่งเรียนรู้',
-      'สำนักงานศูนย์การศึกษา'
-    ]},
-    { g: '✨ โครงการพิเศษ', items: [
-      'โครงการพิเศษ / กิจกรรมโครงการ (ระบุเอง)'
-    ]}
-  ];
-
-  const deptMenu = $('#deptMenu');
-  const rDeptInput = $('#rDept');
-
-  function renderDeptMenu(kw = ''){
-    const q = (kw || '').trim().toLowerCase();
-    let html = '';
-    let totalMatches = 0;
-    deptList.forEach(group => {
-      const matched = group.items.filter(item => !q || item.toLowerCase().includes(q));
-      if(matched.length){
-        html += `<div class="px-3 py-1.5 text-xs font-bold text-slate-400 bg-slate-50 sticky top-0">${group.g}</div>`;
-        matched.forEach(item => {
-          totalMatches++;
-          html += `<div class="dept-opt px-4 py-2 text-sm text-slate-700 hover:bg-brand-50 hover:text-brand-700 cursor-pointer transition font-medium whitespace-normal sm:whitespace-nowrap" data-val="${esc(item)}">${esc(item)}</div>`;
-        });
-      }
-    });
-    if(!totalMatches){
-      html = `<div class="px-4 py-3 text-xs text-slate-400 text-center">ไม่พบตัวเลือกที่ตรงกัน (สามารถพิมพ์ระบุเองได้)</div>`;
-    }
-    deptMenu.innerHTML = html;
-    deptMenu.classList.remove('hidden');
-  }
-
-  rDeptInput.addEventListener('focus', () => renderDeptMenu(rDeptInput.value));
-  rDeptInput.addEventListener('input', () => renderDeptMenu(rDeptInput.value));
-  rDeptInput.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') deptMenu.classList.add('hidden');
+  $('#rDept')?.addEventListener('change', () => {
+    saveReqDraft(false);
   });
-  $('#btnToggleDept').addEventListener('click', (e) => {
-    e.stopPropagation();
-    if(deptMenu.classList.contains('hidden')){
-      renderDeptMenu('');
-      rDeptInput.focus();
-    }else{
-      deptMenu.classList.add('hidden');
-    }
-  });
-
-  deptMenu.addEventListener('click', (e) => {
-    const opt = e.target.closest('.dept-opt');
-    if(opt){
-      rDeptInput.value = opt.dataset.val;
-      deptMenu.classList.add('hidden');
-      saveReqDraft(false);
-    }
-  });
-
-  const onDocDeptClick = (e) => {
-    if(!deptMenu || !document.body.contains(deptMenu)){
-      document.removeEventListener('click', onDocDeptClick);
-      return;
-    }
-    if(!e.target.closest('#rDept') && !e.target.closest('#deptMenu') && !e.target.closest('#btnToggleDept')){
-      deptMenu.classList.add('hidden');
-    }
-  };
-  document.addEventListener('click', onDocDeptClick);
 
   $('#btnAddItem').addEventListener('click', () => {
     addItemRow();
@@ -9120,7 +9108,18 @@ async function viewRequestForm(){
     }
     if($('#rPos') && !$('#rPos').readOnly && d.Position) $('#rPos').value = d.Position;
     if($('#rName') && !$('#rName').readOnly && d.FullName) $('#rName').value = d.FullName;
-    if($('#rDept') && d.Department) $('#rDept').value = d.Department;
+    if($('#rDept') && d.Department){
+      const el = $('#rDept');
+      if(el.tagName === 'SELECT'){
+        if(!Array.from(el.options).some(o => o.value === d.Department)){
+          const opt = document.createElement('option');
+          opt.value = d.Department;
+          opt.textContent = d.Department;
+          el.appendChild(opt);
+        }
+      }
+      el.value = d.Department;
+    }
     if($('#rPurpose') && d.Purpose) $('#rPurpose').value = d.Purpose;
 
     if(Array.isArray(d.items) && d.items.length){
@@ -9284,7 +9283,7 @@ async function submitRequest(e){
   }
 
   const reqDept = (S.reqPersonnel && S.reqPersonnel.Department) || ($('#rDept') && $('#rDept').value.trim()) || '';
-  if(!reqDept) return toast('warning','กรุณาระบุ หลักสูตร / ฝ่ายงาน / โครงการ');
+  if(!reqDept) return toast('warning','กรุณาระบุ สังกัด / ฝ่ายงาน / หลักสูตร');
   const reqPos = (S.reqPersonnel && S.reqPersonnel.Position) || ($('#rPos') && $('#rPos').value.trim()) || (S.user && S.user.Position) || '';
   if(!reqPos) return toast('warning','กรุณาเลือกตำแหน่ง (อาจารย์ หรือ เจ้าหน้าที่)');
   if(!$('#rPurpose').value.trim()) return toast('warning','กรุณาระบุความจำเป็นในการเบิกพัสดุ');

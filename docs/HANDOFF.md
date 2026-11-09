@@ -20,7 +20,31 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-08 Dashboard Item Charts Redesign)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-09 Requisition Department Selection Hardening)
+
+### feat(requisition): ปรับปรุงระบบเลือกสังกัด/ฝ่ายงานเป็น Strict Dropdown พร้อมจัดกลุ่ม 4 หมวดหมู่ ป้องกันคำสะกดผิด
+- **ปัญหาเดิม:** ช่อง "หลักสูตร / ฝ่ายงาน / โครงการ" (`#rDept`) เป็น Free-text Input ที่ยอมรับข้อความอิสระ ทำให้ผู้ใช้งานพิมพ์สะกดผิด หรือพิมพ์ชื่อย่อที่ไม่เป็นทางการปนในฐานข้อมูล
+- **ผลการวิเคราะห์และ Brainstorm (EGM):**
+  - ไม่ควรยุบตัวเลือกเหลือเพียง 2 องค์กร ("ศูนย์ฯ ลำปาง" vs "โรงเรียนสาธิตฯ") เนื่องจากรายการเบิก >95% มาจากบุคลากรศูนย์ฯ ลำปาง การยุบจะทำลายความละเอียดในการตัดสต็อกและตรวจสอบต้นทุนพัสดุรายสาขา/ฝ่ายงาน
+  - ทางออกที่ถูกต้องคือการเปลี่ยนเป็น Single `<select>` ที่บังคับเลือกจากรายการที่กำหนด (Strict Enforcement) ห้ามส่ง Free-text แปลกปลอม
+- **การเปลี่ยนแปลงในโค้ด (`cloudflare/public/index.html` — Backend Schema ไม่แตะ):**
+  - เพิ่มชุดข้อมูลมาตรฐาน `DEPT_GROUPS` และฟังก์ชันสร้างตัวเลือก `renderDeptSelectOptions(selectedVal, placeholder)` รองรับ `<optgroup>` 4 หมวดหมู่:
+    1. 🏢 ฝ่ายงาน / สำนักงาน (ศูนย์ฯ ลำปาง) (6 ฝ่ายหลัก)
+    2. 🎓 สาขาวิชา / หลักสูตร (ศูนย์ฯ ลำปาง) (4 สาขาหลัก)
+    3. 🏫 โรงเรียนสาธิตละอออุทิศ
+    4. ✨ โครงการพิเศษ
+    - มี Fallback กรณีข้อมูลประวัติศาสตร์/ข้อมูลเดิมไม่อยู่ในลิสต์ จะสร้าง `<optgroup label="📌 สังกัดเดิม / อื่นๆ">` รองรับอัตโนมัติ ไม่สูญเสียข้อมูลเดิม
+  - แบบฟอร์มขอเบิกพัสดุ (`viewRequestForm`): ปรับ `#rDept` เป็น `<select>` ขนาด Touch Target >= 48px พร้อมผูก event `change` เข้ากับระบบ Draft Auto-save
+  - ระบบค้นหารหัสบุคลากร (`applyPersonnelToReqForm_` / `doClearPersonnel_`): ซิงค์ค่า Department เข้า `<select>` และล็อก/ปลดล็อกสถานะ disabled อัตโนมัติ
+  - Modal เพิ่มประวัติผู้เบิก (`registerPersonnelModal`) & Modal แก้ไขบุคลากร (`personnelModal`) & Modal แก้ไขใบขอเบิก (`openEditReqModal`): ปรับให้ใช้ `renderDeptSelectOptions` ร่วมกันทั้งหมด ข้อมูลจึงเป็นมาตรฐานเดียวกันทั้งระบบ
+  - จัดทำเอกสารการออกแบบฉบับทางการที่ `docs/designs/requisition_department_selection_hardening.md` และลงทะเบียนใน `docs/designs/SITEMAP.md`
+- **ผลการทดสอบ:**
+  - `npm --prefix cloudflare test`: 12 test files, 220 tests ผ่าน 100%
+  - `npm --prefix cloudflare run typecheck`: ผ่านสมบูรณ์ (no errors)
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-08 Dashboard Item Charts Redesign)
 
 ### fix(dashboard): แก้ลำดับอันดับกราฟแท่งนอน + กลับไปหมุนสีต่อแท่ง (follow-up 9212855)
 - **Feedback จากภาพจริงหลัง deploy:** (1) ลำดับผิด — แท่งบนสุดกลายเป็นอันดับท้าย เพราะ reverse ลำดับใน `drawChart` ย้อนทาง: Chart.js วาง label แรกของแกน y บนสุดอยู่แล้ว จึงเอา reverse ออก (2) user ขอแยกสีต่อแท่ง — เอา `colors` option ออกจาก `chTop10`/`tChItem` กลับไปหมุน `PALETTE` เหมือนกราฟอื่น, เลิกเน้นสีเข้มอันดับ 1
