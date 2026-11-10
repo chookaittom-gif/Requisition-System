@@ -447,7 +447,7 @@ describe('low-stock cron', () => {
     expect(url).toBe('https://api.telegram.org/bot123456:ABCDEFG/sendMessage');
     expect(body.chat_id).toBe('-100123');
     expect(body.text).toBe(
-      '⚠️ <b>แจ้งเตือนสต็อกพัสดุประจำเดือน</b>\n🔴 หมดสต็อก: 1 รายการ\n🟡 ใกล้หมด: 1 รายการ\n\n🚨 <b>หมดสต็อก:</b>\n• A1 พัสดุ A1 → <b>0</b> ชิ้น\n\n⚠️ <b>ใกล้หมด:</b>\n• A2 พัสดุ A2 → <b>1</b> ชิ้น\n\n🔗 <a href="https://supply-requisition.pages.dev/#a-low">เปิดดูรายการทั้งหมดและทำใบสั่งซื้อในระบบ</a>\n',
+      '⚠️ <b>แจ้งเตือนสต็อกพัสดุประจำเดือน</b>\n🔴 หมดสต็อก: 1 รายการ\n🟡 ใกล้หมด: 1 รายการ\n\n🚨 <b>หมดสต็อก:</b>\n• A1 พัสดุ A1 → <b>0</b> ชิ้น\n\n⚠️ <b>ใกล้หมด:</b>\n• A2 พัสดุ A2 → <b>1</b> ชิ้น\n\n🔗 <a href="https://supply-requisition.chookait-tom.workers.dev/#a-low">เปิดดูรายการทั้งหมดและทำใบสั่งซื้อในระบบ</a>\n',
     );
   });
 

@@ -12,7 +12,7 @@
   "triggers": { "crons": ["0 22 24 * *"] },
   "vars": {
     "DRIVE_ROOT_FOLDER_ID": "1kVDobdN0V1U7bqTHHFMEDrlUEhQAMG4U",
-    "APP_URL": "https://supply-requisition.pages.dev"
+    "APP_URL": "https://supply-requisition.chookait-tom.workers.dev"
   },
   "ratelimits": [
     { "name": "GUEST_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }

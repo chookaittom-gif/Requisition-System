@@ -34,7 +34,7 @@
     - เพิ่มการตัดความยาวชื่อพัสดุที่ยาวเกิน 50 ตัวอักษรอย่างปลอดภัย เพื่อป้องกันปัญหายาวเกินลิมิต 4,096 ตัวอักษรของ Telegram
     - คงการตัดแสดง 15 รายการแรกพร้อมระบุจำนวนที่เหลือ (`... และอีก N รายการ`)
     - แนบลิงก์ต่อท้ายข้อความเปิดตรงไปยังหน้าพัสดุหมด/ใกล้หมด (`${APP_URL}/#a-low`) เพื่อให้ผู้ดูแลเปิดดูรายการทั้งหมดและกดดึงทำใบสั่งซื้อ (PO) ได้ทันที
-  - `cloudflare/src/env.ts` & `cloudflare/wrangler.jsonc`: เพิ่มตัวแปรคอนฟิก `APP_URL` (default: `https://supply-requisition.pages.dev`)
+  - `cloudflare/src/env.ts` & `cloudflare/wrangler.jsonc`: เพิ่มตัวแปรคอนฟิก `APP_URL` (`https://supply-requisition.chookait-tom.workers.dev`)
   - `cloudflare/src/cron.ts`: ส่งผ่าน `env.APP_URL` เข้า `lowStockText`
   - `cloudflare/test/admin.test.ts`: อัปเดต Unit Test ตรวจสอบข้อความแจ้งเตือนรูปแบบใหม่และการแนบลิงก์ระบบ
 - **ผลการทดสอบ & Typecheck:**
