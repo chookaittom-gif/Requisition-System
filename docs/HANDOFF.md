@@ -20,7 +20,22 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-10 Monthly Stock Alert Optimization & Karpathy Guidelines)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-10 Requisition Department Option Optimization)
+
+### feat(requisition): นำตัวเลือก โรงเรียนสาธิตละอออุทิศ ลำปาง ออกจากรายการสังกัด พร้อมคง Native Select มาตรฐาน
+- **ความต้องการ & ผลการวิเคราะห์ (EGM Brainstorm):**
+  - ลบตัวเลือก "โรงเรียนสาธิตละอออุทิศ ลำปาง" ออกจากช่องตัวเลือกสังกัดในใบขอเบิกพัสดุ
+  - วิเคราะห์ความจำเป็นของตัวกรองค้นหา (Search Filter) สำหรับสังกัด: สรุปไม่จำเป็น (YAGNI) เนื่องจากหลังลบเหลือตัวเลือกเพียง 11 รายการ ผู้ใช้กวาดสายตาแตะเลือกจบใน 2 สเต็ป (1–2 วินาที) เร็วกว่าการแตะค้นหาแล้วพิมพ์ไทย 2–3 เท่า และระบบมี Auto-fill สังกัดจากโปรไฟล์ผู้ใช้ให้อยู่แล้ว
+- **การเปลี่ยนแปลงในโค้ด (`cloudflare/public/index.html`):**
+  - นำหมวด `'🏫 โรงเรียนสาธิตละอออุทิศ'` ออกจากตัวแปร `DEPT_GROUPS`
+  - กลไก Fallback ใน `renderDeptSelectOptions` ยังคงรองรับข้อมูลประวัติศาสตร์ (`📌 สังกัดเดิม / อื่นๆ`) อย่างปลอดภัย ไม่สูญหาย
+- **ผลการทดสอบ & Typecheck:**
+  - `npm --prefix cloudflare run typecheck`: ผ่าน 100% (`tsc --noEmit` code 0)
+  - `npm --prefix cloudflare test`: 13 test files, 221 tests ผ่าน 100%
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-10 Monthly Stock Alert Optimization & Karpathy Guidelines)
 
 ### feat(cron): ปรับรอบแจ้งเตือนสต็อกพัสดุเป็นทุกวันที่ 25 เวลา 05:00 น. พร้อมปรับปรุง Telegram HTML ให้แยกหมวดหมู่สวยงาม
 - **ความต้องการ:**
