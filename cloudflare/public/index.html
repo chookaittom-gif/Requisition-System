@@ -1976,6 +1976,12 @@ function showLogin_(){
 async function init(){
   if($('#ftYear')) $('#ftYear').textContent = new Date().getFullYear() + 543;
 
+  // ดักจำ Hash จาก URL (เช่น #a-low) กรณีเปิดผ่านลิงก์โดยตรง
+  const initialHash = window.location.hash ? window.location.hash.replace(/^#/, '').trim() : '';
+  if(initialHash){
+    try{ sessionStorage.setItem('supply_pending_view', initialHash); }catch(e){}
+  }
+
   // 1) ใช้ค่าที่เคยจำไว้ แสดงชื่อและโลโก้ได้ทันที (เข้าครั้งที่ 2 เป็นต้นไป)
   try{
     const c = JSON.parse(localStorage.getItem(BOOT_KEY) || 'null');
@@ -2113,16 +2119,22 @@ function enterApp(){
   $('#sbRole').textContent = getRoleLabel(u.Role) + (u.Position? ' • '+u.Position : '');
   $('#sbAvatar').textContent = (u.FullName||'U').replace(/^(นาย|นาง|นางสาว|น.ส.)/,'').trim().charAt(0).toUpperCase();
   renderMenu();
-  const savedView = sessionStorage.getItem('supply_last_view');
+
+  const currentHash = window.location.hash ? window.location.hash.replace(/^#/, '').trim() : '';
+  const pendingView = sessionStorage.getItem('supply_pending_view');
+  try{ sessionStorage.removeItem('supply_pending_view'); }catch(e){}
+
   const role = u.Role || 'officer';
   const list = MENUS[role] || MENUS.officer;
-  if(u.Role==='guest'){
-    const guestView = (savedView && list.some(m => m.id === savedView)) ? savedView : 't-form';
-    go(guestView);
-  } else {
-    const targetView = (savedView && list.some(m => m.id === savedView)) ? savedView : 'a-dash';
-    go(targetView);
+  let targetView = currentHash || pendingView || sessionStorage.getItem('supply_last_view');
+
+  // หากเป็นผู้ใช้ทั่วไป (guest) และปลายทางคือ a-low ให้ map ไปที่ t-low อัตโนมัติ
+  if(role === 'guest' && targetView === 'a-low') targetView = 't-low';
+
+  if(!list.some(m => m.id === targetView)){
+    targetView = (role === 'guest') ? 't-form' : 'a-dash';
   }
+  go(targetView);
 }
 
 function renderMenu(){
@@ -2197,11 +2209,13 @@ $('#btnLogout').addEventListener('click', async ()=>{
   localStorage.removeItem('supply_login_time');
   sessionStorage.removeItem('supply_user');
   sessionStorage.removeItem('supply_last_view');
+  sessionStorage.removeItem('supply_pending_view');
   backToLoginPage();
 });
 
 /* ---------------- SOFT LOGOUT (ห้ามใช้ location.reload() ใน Google Apps Script) ---------------- */
 function backToLoginPage(){
+  try{ history.replaceState(null, '', window.location.pathname + window.location.search); }catch(e){}
   Object.keys(S.charts).forEach(id=>{
     try{ S.charts[id].destroy(); }catch(e){}
     delete S.charts[id];
@@ -2231,7 +2245,12 @@ function backToLoginPage(){
 
 async function go(view, keepCache){
   S.view = view;
-  try { sessionStorage.setItem('supply_last_view', view); }catch(e){}
+  try {
+    sessionStorage.setItem('supply_last_view', view);
+    if(window.location.hash !== '#' + view){
+      history.replaceState(null, '', '#' + view);
+    }
+  }catch(e){}
   const role = S.user ? S.user.Role : 'officer';
   const list = MENUS[role] || MENUS.officer;
   const meta = list.find(m=>m.id===view) || list[0];
@@ -2279,6 +2298,18 @@ async function go(view, keepCache){
   const defaultView = (role==='guest') ? viewRequestForm : viewAdminDash;
   (map[view] || defaultView)();
 }
+
+// Deep-link Hash Navigation Listener
+window.addEventListener('hashchange', ()=>{
+  if(!S.user) return;
+  const h = window.location.hash ? window.location.hash.replace(/^#/, '').trim() : '';
+  if(!h || h === S.view) return;
+  const role = S.user.Role || 'officer';
+  let target = h;
+  if(role === 'guest' && target === 'a-low') target = 't-low';
+  const list = MENUS[role] || MENUS.officer;
+  if(list.some(m => m.id === target)) go(target);
+});
 
 /* =================================================================================
  *  VIEW : PUBLIC TRACKING (ติดตามสถานะคำขอสำหรับบุคคลทั่วไป)

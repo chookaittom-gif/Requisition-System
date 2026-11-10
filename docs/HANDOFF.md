@@ -36,6 +36,16 @@
     - แนบลิงก์ต่อท้ายข้อความเปิดตรงไปยังหน้าพัสดุหมด/ใกล้หมด (`${APP_URL}/#a-low`) เพื่อให้ผู้ดูแลเปิดดูรายการทั้งหมดและกดดึงทำใบสั่งซื้อ (PO) ได้ทันที
   - `cloudflare/src/env.ts` & `cloudflare/wrangler.jsonc`: เพิ่มตัวแปรคอนฟิก `APP_URL` (`https://supply-requisition.chookait-tom.workers.dev`)
   - `cloudflare/src/cron.ts`: ส่งผ่าน `env.APP_URL` เข้า `lowStockText`
+  - `cloudflare/src/lib/telegram.ts`: ปรับปรุงฟังก์ชัน `lowStockText(low, appUrl)`:
+    - แยกการแสดงผลออกเป็น 2 หมวดหมู่ชัดเจน: `🚨 หมดสต็อก:` (จำนวนคงเหลือ 0) และ `⚠️ ใกล้หมด:` (จำนวนคงเหลือ <= MinQty)
+    - เพิ่มการตัดความยาวชื่อพัสดุที่ยาวเกิน 50 ตัวอักษรอย่างปลอดภัย เพื่อป้องกันปัญหายาวเกินลิมิต 4,096 ตัวอักษรของ Telegram
+    - คงการตัดแสดง 15 รายการแรกพร้อมระบุจำนวนที่เหลือ (`... และอีก N รายการ`)
+    - แนบลิงก์ต่อท้ายข้อความเปิดตรงไปยังหน้าพัสดุหมด/ใกล้หมด (`${APP_URL}/#a-low`) เพื่อให้ผู้ดูแลเปิดดูรายการทั้งหมดและกดดึงทำใบสั่งซื้อ (PO) ได้ทันที
+  - `cloudflare/public/index.html`: เพิ่มระบบ Deep-Linking และ Redirect After Login:
+    - ดักอ่าน `window.location.hash` เมื่อโหลดหน้าเว็บ หากมีเซสชันอยู่แล้วจะเปิดหน้าเป้าหมายทันที
+    - หากยังไม่ได้ล็อกอิน จะจำ `supply_pending_view` ไว้ใน `sessionStorage` เพื่อนำทางไปยังหน้าเป้าหมายให้อัตโนมัติหลังล็อกอินสำเร็จ
+    - รองรับ Role-mapping กรณีผู้ใช้ทั่วไปเปิด `#a-low` จะแปลงเป็นมุมมอง `#t-low` อัตโนมัติ
+    - ซิงค์ `history.replaceState` เมื่อเปลี่ยนหน้าเพื่อรองรับการบุ๊กมาร์กและ History navigation
   - `cloudflare/test/admin.test.ts`: อัปเดต Unit Test ตรวจสอบข้อความแจ้งเตือนรูปแบบใหม่และการแนบลิงก์ระบบ
 - **ผลการทดสอบ & Typecheck:**
   - `npm --prefix cloudflare run typecheck`: ผ่าน 100% (`tsc --noEmit` code 0)
