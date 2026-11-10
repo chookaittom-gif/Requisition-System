@@ -175,12 +175,41 @@ export function rejectedRequestText(req: Obj, reason?: string): string {
   );
 }
 
-/** Legacy notifyLowStock_ Telegram text. `low` = materials whose StockState is not OK. */
+/** Monthly low-stock Telegram text on the 25th. `low` = materials whose StockState is not OK. */
 export function lowStockText(low: Obj[]): string {
-  const outCount = low.filter((m) => m.StockState === 'OUT').length;
-  const lowCount = low.filter((m) => m.StockState === 'LOW').length;
-  let lines = `⚠️ <b>แจ้งเตือนสต็อกพัสดุ</b>\nหมดสต็อก: ${outCount} รายการ\nใกล้หมด: ${lowCount} รายการ\n\n`;
-  for (const m of low.slice(0, 15)) lines += `• ${esc(m.Code)} ${esc(m.Name)} → ${m.StockQty} ${esc(m.Unit)}\n`;
-  if (low.length > 15) lines += `... และอีก ${low.length - 15} รายการ`;
+  const outItems = low.filter((m) => m.StockState === 'OUT');
+  const lowItems = low.filter((m) => m.StockState === 'LOW');
+
+  let lines = `⚠️ <b>แจ้งเตือนสต็อกพัสดุประจำเดือน</b>\n`;
+  lines += `🔴 หมดสต็อก: ${outItems.length} รายการ\n`;
+  lines += `🟡 ใกล้หมด: ${lowItems.length} รายการ\n`;
+
+  const sorted = [...outItems, ...lowItems];
+  const displayItems = sorted.slice(0, 15);
+  const displayOut = displayItems.filter((m) => m.StockState === 'OUT');
+  const displayLow = displayItems.filter((m) => m.StockState === 'LOW');
+
+  const cleanName = (val: unknown): string => {
+    const s = String(val || '').trim();
+    return s.length > 50 ? s.slice(0, 47) + '...' : s;
+  };
+
+  if (displayOut.length > 0) {
+    lines += `\n🚨 <b>หมดสต็อก:</b>\n`;
+    for (const m of displayOut) {
+      lines += `• ${esc(m.Code)} ${esc(cleanName(m.Name))} → <b>0</b> ${esc(m.Unit || 'ชิ้น')}\n`;
+    }
+  }
+
+  if (displayLow.length > 0) {
+    lines += `\n⚠️ <b>ใกล้หมด:</b>\n`;
+    for (const m of displayLow) {
+      lines += `• ${esc(m.Code)} ${esc(cleanName(m.Name))} → <b>${m.StockQty}</b> ${esc(m.Unit || 'ชิ้น')}\n`;
+    }
+  }
+
+  if (low.length > 15) {
+    lines += `\n... และอีก ${low.length - 15} รายการ`;
+  }
   return lines;
 }
