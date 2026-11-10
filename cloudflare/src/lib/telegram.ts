@@ -176,7 +176,7 @@ export function rejectedRequestText(req: Obj, reason?: string): string {
 }
 
 /** Monthly low-stock Telegram text on the 25th. `low` = materials whose StockState is not OK. */
-export function lowStockText(low: Obj[]): string {
+export function lowStockText(low: Obj[], appUrl?: string): string {
   const outItems = low.filter((m) => m.StockState === 'OUT');
   const lowItems = low.filter((m) => m.StockState === 'LOW');
 
@@ -209,7 +209,14 @@ export function lowStockText(low: Obj[]): string {
   }
 
   if (low.length > 15) {
-    lines += `\n... และอีก ${low.length - 15} รายการ`;
+    lines += `\n... และอีก ${low.length - 15} รายการ\n`;
   }
+
+  const cleanUrl = String(appUrl || '').trim();
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    const targetUrl = cleanUrl.replace(/\/+$/, '') + '/#a-low';
+    lines += `\n🔗 <a href="${esc(targetUrl)}">เปิดดูรายการทั้งหมดและทำใบสั่งซื้อในระบบ</a>\n`;
+  }
+
   return lines;
 }

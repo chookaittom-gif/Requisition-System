@@ -7,4 +7,5 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REFRESH_TOKEN: string;
   DRIVE_ROOT_FOLDER_ID: string;
+  APP_URL?: string;
 }

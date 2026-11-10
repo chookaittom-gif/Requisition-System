@@ -29,14 +29,17 @@
   - ยืนยันข้อตกลง (Karpathy Guidelines): LINE คงไว้ตามเดิมสำหรับการแจ้งเตือนจองและอนุมัติใบขอเบิก ไม่ต้องเพิ่มแจ้งเตือนสต็อกลงใน LINE เพื่อป้องกันปัญหาโควตาข้อความ (200 ข้อความ/เดือน) และความซับซ้อนเกินจำเป็น
 - **การเปลี่ยนแปลงในโค้ด:**
   - `cloudflare/wrangler.jsonc`: ปรับค่า Cron Trigger จาก `"0 1 * * *"` (ทุกวัน 08:00 น. ไทย) เป็น `"0 22 24 * *"` (วันที่ 24 เวลา 22:00 UTC ซึ่งตรงกับวันที่ 25 เวลา 05:00 น. ไทย)
-  - `cloudflare/src/lib/telegram.ts`: ปรับปรุงฟังก์ชัน `lowStockText(low)`:
+  - `cloudflare/src/lib/telegram.ts`: ปรับปรุงฟังก์ชัน `lowStockText(low, appUrl)`:
     - แยกการแสดงผลออกเป็น 2 หมวดหมู่ชัดเจน: `🚨 หมดสต็อก:` (จำนวนคงเหลือ 0) และ `⚠️ ใกล้หมด:` (จำนวนคงเหลือ <= MinQty)
     - เพิ่มการตัดความยาวชื่อพัสดุที่ยาวเกิน 50 ตัวอักษรอย่างปลอดภัย เพื่อป้องกันปัญหายาวเกินลิมิต 4,096 ตัวอักษรของ Telegram
     - คงการตัดแสดง 15 รายการแรกพร้อมระบุจำนวนที่เหลือ (`... และอีก N รายการ`)
-  - `cloudflare/test/admin.test.ts`: อัปเดต Unit Test ตรวจสอบข้อความแจ้งเตือนรูปแบบใหม่
+    - แนบลิงก์ต่อท้ายข้อความเปิดตรงไปยังหน้าพัสดุหมด/ใกล้หมด (`${APP_URL}/#a-low`) เพื่อให้ผู้ดูแลเปิดดูรายการทั้งหมดและกดดึงทำใบสั่งซื้อ (PO) ได้ทันที
+  - `cloudflare/src/env.ts` & `cloudflare/wrangler.jsonc`: เพิ่มตัวแปรคอนฟิก `APP_URL` (default: `https://supply-requisition.pages.dev`)
+  - `cloudflare/src/cron.ts`: ส่งผ่าน `env.APP_URL` เข้า `lowStockText`
+  - `cloudflare/test/admin.test.ts`: อัปเดต Unit Test ตรวจสอบข้อความแจ้งเตือนรูปแบบใหม่และการแนบลิงก์ระบบ
 - **ผลการทดสอบ & Typecheck:**
   - `npm --prefix cloudflare run typecheck`: ผ่าน 100% (`tsc --noEmit` code 0)
-  - `npm --prefix cloudflare test`: 12 test files, 220 tests ผ่าน 100%
+  - `npm --prefix cloudflare test`: 12 test files, 221 tests ผ่าน 100%
 
 ---
 
