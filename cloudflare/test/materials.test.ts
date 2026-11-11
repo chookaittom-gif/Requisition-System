@@ -365,3 +365,77 @@ describe('category code', () => {
   });
 });
 
+
+describe('edit form keeps lots and price consistent', () => {
+  const upd = (id: string, over: Record<string, unknown>) =>
+    rpc('apiSaveMaterials', [
+      [{ action: 'update', ID: id, Code: 'A-1', Name: 'ปากกา', Unit: 'ด้าม', UnitPrice: 10, StockQty: 5, MinQty: 2, Category: 'x', ...over }],
+    ]);
+  const lotsOf = (id: string) =>
+    rows('SELECT unit_price, remaining_qty, status FROM material_lots WHERE material_id = ? ORDER BY created_at ASC, rowid ASC', id);
+  const matOf = async (id: string) => (await rows('SELECT unit_price, stock_qty FROM materials WHERE id = ?', id))[0];
+
+  // Material with lots: 5 @ 10 (initial), then purchase 5 @ 20 => stock 10.
+  const twoLots = async () => {
+    await create({ StockQty: 5, UnitPrice: 10 });
+    const [m] = await rows('SELECT id FROM materials');
+    await rpc('apiPurchaseMaterials', [[{ MaterialID: m.id, Qty: 5, UnitPrice: 20 }]]);
+    return m.id as string;
+  };
+
+  it('ignores a price change from the form once lots exist', async () => {
+    const id = await twoLots();
+    expect((await upd(id, { UnitPrice: 99, StockQty: 10 })).ok).toBe(true);
+    expect((await matOf(id)).unit_price).toBe(10);
+  });
+
+  it('lowering stock consumes the oldest lots first and moves the price to the oldest live lot', async () => {
+    const id = await twoLots();
+    expect((await upd(id, { StockQty: 4 })).ok).toBe(true);
+    expect(await lotsOf(id)).toEqual([
+      { unit_price: 10, remaining_qty: 0, status: 'DEPLETED' },
+      { unit_price: 20, remaining_qty: 4, status: 'ACTIVE' },
+    ]);
+    expect(await matOf(id)).toEqual({ unit_price: 20, stock_qty: 4 });
+  });
+
+  it('raising stock adds to the latest lot so lot totals still equal stock', async () => {
+    const id = await twoLots();
+    expect((await upd(id, { StockQty: 12 })).ok).toBe(true);
+    expect(await lotsOf(id)).toEqual([
+      { unit_price: 10, remaining_qty: 5, status: 'ACTIVE' },
+      { unit_price: 20, remaining_qty: 7, status: 'ACTIVE' },
+    ]);
+    expect((await matOf(id)).stock_qty).toBe(12);
+  });
+
+  it('a material with no lots can still get a price and a first lot from the form', async () => {
+    await create({ StockQty: 0, UnitPrice: 10 });
+    const [m] = await rows('SELECT id FROM materials');
+    expect((await upd(m.id, { StockQty: 3, UnitPrice: 15 })).ok).toBe(true);
+    expect(await matOf(m.id)).toEqual({ unit_price: 15, stock_qty: 3 });
+    expect(await lotsOf(m.id)).toEqual([{ unit_price: 15, remaining_qty: 3, status: 'ACTIVE' }]);
+  });
+
+  it('deleting a material removes its lots', async () => {
+    const id = await twoLots();
+    await rpc('apiDeleteMaterials', [[id]]);
+    expect(await rows('SELECT * FROM material_lots WHERE material_id = ?', id)).toHaveLength(0);
+  });
+});
+
+describe('last purchase price', () => {
+  it('apiGetMaterials exposes LastPurchasePrice from the latest purchase, null when none', async () => {
+    await create({ StockQty: 2, UnitPrice: 350 });
+    const [m] = await rows('SELECT id FROM materials');
+    const before = (await rpc('apiGetMaterials', [])).data.find((x: any) => x.ID === m.id);
+    expect(before.LastPurchasePrice).toBeNull();
+
+    await rpc('apiPurchaseMaterials', [[{ MaterialID: m.id, Qty: 5, UnitPrice: 380, PurchaseDate: '2026-02-01' }]]);
+    await rpc('apiPurchaseMaterials', [[{ MaterialID: m.id, Qty: 1, UnitPrice: 360, PurchaseDate: '2026-01-01' }]]);
+    const got = (await rpc('apiGetMaterials', [])).data.find((x: any) => x.ID === m.id);
+    // Latest by purchase date, not by entry order; the displayed UnitPrice stays the oldest live lot.
+    expect(got.LastPurchasePrice).toBe(380);
+    expect(got.UnitPrice).toBe(350);
+  });
+});

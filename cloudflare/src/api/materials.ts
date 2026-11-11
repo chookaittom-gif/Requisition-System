@@ -134,6 +134,16 @@ export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
   const { results: lots } = await db
     .prepare("SELECT material_id, unit_price, remaining_qty FROM material_lots WHERE status = 'ACTIVE' AND remaining_qty > 0 ORDER BY created_at ASC, rowid ASC")
     .all<{ material_id: string; unit_price: number; remaining_qty: number }>();
+  // Latest purchase per material (by purchase date, then entry order) that actually recorded a price.
+  const { results: lastBuys } = await db
+    .prepare(
+      `SELECT p.material_id, p.unit_price FROM purchases p
+        WHERE p.material_id IS NOT NULL AND p.unit_price > 0
+          AND p.rowid = (SELECT p2.rowid FROM purchases p2 WHERE p2.material_id = p.material_id AND p2.unit_price > 0
+                          ORDER BY p2.purchase_date DESC, p2.created_at DESC, p2.rowid DESC LIMIT 1)`,
+    )
+    .all<{ material_id: string; unit_price: number }>();
+  const lastBuyPrice = new Map(lastBuys.map((p) => [p.material_id, Number(p.unit_price)]));
   const lotsByMat = new Map<string, { unit_price: number; remaining_qty: number }[]>();
   for (const l of lots) {
     const arr = lotsByMat.get(l.material_id) || [];
@@ -178,6 +188,8 @@ export async function listMaterials(ctx: Ctx): Promise<Obj[]> {
         AcquiredDate: m.AcquiredDate || '',
         OrderQty: Number(m.OrderQty || 0),
         StockState: computeStockState(stockQty, minQty),
+        HasLots: matLots.length > 0,
+        LastPurchasePrice: lastBuyPrice.get(String(r.id)) ?? null,
         NextLotPrice: nextLotPrice,
         NextLotQty: nextLotQty,
         RemainAmount: matLots.length > 0 && stockQty > 0 ? lotRemainAmount : stockQty * currentPrice,
@@ -261,6 +273,55 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
         const cur = byId.get(id);
         if (!cur) return fail('ไม่พบข้อมูลพัสดุที่ต้องการแก้ไข');
         const stockSent = item.StockQty !== undefined && item.StockQty !== null;
+
+        // Keep material_lots in step with this edit: once a material has lots, its price is owned by the
+        // lots (change it by purchasing), and a stock change is applied to the lots FIFO.
+        const curRow = await db.prepare('SELECT unit_price FROM materials WHERE id = ?').bind(id).first<{ unit_price: number }>();
+        const { results: matLots } = await db
+          .prepare('SELECT id, unit_price, remaining_qty FROM material_lots WHERE material_id = ? ORDER BY created_at ASC, rowid ASC')
+          .bind(id)
+          .all<{ id: string; unit_price: number; remaining_qty: number }>();
+        let effectivePrice = matLots.length > 0 ? Number(curRow?.unit_price ?? unitPrice) : unitPrice;
+        if (stockSent && newStock !== cur.stock) {
+          if (matLots.length === 0) {
+            if (newStock > 0) {
+              stmts.push(
+                db
+                  .prepare(
+                    "INSERT INTO material_lots (id, material_id, purchase_id, unit_price, initial_qty, remaining_qty, status, created_at) VALUES (?, ?, NULL, ?, ?, ?, 'ACTIVE', ?)",
+                  )
+                  .bind(genId('LOT'), id, unitPrice, newStock, newStock, now),
+              );
+            }
+          } else {
+            const remaining = matLots.map((l) => Number(l.remaining_qty));
+            const diff = newStock - cur.stock;
+            if (diff < 0) {
+              let need = -diff;
+              for (let i = 0; i < matLots.length && need > 0; i++) {
+                if (remaining[i] <= 0) continue;
+                const take = Math.min(remaining[i], need);
+                remaining[i] -= take;
+                need -= take;
+                stmts.push(
+                  db
+                    .prepare("UPDATE material_lots SET remaining_qty = ?, status = CASE WHEN ? <= 0 THEN 'DEPLETED' ELSE 'ACTIVE' END WHERE id = ?")
+                    .bind(remaining[i], remaining[i], matLots[i].id),
+                );
+              }
+            } else {
+              const last = matLots.length - 1;
+              remaining[last] += diff;
+              stmts.push(
+                db
+                  .prepare("UPDATE material_lots SET remaining_qty = remaining_qty + ?, status = 'ACTIVE' WHERE id = ?")
+                  .bind(diff, matLots[last].id),
+              );
+            }
+            const firstLive = remaining.findIndex((q) => q > 0);
+            if (firstLive >= 0) effectivePrice = Number(matLots[firstLive].unit_price);
+          }
+        }
         // Movement first: its SELECT must read the pre-update stock; it is skipped in SQL when unchanged.
         if (stockSent) {
           stmts.push(
@@ -279,7 +340,7 @@ registerRpc('apiSaveMaterials', 'officer', (ctx, args) =>
             .prepare(
               'UPDATE materials SET code = ?, name = ?, unit = ?, unit_price = ?, stock_qty = COALESCE(?, stock_qty), min_qty = ?, opening_qty = COALESCE(?, opening_qty), category = ?, material_type = ?, size_spec = ?, storage_location = ?, image_url = ?, file_url = ?, shop_name = ?, shop_address = ?, shop_phone = ?, shop_tax_id = ?, budget_source = ?, acquired_date = ?, order_qty = ?, updated_at = ? WHERE id = ?',
             )
-            .bind(code, name, unit, unitPrice, stockSent ? newStock : null, minQty, openingQtyVal, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, id),
+            .bind(code, name, unit, effectivePrice, stockSent ? newStock : null, minQty, openingQtyVal, category, materialType, sizeSpec, storageLoc, imageUrl, fileUrl, shopName, shopAddress, shopPhone, shopTaxId, budgetSource, acquiredDate, orderQty, now, id),
           logAudit(db, { action: 'UPDATE', entity: 'Material', entityId: id, detail: code, actor }),
         );
         if (openingSent && openingQtyVal !== null) {
