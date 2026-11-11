@@ -21,6 +21,98 @@ async function safe(label: string, fn: () => Promise<unknown>): Promise<unknown>
   }
 }
 
+/* ============================== LOT-BASED VALUATION ============================== */
+/** Approved requests are dated by request_date, falling back to approved_date, in every report. */
+const USED_DATE_SQL = "substr(COALESCE(NULLIF(r.request_date, ''), r.approved_date), 1, 10)";
+
+interface Flows {
+  purchaseAmt: Map<string, number>;
+  adjNet: Map<string, number>;
+  allocQty: Map<string, number>;
+  allocAmt: Map<string, number>;
+  openPrice: Map<string, number>;
+}
+
+const mapOf = (rows: Obj[], key: string, val: string) => new Map(rows.map((r) => [String(r[key]), num(r[val])]));
+
+/** Per-material money/quantity flows for [from, to] (null = unbounded) that the plain qty queries cannot give. */
+async function loadFlows(db: D1Database, from: string | null, to: string | null): Promise<Flows> {
+  const lo = from ?? '0000-00-00';
+  const hi = to ?? '9999-12-31';
+  const [pa, adj, al, op] = await db.batch<Obj>([
+    // Real purchase price; rows with no recorded amount (legacy) fall back to qty x current price.
+    db
+      .prepare(
+        `SELECT p.material_id AS mid, SUM(CASE WHEN COALESCE(p.amount, 0) > 0 THEN p.amount ELSE p.qty * m.unit_price END) AS v
+           FROM purchases p JOIN materials m ON m.id = p.material_id
+          WHERE substr(p.purchase_date, 1, 10) BETWEEN ? AND ? GROUP BY p.material_id`,
+      )
+      .bind(lo, hi),
+    db
+      .prepare(
+        `SELECT material_id AS mid, SUM(after_qty - before_qty) AS v FROM stock_movements
+          WHERE type = 'ADJUST' AND material_id IS NOT NULL AND substr(created_at, 1, 10) BETWEEN ? AND ? GROUP BY material_id`,
+      )
+      .bind(lo, hi),
+    db
+      .prepare(
+        `SELECT a.material_id AS mid, SUM(a.qty) AS q, SUM(a.qty * a.unit_price) AS v
+           FROM request_lot_allocations a JOIN requests r ON r.id = a.request_id
+          WHERE r.status = 'APPROVED' AND ${USED_DATE_SQL} BETWEEN ? AND ? GROUP BY a.material_id`,
+      )
+      .bind(lo, hi),
+    // The opening lot is the one not created by a purchase; its price is what the opening balance cost.
+    db.prepare('SELECT material_id AS mid, unit_price AS v FROM material_lots WHERE purchase_id IS NULL ORDER BY created_at DESC, rowid DESC'),
+  ]);
+  return {
+    purchaseAmt: mapOf(pa.results, 'mid', 'v'),
+    adjNet: mapOf(adj.results, 'mid', 'v'),
+    allocQty: mapOf(al.results, 'mid', 'q'),
+    allocAmt: mapOf(al.results, 'mid', 'v'),
+    // Ordered newest-first, so the oldest opening lot wins when the Map is filled.
+    openPrice: mapOf(op.results, 'mid', 'v'),
+  };
+}
+
+interface ValueInput {
+  id: string;
+  openingQty: number;
+  purchaseQty: number;
+  usedQty: number;
+  unitPrice: number;
+  lotRemainAmount: number | undefined;
+  isCurrent: boolean;
+}
+
+/** Quantities and amounts for one material that always reconcile: opening + in - out = remain. */
+function valueMaterial(f: Flows, x: ValueInput) {
+  const adjNet = f.adjNet.get(x.id) ?? 0;
+  const adjIn = Math.max(adjNet, 0);
+  const adjOut = Math.max(-adjNet, 0);
+  const purchaseQty = x.purchaseQty + adjIn;
+  const usedQty = x.usedQty + adjOut;
+  const remainQty = Math.max(0, x.openingQty + purchaseQty - usedQty);
+
+  const openingAmount = x.openingQty * (f.openPrice.get(x.id) ?? x.unitPrice);
+  const purchaseAmount = (f.purchaseAmt.get(x.id) ?? x.purchaseQty * x.unitPrice) + adjIn * x.unitPrice;
+  const allocQty = f.allocQty.get(x.id) ?? 0;
+  const allocAmt = f.allocAmt.get(x.id) ?? 0;
+  const legacyUsedQty = Math.max(0, usedQty - allocQty);
+
+  let usedAmount: number;
+  let remainAmount: number;
+  if (x.isCurrent) {
+    // Today's value is whatever the live lots hold (priced at the material price when it has no lots).
+    remainAmount = x.lotRemainAmount !== undefined && remainQty > 0 ? x.lotRemainAmount : remainQty * x.unitPrice;
+    usedAmount = legacyUsedQty > 0 ? Math.max(0, openingAmount + purchaseAmount - remainAmount) : allocAmt;
+  } else {
+    // A closed period can't read today's lots: derive its closing value from its own flows.
+    usedAmount = allocAmt + legacyUsedQty * x.unitPrice;
+    remainAmount = remainQty > 0 ? Math.max(0, openingAmount + purchaseAmount - usedAmount) : 0;
+  }
+  return { purchaseQty, usedQty, remainQty, openingAmount, purchaseAmount, usedAmount, remainAmount };
+}
+
 const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
@@ -154,7 +246,14 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
     const counters: Counters = { approved: n('APPROVED'), pending: n('PENDING'), rejected: n('REJECTED') };
     const used = await db
       .prepare(
-        "SELECT COALESCE(SUM(COALESCE(i.approved_qty, i.qty) * i.unit_price), 0) AS value, COALESCE(SUM(COALESCE(i.approved_qty, i.qty)), 0) AS qty FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED'",
+        // Value of what was issued = the lots actually consumed; legacy approvals with no recorded
+        // allocation keep the price stamped on the request line.
+        `SELECT
+           COALESCE((SELECT SUM(a.qty * a.unit_price) FROM request_lot_allocations a JOIN requests r ON r.id = a.request_id WHERE r.status = 'APPROVED'), 0)
+           + COALESCE((SELECT SUM(COALESCE(i.approved_qty, i.qty) * i.unit_price) FROM request_items i JOIN requests r ON r.id = i.request_id
+                        WHERE r.status = 'APPROVED'
+                          AND NOT EXISTS (SELECT 1 FROM request_lot_allocations a WHERE a.request_id = i.request_id AND a.material_id = i.material_id)), 0) AS value,
+           COALESCE((SELECT SUM(COALESCE(i.approved_qty, i.qty)) FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED'), 0) AS qty`,
       )
       .first<{ value: number; qty: number }>();
     const { results: byName } = await db
@@ -282,13 +381,13 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
   if (effectiveFrom) {
     purchaseWhere.push('p.purchase_date >= ?');
     pBinds.push(effectiveFrom);
-    usedWhere.push("COALESCE(r.request_date, '') >= ?");
+    usedWhere.push(`${USED_DATE_SQL} >= ?`);
     uBinds.push(effectiveFrom);
   }
   if (effectiveTo) {
     purchaseWhere.push('p.purchase_date <= ?');
     pBinds.push(effectiveTo);
-    usedWhere.push("COALESCE(r.request_date, '') <= ?");
+    usedWhere.push(`${USED_DATE_SQL} <= ?`);
     uBinds.push(effectiveTo);
   }
 
@@ -310,16 +409,27 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
   ).all<{ material_id: string; lot_remain_amount: number }>();
   const lotRemainMap = new Map(lotTotals.map((l) => [String(l.material_id), Number(l.lot_remain_amount)]));
 
+  const flows = await loadFlows(ctx.env.DB, effectiveFrom, effectiveTo);
+  const isCurrent = !effectiveTo || effectiveTo >= todayBkk();
+
   const data = results
     .map((row) => {
       const m = toLegacy('materials', row);
       const unitPrice = num(m.UnitPrice);
       const openingQty = row.ob_qty !== null && row.ob_qty !== undefined ? num(row.ob_qty) : num(m.OpeningQty);
-      const purchaseQty = num(row.purchased);
-      const usedQty = num(row.used);
-      const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
-      const lotRemainAmount = lotRemainMap.get(String(row.id));
-      const remainAmount = lotRemainAmount !== undefined && remainQty > 0 ? lotRemainAmount : remainQty * unitPrice;
+      const v = valueMaterial(flows, {
+        id: String(row.id),
+        openingQty,
+        purchaseQty: num(row.purchased),
+        usedQty: num(row.used),
+        unitPrice,
+        lotRemainAmount: lotRemainMap.get(String(row.id)),
+        isCurrent,
+      });
+      const purchaseQty = v.purchaseQty;
+      const usedQty = v.usedQty;
+      const remainQty = v.remainQty;
+      const remainAmount = v.remainAmount;
       return {
         Code: m.Code,
         Name: m.Name,
@@ -327,13 +437,13 @@ async function inventoryAccount(ctx: Ctx, filter: unknown) {
         UnitPrice: unitPrice,
         Category: m.Category || '',
         OpeningQty: openingQty,
-        OpeningAmount: openingQty * unitPrice,
+        OpeningAmount: v.openingAmount,
         PurchaseQty: purchaseQty,
-        PurchasePrice: unitPrice,
-        PurchaseAmount: purchaseQty * unitPrice,
+        PurchasePrice: purchaseQty > 0 ? v.purchaseAmount / purchaseQty : unitPrice,
+        PurchaseAmount: v.purchaseAmount,
         UsedQty: usedQty,
-        UsedPrice: unitPrice,
-        UsedAmount: usedQty * unitPrice,
+        UsedPrice: usedQty > 0 ? v.usedAmount / usedQty : unitPrice,
+        UsedAmount: v.usedAmount,
         RemainQty: remainQty,
         RemainAmount: remainAmount,
         StockState: computeStockState(remainQty, num(m.MinQty)),
@@ -415,17 +525,27 @@ registerRpc('apiGetInventoryReport', 'officer', (ctx, args) =>
     ).all<{ material_id: string; lot_remain_amount: number }>();
     const lotRemainMap = new Map(lotTotals.map((l) => [String(l.material_id), Number(l.lot_remain_amount)]));
 
+    const flows = await loadFlows(ctx.env.DB, startDate, endDate);
+    const isCurrent = reportDate >= todayBkk();
+
     const data = results
       .map((row) => {
         const m = toLegacy('materials', row);
         const unitPrice = num(m.UnitPrice);
-        let openingQty = row.ob_qty === null || row.ob_qty === undefined ? num(m.OpeningQty) : num(row.ob_qty);
-        let purchaseQty = num(row.purchased);
-        const usedQty = num(row.used);
-
-        const remainQty = Math.max(0, openingQty + purchaseQty - usedQty);
-        const lotRemainAmount = lotRemainMap.get(String(row.id));
-        const amount = lotRemainAmount !== undefined && remainQty > 0 ? lotRemainAmount : remainQty * unitPrice;
+        const openingQty = row.ob_qty === null || row.ob_qty === undefined ? num(m.OpeningQty) : num(row.ob_qty);
+        const v = valueMaterial(flows, {
+          id: String(row.id),
+          openingQty,
+          purchaseQty: num(row.purchased),
+          usedQty: num(row.used),
+          unitPrice,
+          lotRemainAmount: lotRemainMap.get(String(row.id)),
+          isCurrent,
+        });
+        const purchaseQty = v.purchaseQty;
+        const usedQty = v.usedQty;
+        const remainQty = v.remainQty;
+        const amount = v.remainAmount;
         return {
           seq: 0,
           ID: m.ID,

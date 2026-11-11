@@ -364,3 +364,70 @@ describe('csv export', () => {
     expect(decode(card.base64).split('\n')[1]).toBe('1 ตุลาคม 2568,ยอดยกมา,5,,5,-,');
   });
 });
+
+describe('valuation follows the real lots', () => {
+  const lotRow = (id: string, m: string, purchaseId: string | null, price: number, init: number, remain: number, at: string) =>
+    run(
+      "INSERT INTO material_lots (id, material_id, purchase_id, unit_price, initial_qty, remaining_qty, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      id, m, purchaseId, price, init, remain, remain > 0 ? 'ACTIVE' : 'DEPLETED', at,
+    );
+  const alloc = (id: string, reqId: string, m: string, lot: string, qty: number, price: number) =>
+    run(
+      'INSERT INTO request_lot_allocations (id, request_id, material_id, lot_id, qty, unit_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      id, reqId, m, lot, qty, price, T,
+    );
+  const priced = (id: string, m: string, qty: number, price: number, date: string) =>
+    run(
+      'INSERT INTO purchases (id, material_id, qty, unit_price, amount, purchase_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      id, m, qty, price, qty * price, date, `${date} 09:00:00`,
+    );
+
+  it('past fiscal year: purchase at real prices, used from consumed lots, remain = opening + in - out', async () => {
+    await mat('MX', 'X-1', 'ของทดสอบ', 'วัสดุสำนักงาน', 20, 0, 8);
+    await priced('PXA', 'MX', 10, 10, '2025-11-01');
+    await priced('PXB', 'MX', 10, 20, '2026-02-01');
+    await req('RX', 'APPROVED', '2026-03-01', 'U-R1', [['a', 'MX', 12, 20]]);
+    await lotRow('LXA', 'MX', 'PXA', 10, 10, 0, '2025-11-01 09:00:00');
+    await lotRow('LXB', 'MX', 'PXB', 20, 10, 8, '2026-02-01 09:00:00');
+    await alloc('AXA', 'RX', 'MX', 'LXA', 10, 10);
+    await alloc('AXB', 'RX', 'MX', 'LXB', 2, 20);
+
+    const r = await asOfficer('apiGetInventoryAccount', { fiscalYear: 2569 });
+    expect(byCode(r, 'X-1')).toMatchObject({
+      PurchaseQty: 20, PurchaseAmount: 300, UsedQty: 12, UsedAmount: 140, RemainQty: 8, RemainAmount: 160,
+    });
+  });
+
+  it('opening amount uses the opening lot price, not the current price', async () => {
+    await mat('MO', 'O-1', 'ยกมา', 'วัสดุสำนักงาน', 20, 5, 5);
+    await lotRow('LOO', 'MO', null, 10, 5, 5, '2025-01-01 09:00:00');
+    const r = await asOfficer('apiGetInventoryAccount', { fiscalYear: 2569 });
+    expect(byCode(r, 'O-1')).toMatchObject({ OpeningQty: 5, OpeningAmount: 50, RemainQty: 5, RemainAmount: 50 });
+  });
+
+  it('stock adjustments in the period count as receipts / issues so remain matches stock', async () => {
+    await mat('MU', 'U-1', 'ปรับขึ้น', 'วัสดุสำนักงาน', 10, 5, 7);
+    await run("INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES ('SU', 'MU', 'U-1', 'n', 'ADJUST', 2, 5, 7, '', '', 'a', '2026-01-01 09:00:00')");
+    await mat('MD', 'D-1', 'ปรับลง', 'วัสดุสำนักงาน', 10, 5, 3);
+    await run("INSERT INTO stock_movements (id, material_id, code, name, type, qty, before_qty, after_qty, ref_doc, note, actor, created_at) VALUES ('SD', 'MD', 'D-1', 'n', 'ADJUST', 2, 5, 3, '', '', 'a', '2026-01-01 09:00:00')");
+    const acc = await asOfficer('apiGetInventoryAccount', { fiscalYear: 2569 });
+    expect(byCode(acc, 'U-1')).toMatchObject({ PurchaseQty: 2, UsedQty: 0, RemainQty: 7, RemainAmount: 70 });
+    expect(byCode(acc, 'D-1')).toMatchObject({ PurchaseQty: 0, UsedQty: 2, RemainQty: 3, RemainAmount: 30 });
+    const rep = await asOfficer('apiGetInventoryReport', { fiscalYear: 2569, reportDate: '2026-09-30' });
+    expect(rep.data.find((x: any) => x.Code === 'U-1')).toMatchObject({ RemainQty: 7 });
+    expect(rep.data.find((x: any) => x.Code === 'D-1')).toMatchObject({ RemainQty: 3 });
+  });
+
+  it('both reports count an approved request with no request_date by its approved_date', async () => {
+    await mat('MN', 'N-1', 'ไม่มีวันที่ขอ', 'วัสดุสำนักงาน', 10, 10, 6);
+    await run(
+      "INSERT INTO requests (id, doc_no, request_date, approved_date, user_id, full_name, status, stock_applied, created_at, updated_at) VALUES ('RN', 'DOC-RN', '', '2026-02-01', 'U-R1', 'ผู้ขอ', 'APPROVED', 1, ?, ?)",
+      T, T,
+    );
+    await run("INSERT INTO request_items (id, request_id, material_id, code, name, unit, qty, unit_price, total_price) VALUES ('RNI', 'RN', 'MN', 'N-1', 'n', 'ชิ้น', 4, 10, 40)");
+    const acc = await asOfficer('apiGetInventoryAccount', { fiscalYear: 2569 });
+    const rep = await asOfficer('apiGetInventoryReport', { fiscalYear: 2569, reportDate: '2026-09-30' });
+    expect(byCode(acc, 'N-1').UsedQty).toBe(4);
+    expect(rep.data.find((x: any) => x.Code === 'N-1').UsedQty).toBe(4);
+  });
+});
