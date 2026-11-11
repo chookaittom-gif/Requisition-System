@@ -6064,8 +6064,7 @@ async function viewMaterials(){
       </form>`)}
     </div>
 
-    <div class="mt-5">${cardWrap('รายการจัดซื้อล่าสุด','fa-clock-rotate-left', `<div id="recentBuys" class="text-sm text-slate-400 py-4 text-center">กำลังโหลด...</div>`,
-      `<button type="button" id="lnkBuyHistory" class="min-h-[44px] px-3 rounded-xl text-sm font-semibold text-brand-600 hover:bg-brand-50 transition">ดูประวัติทั้งหมด <i class="fa-solid fa-arrow-right text-xs"></i></button>`)}</div>
+    <div class="mt-5">${cardWrap('รายการจัดซื้อล่าสุด','fa-clock-rotate-left', `<div id="recentBuys" class="text-sm text-slate-400 py-4 text-center">กำลังโหลด...</div>`)}</div>
 
     <div class="mt-5">
       ${cardWrap('รายการพัสดุทั้งหมด','fa-boxes-packing', `
@@ -6343,9 +6342,6 @@ async function viewMaterials(){
       <div class="lg:hidden space-y-2">${cardRows}</div>
       ${extraCount ? `<button type="button" data-rb-toggle data-more="${extraCount}" class="mt-3 w-full min-h-[44px] rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-sm font-semibold text-slate-600 transition">ดูเพิ่ม (${extraCount} รายการ) <i class="fa-solid fa-chevron-down text-xs"></i></button>` : ''}`;
   };
-
-  const lnkHistory = $('#lnkBuyHistory');
-  if(lnkHistory) lnkHistory.addEventListener('click', () => { S.mvPresetType = 'IN'; go('a-movement'); });
 
   const recentBox = $('#recentBuys');
   if(recentBox){
