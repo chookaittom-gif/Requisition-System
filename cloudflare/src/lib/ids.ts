@@ -1,6 +1,6 @@
 import { todayBkk } from './time';
 
-export type IdPrefix = 'U' | 'M' | 'CAT' | 'R' | 'RI' | 'P' | 'SM' | 'AUD' | 'OB' | 'F' | 'SHP' | 'LOT';
+export type IdPrefix = 'U' | 'M' | 'CAT' | 'R' | 'RI' | 'P' | 'SM' | 'AUD' | 'OB' | 'F' | 'SHP' | 'LOT' | 'LA';
 
 /** '<PREFIX>-' + 8 uppercase hex chars, like legacy genId_. */
 export function genId(prefix: IdPrefix): string {

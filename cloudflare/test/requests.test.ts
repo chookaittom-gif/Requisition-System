@@ -474,3 +474,60 @@ describe('reads', () => {
     });
   });
 });
+
+describe('lot allocations on approve / cancel', () => {
+  const addLot = (id: string, m: string, price: number, qty: number, at: string) =>
+    env.DB.prepare(
+      "INSERT INTO material_lots (id, material_id, purchase_id, unit_price, initial_qty, remaining_qty, status, created_at) VALUES (?, ?, NULL, ?, ?, ?, 'ACTIVE', ?)",
+    )
+      .bind(id, m, price, qty, qty, at)
+      .run();
+  const lot = async (id: string) => (await rows('SELECT * FROM material_lots WHERE id = ?', id))[0];
+  const price = async (id: string) => (await rows('SELECT unit_price FROM materials WHERE id = ?', id))[0].unit_price;
+
+  // M-A: stock 10 @ price 10. Lots: L1 4 @ 10 (older), L2 6 @ 20 (newer).
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM material_lots').run();
+    await addLot('L1', 'M-A', 10, 4, '2026-01-01 00:00:00');
+    await addLot('L2', 'M-A', 20, 6, '2026-02-01 00:00:00');
+  });
+
+  it('records which lots an approval consumed', async () => {
+    await createReq([{ MaterialID: 'M-A', Qty: 6 }]);
+    const req = await lastReq();
+    expect((await status(req.id, 'APPROVED')).ok).toBe(true);
+    const alloc = await rows(
+      'SELECT lot_id, qty, unit_price FROM request_lot_allocations WHERE request_id = ? ORDER BY lot_id',
+      req.id,
+    );
+    expect(alloc).toEqual([
+      { lot_id: 'L1', qty: 4, unit_price: 10 },
+      { lot_id: 'L2', qty: 2, unit_price: 20 },
+    ]);
+  });
+
+  it('cancelling an approved request returns stock to the original lots and restores the price', async () => {
+    await createReq([{ MaterialID: 'M-A', Qty: 6 }]);
+    const req = await lastReq();
+    await status(req.id, 'APPROVED');
+    expect(await price('M-A')).toBe(20);
+    expect((await lot('L1')).status).toBe('DEPLETED');
+
+    expect((await status(req.id, 'REJECTED', { RejectReason: 'ยกเลิก' })).ok).toBe(true);
+    expect(await lot('L1')).toMatchObject({ remaining_qty: 4, status: 'ACTIVE' });
+    expect(await lot('L2')).toMatchObject({ remaining_qty: 6, status: 'ACTIVE' });
+    expect(await price('M-A')).toBe(10);
+    expect(await rows('SELECT * FROM request_lot_allocations WHERE request_id = ?', req.id)).toHaveLength(0);
+    expect(await stock('M-A')).toBe(10);
+  });
+
+  it('legacy approvals without allocations still restore into the latest lot', async () => {
+    await createReq([{ MaterialID: 'M-A', Qty: 2 }]);
+    const req = await lastReq();
+    await status(req.id, 'APPROVED');
+    await env.DB.prepare('DELETE FROM request_lot_allocations').run();
+    expect((await status(req.id, 'REJECTED', { RejectReason: 'ยกเลิก' })).ok).toBe(true);
+    expect(await stock('M-A')).toBe(10);
+    expect((await lot('L2')).remaining_qty).toBe(8);
+  });
+});

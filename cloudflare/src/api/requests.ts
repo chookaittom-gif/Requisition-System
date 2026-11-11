@@ -82,6 +82,8 @@ export async function applyRequestStock(
   const note = direction === -1 ? 'ตัดสต็อกจากใบขอเบิก' : 'คืนสต็อกจากใบขอเบิก';
   const type = direction === -1 ? 'OUT' : 'IN';
 
+  // Lot statements only take effect if this call's own stock_txn won the stock_applied flip (repeat/race = no-op).
+  const txnGuard = 'EXISTS (SELECT 1 FROM requests WHERE id = ? AND stock_txn = ?)';
   const stmts: D1PreparedStatement[] = [
     direction === -1
       ? db
@@ -139,15 +141,29 @@ export async function applyRequestStock(
             if (activePriceAfter === null) activePriceAfter = lot.unit_price;
             break;
           }
+          const take = lot.remaining_qty <= needed ? lot.remaining_qty : needed;
+          // Remember exactly which lot (and price) this request consumed so a cancel can undo it.
+          stmts.push(
+            db
+              .prepare(
+                `INSERT INTO request_lot_allocations (id, request_id, material_id, lot_id, qty, unit_price, created_at)
+                 SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${txnGuard}`,
+              )
+              .bind(genId('LA'), requestId, materialId, lot.id, take, lot.unit_price, now, requestId, txn),
+          );
           if (lot.remaining_qty <= needed) {
             stmts.push(
-              db.prepare("UPDATE material_lots SET remaining_qty = 0, status = 'DEPLETED' WHERE id = ?").bind(lot.id),
+              db
+                .prepare(`UPDATE material_lots SET remaining_qty = 0, status = 'DEPLETED' WHERE id = ? AND ${txnGuard}`)
+                .bind(lot.id, requestId, txn),
             );
             needed -= lot.remaining_qty;
             if (i === 0) firstLotDepleted = true;
           } else {
             stmts.push(
-              db.prepare('UPDATE material_lots SET remaining_qty = remaining_qty - ? WHERE id = ?').bind(needed, lot.id),
+              db
+                .prepare(`UPDATE material_lots SET remaining_qty = remaining_qty - ? WHERE id = ? AND ${txnGuard}`)
+                .bind(needed, lot.id, requestId, txn),
             );
             activePriceAfter = lot.unit_price;
             needed = 0;
@@ -157,25 +173,60 @@ export async function applyRequestStock(
 
         if (firstLotDepleted) {
           const targetPrice = activePriceAfter !== null ? activePriceAfter : lots[lots.length - 1].unit_price;
-          stmts.push(db.prepare('UPDATE materials SET unit_price = ? WHERE id = ?').bind(targetPrice, materialId));
+          stmts.push(
+            db.prepare(`UPDATE materials SET unit_price = ? WHERE id = ? AND ${txnGuard}`).bind(targetPrice, materialId, requestId, txn),
+          );
         }
       }
     }
   } else {
-    for (const it of items) {
-      const effQty = Number(it.effective_qty ?? it.qty);
-      if (effQty <= 0) continue;
-      const materialId = it.material_id as string;
-      const lastLot = await db
-        .prepare('SELECT id FROM material_lots WHERE material_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
-        .bind(materialId)
-        .first<{ id: string }>();
-      if (lastLot) {
+    const { results: allocs } = await db
+      .prepare('SELECT lot_id, material_id, qty FROM request_lot_allocations WHERE request_id = ?')
+      .bind(requestId)
+      .all<{ lot_id: string; material_id: string; qty: number }>();
+
+    if (allocs.length > 0) {
+      // Return stock to the exact lots it came from, then reset the displayed price to the oldest live lot.
+      for (const a of allocs) {
         stmts.push(
           db
-            .prepare("UPDATE material_lots SET remaining_qty = remaining_qty + ?, status = 'ACTIVE' WHERE id = ?")
-            .bind(effQty, lastLot.id),
+            .prepare(`UPDATE material_lots SET remaining_qty = remaining_qty + ?, status = 'ACTIVE' WHERE id = ? AND ${txnGuard}`)
+            .bind(a.qty, a.lot_id, requestId, txn),
         );
+      }
+      stmts.push(db.prepare(`DELETE FROM request_lot_allocations WHERE request_id = ? AND ${txnGuard}`).bind(requestId, requestId, txn));
+
+      for (const materialId of new Set(allocs.map((a) => a.material_id))) {
+        const { results: allLots } = await db
+          .prepare('SELECT id, unit_price, remaining_qty FROM material_lots WHERE material_id = ? ORDER BY created_at ASC, rowid ASC')
+          .bind(materialId)
+          .all<{ id: string; unit_price: number; remaining_qty: number }>();
+        const back = new Map<string, number>();
+        for (const a of allocs) if (a.material_id === materialId) back.set(a.lot_id, (back.get(a.lot_id) ?? 0) + a.qty);
+        const first = allLots.find((l) => l.remaining_qty + (back.get(l.id) ?? 0) > 0);
+        if (first) {
+          stmts.push(
+            db.prepare(`UPDATE materials SET unit_price = ? WHERE id = ? AND ${txnGuard}`).bind(first.unit_price, materialId, requestId, txn),
+          );
+        }
+      }
+    } else {
+      // Legacy approval (pre-allocation): no record of the lots used, so put it back into the latest lot.
+      for (const it of items) {
+        const effQty = Number(it.effective_qty ?? it.qty);
+        if (effQty <= 0) continue;
+        const materialId = it.material_id as string;
+        const lastLot = await db
+          .prepare('SELECT id FROM material_lots WHERE material_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
+          .bind(materialId)
+          .first<{ id: string }>();
+        if (lastLot) {
+          stmts.push(
+            db
+              .prepare(`UPDATE material_lots SET remaining_qty = remaining_qty + ?, status = 'ACTIVE' WHERE id = ? AND ${txnGuard}`)
+              .bind(effQty, lastLot.id, requestId, txn),
+          );
+        }
       }
     }
   }
