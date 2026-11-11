@@ -460,6 +460,7 @@ registerRpc('apiPurchaseMaterials', 'officer', (ctx, args) =>
     const { results } = await db.prepare('SELECT id, code, name, unit_price, stock_qty FROM materials').all<Obj>();
     const byId = new Map(results.map((r) => [String(r.id), r]));
     const stmts: D1PreparedStatement[] = [];
+    const notes: string[] = [];
     const now = nowBkk();
 
     for (const raw of list) {
@@ -494,11 +495,116 @@ registerRpc('apiPurchaseMaterials', 'officer', (ctx, args) =>
       );
       if (Number(m.stock_qty || 0) === 0) {
         stmts.push(db.prepare('UPDATE materials SET unit_price = ? WHERE id = ?').bind(unitPrice, id));
+      } else if (Math.abs(unitPrice - Number(m.unit_price || 0)) > 0.001) {
+        // The displayed price stays on the older lot until it runs out: tell the officer so it is not a surprise.
+        const oldPrice = Number(m.unit_price || 0);
+        const pct = oldPrice > 0 ? Math.round((Math.abs(unitPrice - oldPrice) / oldPrice) * 100) : 0;
+        const dir = unitPrice > oldPrice ? 'ขึ้น' : 'ลง';
+        notes.push(
+          `${String(m.name)}: ล็อตใหม่ราคา ${unitPrice} (${dir}${oldPrice > 0 ? ` ${pct}%` : ''}) ราคาจะมีผลเมื่อล็อตเก่าหมด เหลือล็อตเก่า ${Number(m.stock_qty || 0)} หน่วย`,
+        );
       }
     }
 
     if (stmts.length) await db.batch(stmts);
-    return { ok: true, message: 'บันทึกการจัดซื้อพัสดุเรียบร้อยแล้ว' };
+    return { ok: true, message: ['บันทึกการจัดซื้อพัสดุเรียบร้อยแล้ว', ...notes].join('\n') };
+  }),
+);
+
+/* ============================== PURCHASE HISTORY / VOID ============================== */
+interface PurchaseLotRow {
+  id: string;
+  material_id: string | null;
+  code: string;
+  name: string;
+  qty: number;
+  unit_price: number;
+  amount: number;
+  purchase_date: string;
+  note: string;
+  actor: string;
+  created_at: string;
+  lot_id: string | null;
+  lot_status: string | null;
+  initial_qty: number | null;
+  remaining_qty: number | null;
+  allocs: number;
+}
+
+const PURCHASE_SELECT = `SELECT p.id, p.material_id, p.code, p.name, p.qty, p.unit_price, p.amount, p.purchase_date, p.note, p.actor, p.created_at,
+    l.id AS lot_id, l.status AS lot_status, l.initial_qty, l.remaining_qty,
+    (SELECT COUNT(*) FROM request_lot_allocations a WHERE a.lot_id = l.id) AS allocs
+  FROM purchases p LEFT JOIN material_lots l ON l.purchase_id = p.id`;
+
+/** A purchase can be voided only while its lot is whole: nothing has been issued from it. */
+function voidReason(r: PurchaseLotRow): string {
+  if (!r.material_id) return 'ไม่พบพัสดุของรายการนี้แล้ว';
+  if (!r.lot_id) return 'ไม่พบล็อตของรายการจัดซื้อนี้ (รายการเก่า) ให้ใช้ฟอร์มปรับสต็อกแทน';
+  if (r.allocs > 0 || Number(r.remaining_qty) !== Number(r.initial_qty) || r.lot_status !== 'ACTIVE') {
+    return 'ล็อตนี้ถูกเบิกไปแล้ว ไม่สามารถยกเลิกรายการจัดซื้อได้ ให้ใช้ฟอร์มปรับสต็อกแทน';
+  }
+  return '';
+}
+
+registerRpc('apiGetPurchases', 'officer', async (ctx, args) => {
+  const lim = Math.min(Math.max(Math.floor(Number(asObj(args[0]).limit) || 20), 1), 100);
+  const { results } = await ctx.env.DB.prepare(
+    `${PURCHASE_SELECT} ORDER BY p.purchase_date DESC, p.created_at DESC, p.rowid DESC LIMIT ?`,
+  )
+    .bind(lim)
+    .all<PurchaseLotRow>();
+  return {
+    ok: true,
+    data: results.map((r) => {
+      const reason = voidReason(r);
+      return {
+        ID: r.id,
+        MaterialID: r.material_id,
+        Code: r.code,
+        Name: r.name,
+        Qty: Number(r.qty),
+        UnitPrice: Number(r.unit_price),
+        Amount: Number(r.amount),
+        PurchaseDate: r.purchase_date,
+        Note: r.note,
+        Actor: r.actor,
+        Voidable: reason === '',
+        VoidReason: reason,
+      };
+    }),
+  };
+});
+
+registerRpc('apiVoidPurchase', 'admin', (ctx, args) =>
+  guarded(async () => {
+    const db = ctx.env.DB;
+    const actor = actorOf(ctx);
+    const id = str(args[0]);
+    const r = await db.prepare(`${PURCHASE_SELECT} WHERE p.id = ?`).bind(id).first<PurchaseLotRow>();
+    if (!r) return fail('ไม่พบรายการจัดซื้อ');
+    const reason = voidReason(r);
+    if (reason) return fail(reason);
+
+    const matId = r.material_id as string;
+    const now = nowBkk();
+    const stmts: D1PreparedStatement[] = [
+      // Movement first so it reads the pre-update stock. A stock CHECK failure rolls the whole batch back.
+      movementStmt(db, { materialId: matId, type: 'OUT', qty: Number(r.qty), refDoc: '', note: 'ยกเลิกรายการจัดซื้อ', actor }),
+      db.prepare('UPDATE materials SET stock_qty = stock_qty - ?, updated_at = ? WHERE id = ?').bind(Number(r.qty), now, matId),
+      db.prepare('DELETE FROM material_lots WHERE id = ?').bind(r.lot_id),
+      db.prepare('DELETE FROM purchases WHERE id = ?').bind(id),
+    ];
+    // Displayed price follows the oldest lot that still holds stock once this one is gone.
+    const { results: others } = await db
+      .prepare("SELECT unit_price FROM material_lots WHERE material_id = ? AND id <> ? AND status = 'ACTIVE' AND remaining_qty > 0 ORDER BY created_at ASC, rowid ASC LIMIT 1")
+      .bind(matId, r.lot_id)
+      .all<{ unit_price: number }>();
+    if (others.length) stmts.push(db.prepare('UPDATE materials SET unit_price = ? WHERE id = ?').bind(others[0].unit_price, matId));
+    stmts.push(
+      logAudit(db, { action: 'VOID_PURCHASE', entity: 'Material', entityId: matId, detail: `${r.code} -${r.qty} @ ${r.unit_price}`, actor }),
+    );
+    await db.batch(stmts);
+    return { ok: true, message: 'ยกเลิกรายการจัดซื้อเรียบร้อยแล้ว' };
   }),
 );
 

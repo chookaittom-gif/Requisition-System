@@ -439,3 +439,87 @@ describe('last purchase price', () => {
     expect(got.UnitPrice).toBe(350);
   });
 });
+
+describe('purchase message, history and void', () => {
+  const purchaseOf = async (matId: string, qty: number, price: number) => {
+    const r = await rpc('apiPurchaseMaterials', [[{ MaterialID: matId, Qty: qty, UnitPrice: price }]]);
+    expect(r.ok).toBe(true);
+    return r;
+  };
+  const asAdmin = async (fn: string, args: unknown[]) => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO users (id, username, password_hash, full_name, role, created_at, updated_at) VALUES ('U-AD', 'adm1', ?, 'A', 'admin', '2026-01-01 00:00:00', '2026-01-01 00:00:00')",
+    )
+      .bind(await legacyHash('1234'))
+      .run();
+    const ck = ((await post('apiLogin', [{ username: 'adm1', password: '1234' }])).headers.get('set-cookie') ?? '').split(';')[0];
+    return (await post(fn, args, ck)).json() as Promise<any>;
+  };
+  const setup = async () => {
+    await create({ StockQty: 2, UnitPrice: 350 });
+    const [m] = await rows('SELECT id FROM materials');
+    return m.id as string;
+  };
+
+  it('a price change on purchase is explained in the result message', async () => {
+    const id = await setup();
+    const r = await purchaseOf(id, 5, 385);
+    expect(r.message).toContain('บันทึกการจัดซื้อพัสดุเรียบร้อยแล้ว');
+    expect(r.message).toContain('ล็อตใหม่ราคา 385');
+    expect(r.message).toContain('ขึ้น 10%');
+    expect(r.message).toContain('เหลือล็อตเก่า 2');
+  });
+
+  it('apiGetPurchases lists newest first and says whether each can be voided', async () => {
+    const id = await setup();
+    await purchaseOf(id, 5, 380);
+    const list = (await rpc('apiGetPurchases', [])).data;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ MaterialID: id, Qty: 5, UnitPrice: 380, Amount: 1900, Voidable: true });
+
+    await rpc('apiCreateRequest', [{ FullName: 'ครู', Department: 'ฝ่าย', Purpose: 'สอน', items: [{ MaterialID: id, Qty: 4 }] }]);
+    const [req] = await rows('SELECT id FROM requests ORDER BY created_at DESC LIMIT 1');
+    await rpc('apiUpdateRequestStatus', [[{ ID: req.id, Status: 'APPROVED' }]]);
+    const after = (await rpc('apiGetPurchases', [])).data;
+    expect(after[0].Voidable).toBe(false);
+    expect(after[0].VoidReason).toMatch(/เบิก/);
+  });
+
+  it('admin voids an untouched purchase: lot, stock, price and history all roll back', async () => {
+    const id = await setup();
+    await purchaseOf(id, 5, 380);
+    const [p] = await rows('SELECT id FROM purchases');
+    const r = await asAdmin('apiVoidPurchase', [p.id]);
+    expect(r.ok).toBe(true);
+    expect(await rows('SELECT * FROM purchases')).toHaveLength(0);
+    expect(await rows('SELECT * FROM material_lots WHERE material_id = ?', id)).toHaveLength(1);
+    const [m] = await rows('SELECT stock_qty, unit_price FROM materials WHERE id = ?', id);
+    expect(m).toEqual({ stock_qty: 2, unit_price: 350 });
+    const [mv] = await rows("SELECT * FROM stock_movements WHERE note = 'ยกเลิกรายการจัดซื้อ'");
+    expect(mv).toMatchObject({ type: 'OUT', qty: 5, before_qty: 7, after_qty: 2 });
+    expect((await rows("SELECT actor FROM audit_log WHERE action = 'VOID_PURCHASE'"))[0].actor).toBe('adm1');
+  });
+
+  it('refuses to void once any of the lot has been issued', async () => {
+    const id = await setup();
+    await purchaseOf(id, 5, 380);
+    await rpc('apiCreateRequest', [{ FullName: 'ครู', Department: 'ฝ่าย', Purpose: 'สอน', items: [{ MaterialID: id, Qty: 3 }] }]);
+    const [req] = await rows('SELECT id FROM requests ORDER BY created_at DESC LIMIT 1');
+    await rpc('apiUpdateRequestStatus', [[{ ID: req.id, Status: 'APPROVED' }]]);
+    const [p] = await rows('SELECT id FROM purchases');
+    const r = await asAdmin('apiVoidPurchase', [p.id]);
+    expect(r.ok).toBe(false);
+    expect(r.message).toMatch(/เบิก/);
+    expect(await rows('SELECT * FROM purchases')).toHaveLength(1);
+    expect((await rows('SELECT stock_qty FROM materials WHERE id = ?', id))[0].stock_qty).toBe(4);
+  });
+
+  it('an officer cannot void a purchase', async () => {
+    const id = await setup();
+    await purchaseOf(id, 5, 380);
+    const [p] = await rows('SELECT id FROM purchases');
+    const r = await rpc('apiVoidPurchase', [p.id]);
+    expect(r.ok).toBe(false);
+    expect(await rows('SELECT * FROM purchases')).toHaveLength(1);
+  });
+});
