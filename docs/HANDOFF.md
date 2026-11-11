@@ -20,7 +20,32 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-10 Requisition Department Option Optimization)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-11 Price Change / FIFO Lot Workflow Audit & Fix)
+
+ตรวจ workflow กรณีสินค้าปรับราคา (ซื้อหลายราคา → ตัดล็อต FIFO → ยกเลิก/แก้ไข → รายงาน) พบและแก้ 5 จุดที่ตัวเลขเพี้ยน ผ่านการ grill-me (Q1–Q14) ก่อนลงมือ
+
+**สิ่งที่แก้ (ทุกจุดมี test ที่ล้มก่อนแก้):**
+1. **คืนสต็อกเข้าล็อตเดิม** — ตารางใหม่ `request_lot_allocations` (`migrations/0012_request_lot_allocations.sql`, additive) บันทึกว่าอนุมัติแล้วตัดล็อตไหนกี่ชิ้นราคาเท่าไร; ยกเลิก/ปฏิเสธ/ลบใบเบิกคืนเข้าล็อตเดิมและตั้ง `unit_price` เป็นราคาล็อตเก่าสุดที่เหลือ (`applyRequestStock` ใน `src/api/requests.ts`) ใบเบิกเก่าที่ไม่มี allocation ยังคืนเข้าล็อตล่าสุดตาม fallback เดิม
+   - แก้บั๊กแฝง: คำสั่งล็อตทุกตัวตอนนี้ guard ด้วย `stock_txn` ทำให้ปฏิเสธใบ PENDING (ไม่เคยตัดสต็อก) ไม่เพิ่มยอดล็อตอีก
+2. **ฟอร์มแก้ไขพัสดุ** (`apiSaveMaterials`) — เมื่อมีล็อตแล้ว ราคาถูกล็อก (เปลี่ยนผ่านจัดซื้อเท่านั้น; หน้าเว็บ readonly + คำอธิบาย) และแก้ยอดสต็อกจะปรับล็อตตาม (ลดจากล็อตเก่าก่อน, เพิ่มเข้าล็อตล่าสุด, ไม่มีล็อตสร้างล็อตแรก) `listMaterials` เพิ่ม `HasLots`
+3. **รายงานบัญชีพัสดุ + ทะเบียนคงเหลือ** (`src/api/reports.ts`, helper `loadFlows`/`valueMaterial`) — มูลค่ารับ = `purchases.amount` จริง (fallback qty×ราคาปัจจุบันถ้า amount=0), มูลค่ายกมา = ราคาล็อตยกมา, มูลค่าจ่าย = ล็อตที่ตัดจริง, นับ ADJUST เป็นรับ/จ่าย, ปีงบที่ปิดแล้วคิดคงเหลือจาก ยกมา+รับ−จ่าย (ไม่อ่านล็อตวันนี้), วันที่เบิกใช้ `request_date` → `approved_date` ตรงกันทั้งสองรายงาน
+4. **แดชบอร์ด** `usedValue` ใช้ราคาล็อตที่ตัดจริง (ใบเก่าไม่มี allocation ใช้ราคาในใบเบิก)
+5. **ใบสั่งซื้อ** — `apiGetMaterials` เพิ่ม `LastPurchasePrice` (จัดซื้อล่าสุดตามวันที่) หน้าใบสั่งซื้อใช้เป็นราคาตั้งต้น แก้เองได้
+- ยืนยันแล้วว่า `material_lots` มี `ON DELETE CASCADE` อยู่แล้ว ลบพัสดุแล้วล็อตหายตาม (ไม่ต้องแก้โค้ด มี test ล็อกไว้)
+- ฟอร์มขอเบิกไม่เปลี่ยน: ยอดรวมยังเป็นราคาปัจจุบัน × จำนวน (ค่าประมาณ)
+
+**Tests:** เพิ่ม `test/consistency.test.ts` (ซื้อ 2 ราคา → อนุมัติ → ยกเลิก → แก้ยอดมือ แล้วเช็กว่า materials / บัญชีพัสดุ / ทะเบียนคงเหลือ / สต็อกการ์ด / แดชบอร์ด ตรงกันทั้งจำนวนและมูลค่า) + `test/node/reconcile-lots.test.ts` รวม `npm test` ผ่านทั้งหมด (192 worker + 50 node)
+
+**สคริปต์กระทบยอดข้อมูลเดิม (ยังไม่ได้รันบน production):** `cloudflare/scripts/reconcile-lots.mjs`
+- dry-run เป็นค่าเริ่มต้น ไม่เขียนอะไร: `node scripts/reconcile-lots.mjs --remote`
+- ก่อน `--apply` ต้อง backup: `npx wrangler d1 export ims_db --remote --output backup-before-reconcile.sql` ย้อนกลับด้วยการ import ไฟล์นั้นคืน
+- ปรับเฉพาะ `material_lots` ให้ผลรวมล็อต = `stock_qty` (ไม่แตะ stock/purchases/movements) **ต้องให้ผู้ใช้ดูผล dry-run และอนุมัติก่อน apply**
+
+**ข้อจำกัดที่รู้:** ใบเบิกที่อนุมัติก่อนวันนี้ไม่มี allocation → ยกเลิกแล้วคืนเข้าล็อตล่าสุด, มูลค่าจ่ายในรายงานของใบเก่าคิดด้วยราคาปัจจุบัน (ยอดถัว) ตามกฎ AGENTS ข้อ 5
+
+---
+
+## 3. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-10 Requisition Department Option Optimization)
 
 ### feat(requisition): นำตัวเลือก โรงเรียนสาธิตละอออุทิศ ลำปาง ออกจากรายการสังกัด พร้อมคง Native Select มาตรฐาน
 - **ความต้องการ & ผลการวิเคราะห์ (EGM Brainstorm):**
