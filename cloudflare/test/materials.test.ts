@@ -487,7 +487,7 @@ describe('purchase message, history and void', () => {
     expect(list[0].VoidShort).toBe('');
   });
 
-  it('apiGetPurchases hides legacy (no lot) and orphan purchases unless asked, and counts them', async () => {
+  it('apiGetPurchases always hides legacy (no lot) and orphan purchases but keeps them in the DB', async () => {
     const id = await setup();
     await env.DB.prepare(
       "INSERT INTO purchases (id, material_id, code, name, qty, unit_price, amount, purchase_date, actor, created_at) VALUES ('PUR-OLD', ?, 'X', 'เก่า', 3, 10, 30, '2026-10-01', 'a', '2026-10-01 00:00:00'), ('PUR-ORPHAN', NULL, 'Y', 'ไม่มีพัสดุ', 1, 5, 5, '2026-10-02', 'a', '2026-10-02 00:00:00')",
@@ -497,16 +497,15 @@ describe('purchase message, history and void', () => {
 
     const empty = await rpc('apiGetPurchases', [{}]);
     expect(empty.data).toHaveLength(0);
-    expect(empty.meta).toEqual({ LegacyCount: 2, IncludeLegacy: false });
 
     await purchaseOf(id, 5, 380);
     const shown = await rpc('apiGetPurchases', [{ limit: 1 }]);
     expect(shown.data).toHaveLength(1);
     expect(shown.data[0].Qty).toBe(5);
+    expect((await rpc('apiGetPurchases', [{}])).data).toHaveLength(1);
 
-    const all = await rpc('apiGetPurchases', [{ includeLegacy: true }]);
-    expect(all.meta.IncludeLegacy).toBe(true);
-    expect(all.data.map((r: any) => r.VoidShort).sort()).toEqual(['', 'รายการเก่า', 'ไม่พบพัสดุ']);
+    const [{ n }] = await rows('SELECT COUNT(*) AS n FROM purchases');
+    expect(n).toBe(3);
   });
 
   it('admin voids an untouched purchase: lot, stock, price and history all roll back', async () => {
