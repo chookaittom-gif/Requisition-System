@@ -552,15 +552,25 @@ function voidReason(r: PurchaseLotRow): string {
   return voidCheck(r).reason;
 }
 
+/** Legacy = no lot (bought before lots existed) or the material is gone: never voidable, history only. */
+const LEGACY_SQL = '(p.material_id IS NULL OR l.id IS NULL)';
+
 registerRpc('apiGetPurchases', 'officer', async (ctx, args) => {
-  const lim = Math.min(Math.max(Math.floor(Number(asObj(args[0]).limit) || 20), 1), 100);
+  const opts = asObj(args[0]);
+  const lim = Math.min(Math.max(Math.floor(Number(opts.limit) || 20), 1), 100);
+  const includeLegacy = opts.includeLegacy === true;
+  const where = includeLegacy ? '' : `WHERE NOT ${LEGACY_SQL}`;
   const { results } = await ctx.env.DB.prepare(
-    `${PURCHASE_SELECT} ORDER BY p.purchase_date DESC, p.created_at DESC, p.rowid DESC LIMIT ?`,
+    `${PURCHASE_SELECT} ${where} ORDER BY p.purchase_date DESC, p.created_at DESC, p.rowid DESC LIMIT ?`,
   )
     .bind(lim)
     .all<PurchaseLotRow>();
+  const legacy = await ctx.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM purchases p LEFT JOIN material_lots l ON l.purchase_id = p.id WHERE ${LEGACY_SQL}`,
+  ).first<{ n: number }>();
   return {
     ok: true,
+    meta: { LegacyCount: Number(legacy?.n ?? 0), IncludeLegacy: includeLegacy },
     data: results.map((r) => {
       const { short, reason } = voidCheck(r);
       return {

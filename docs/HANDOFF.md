@@ -20,7 +20,19 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-11 Recent Purchases Compact UI + Thai Date)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-11 Hide Legacy Purchases + Test Data Cleanup Script)
+
+ต่อจากรอบด้านล่าง (grill-me: ซ่อนรายการเก่า)
+- **ซ่อนรายการเก่า:** `apiGetPurchases` รับ `includeLegacy` (ค่าเริ่มต้นซ่อน) "legacy" = ไม่มีล็อต (`l.id IS NULL`) หรือไม่พบพัสดุ (`material_id IS NULL`) กรองฝั่ง SQL ก่อน `LIMIT` และส่ง `meta: { LegacyCount, IncludeLegacy }` เสมอ ส่วน "เบิกแล้ว" ยังแสดงตามปกติ
+- **UI:** ปุ่ม "แสดงรายการเก่า (N)" / "ซ่อนรายการเก่า" ในหัวการ์ด (ซ่อนปุ่มเมื่อ N = 0) ข้อความตอนว่าง "ยังไม่มีรายการจัดซื้อใหม่ · มีรายการเก่า N รายการซ่อนอยู่"
+- **ข้อมูล production ตอนทำ:** purchases 22 รายการ ทั้งหมดไม่มีล็อต (20 รายการเก่า + 2 ไม่พบพัสดุ) → การ์ดจะว่างจนกว่าจะมีการซื้อใหม่ครั้งแรกหลังระบบล็อต (ตั้งใจ)
+- **สคริปต์ลบข้อมูลทดสอบ:** `cloudflare/scripts/cleanup-test-purchases.mjs` (dry-run เป็นค่าเริ่มต้น) เป้าหมายคือ `P-61A10492` (ทดสอบ 4,100 @0) และ `P-B79526DF` (คอมตั้งโต๊ะ 5 @30,000) ที่ `material_id IS NULL` และไม่มีล็อต **dry-run บน production แล้ว ยังไม่ได้ `--apply`** ต้องรอผู้ใช้อนุมัติ + export สำรอง (`npx wrangler d1 export ims_db --remote --output backup-before-cleanup-purchases.sql`) ก่อน
+- **คงไว้โดยตั้งใจ:** แถว 6 พ.ย. "ลวดเสียบกระดาษ" 1 ชิ้น @0.00 (Wirinphat) จนกว่าผู้ใช้/คุณ Wirinphat ยืนยันว่าเป็นข้อมูลทดสอบ (รายงานนับ +1 ชิ้นในยอดซื้อ)
+- **ยังไม่ได้ทดสอบบนเบราว์เซอร์จริง:** ผ่าน `npm test` (198 + 50), typecheck, syntax check
+
+---
+
+## 2.0 สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-11 Recent Purchases Compact UI + Thai Date)
 
 ปรับรายการจัดซื้อล่าสุดในหน้าจัดการพัสดุ (grill-me Q1–Q7) — แก้เฉพาะ UI + เพิ่ม field ใน API
 - **วันที่:** แสดง `thaiDate(PurchaseDate,'short')` = "11 พ.ย. 69" (เดิมพิมพ์ ISO ดิบ) สแกนทั้ง `index.html` แล้วพบจุดดิบจุดเดียวนี้ หน้าอื่นใช้ `thaiDate`/`thaiDateTime` อยู่แล้ว ช่อง `input type=date` ในฟอร์มคงเดิม (เบราว์เซอร์กำหนดรูปแบบ)

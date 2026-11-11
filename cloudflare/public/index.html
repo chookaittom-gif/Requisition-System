@@ -6065,7 +6065,8 @@ async function viewMaterials(){
     </div>
 
     <div class="mt-5">${cardWrap('รายการจัดซื้อล่าสุด','fa-clock-rotate-left', `<div id="recentBuys" class="text-sm text-slate-400 py-4 text-center">กำลังโหลด...</div>`,
-      `<button type="button" id="lnkBuyHistory" class="min-h-[44px] px-3 rounded-xl text-sm font-semibold text-brand-600 hover:bg-brand-50 transition">ดูประวัติทั้งหมด <i class="fa-solid fa-arrow-right text-xs"></i></button>`)}</div>
+      `<button type="button" id="btnLegacyToggle" class="hidden min-h-[44px] px-3 rounded-xl text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 transition"></button>
+       <button type="button" id="lnkBuyHistory" class="min-h-[44px] px-3 rounded-xl text-sm font-semibold text-brand-600 hover:bg-brand-50 transition">ดูประวัติทั้งหมด <i class="fa-solid fa-arrow-right text-xs"></i></button>`)}</div>
 
     <div class="mt-5">
       ${cardWrap('รายการพัสดุทั้งหมด','fa-boxes-packing', `
@@ -6296,12 +6297,26 @@ async function viewMaterials(){
   $('#buyPrice').addEventListener('input', updateBuyPriceNotice);
 
   const isAdminUser = S && S.user && S.user.Role === 'admin';
+  let showLegacy = false;
   const loadRecentBuys = async () => {
     const box = $('#recentBuys');
     if(!box) return;
-    const res = await api('apiGetPurchases', [{ limit: 20 }]);
-    if(!res.ok){ box.textContent = res.message || 'โหลดรายการจัดซื้อไม่สำเร็จ'; return; }
-    if(!res.data.length){ box.textContent = 'ยังไม่มีรายการจัดซื้อ'; return; }
+    const res = await api('apiGetPurchases', [{ limit: 20, includeLegacy: showLegacy }]);
+    const emptyCls = 'text-sm text-slate-400 py-4 text-center';
+    if(!res.ok){ box.className = emptyCls; box.textContent = res.message || 'โหลดรายการจัดซื้อไม่สำเร็จ'; return; }
+    const legacyCount = (res.meta && res.meta.LegacyCount) || 0;
+    const tglLegacy = $('#btnLegacyToggle');
+    if(tglLegacy){
+      tglLegacy.classList.toggle('hidden', legacyCount === 0);
+      tglLegacy.textContent = showLegacy ? 'ซ่อนรายการเก่า' : `แสดงรายการเก่า (${nf(legacyCount)})`;
+    }
+    if(!res.data.length){
+      box.className = emptyCls;
+      box.textContent = showLegacy || !legacyCount
+        ? 'ยังไม่มีรายการจัดซื้อ'
+        : `ยังไม่มีรายการจัดซื้อใหม่ · มีรายการเก่า ${nf(legacyCount)} รายการซ่อนอยู่`;
+      return;
+    }
     const SHOW = 5;
     const extraCls = i => i >= SHOW ? ' rb-extra hidden' : '';
     const actorLine = r => r.Actor ? `<div class="text-[11px] text-slate-400">โดย ${esc(r.Actor)}</div>` : '';
@@ -6342,6 +6357,16 @@ async function viewMaterials(){
       <div class="lg:hidden space-y-2">${cardRows}</div>
       ${extraCount ? `<button type="button" data-rb-toggle data-more="${extraCount}" class="mt-3 w-full min-h-[44px] rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-sm font-semibold text-slate-600 transition">ดูเพิ่ม (${extraCount} รายการ) <i class="fa-solid fa-chevron-down text-xs"></i></button>` : ''}`;
   };
+
+  const btnLegacy = $('#btnLegacyToggle');
+  if(btnLegacy) btnLegacy.addEventListener('click', async () => {
+    if(btnLegacy.disabled) return;
+    btnLegacy.disabled = true;
+    showLegacy = !showLegacy;
+    try { await loadRecentBuys(); }
+    catch (err) { showLegacy = !showLegacy; toast('error', 'โหลดรายการไม่สำเร็จ'); }
+    finally { btnLegacy.disabled = false; }
+  });
 
   const lnkHistory = $('#lnkBuyHistory');
   if(lnkHistory) lnkHistory.addEventListener('click', () => { S.mvPresetType = 'IN'; go('a-movement'); });
