@@ -483,6 +483,8 @@ describe('purchase message, history and void', () => {
     const after = (await rpc('apiGetPurchases', [])).data;
     expect(after[0].Voidable).toBe(false);
     expect(after[0].VoidReason).toMatch(/เบิก/);
+    expect(after[0].VoidShort).toBe('เบิกแล้ว');
+    expect(list[0].VoidShort).toBe('');
   });
 
   it('admin voids an untouched purchase: lot, stock, price and history all roll back', async () => {

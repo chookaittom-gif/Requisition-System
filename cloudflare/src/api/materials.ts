@@ -537,13 +537,19 @@ const PURCHASE_SELECT = `SELECT p.id, p.material_id, p.code, p.name, p.qty, p.un
   FROM purchases p LEFT JOIN material_lots l ON l.purchase_id = p.id`;
 
 /** A purchase can be voided only while its lot is whole: nothing has been issued from it. */
-function voidReason(r: PurchaseLotRow): string {
-  if (!r.material_id) return 'ไม่พบพัสดุของรายการนี้แล้ว';
-  if (!r.lot_id) return 'ไม่พบล็อตของรายการจัดซื้อนี้ (รายการเก่า) ให้ใช้ฟอร์มปรับสต็อกแทน';
-  if (r.allocs > 0 || Number(r.remaining_qty) !== Number(r.initial_qty) || r.lot_status !== 'ACTIVE') {
-    return 'ล็อตนี้ถูกเบิกไปแล้ว ไม่สามารถยกเลิกรายการจัดซื้อได้ ให้ใช้ฟอร์มปรับสต็อกแทน';
+function voidCheck(r: PurchaseLotRow): { short: string; reason: string } {
+  if (!r.material_id) return { short: 'ไม่พบพัสดุ', reason: 'ไม่พบพัสดุของรายการนี้แล้ว' };
+  if (!r.lot_id) {
+    return { short: 'รายการเก่า', reason: 'ไม่พบล็อตของรายการจัดซื้อนี้ (รายการเก่า) ให้ใช้ฟอร์มปรับสต็อกแทน' };
   }
-  return '';
+  if (r.allocs > 0 || Number(r.remaining_qty) !== Number(r.initial_qty) || r.lot_status !== 'ACTIVE') {
+    return { short: 'เบิกแล้ว', reason: 'ล็อตนี้ถูกเบิกไปแล้ว ไม่สามารถยกเลิกรายการจัดซื้อได้ ให้ใช้ฟอร์มปรับสต็อกแทน' };
+  }
+  return { short: '', reason: '' };
+}
+
+function voidReason(r: PurchaseLotRow): string {
+  return voidCheck(r).reason;
 }
 
 registerRpc('apiGetPurchases', 'officer', async (ctx, args) => {
@@ -556,7 +562,7 @@ registerRpc('apiGetPurchases', 'officer', async (ctx, args) => {
   return {
     ok: true,
     data: results.map((r) => {
-      const reason = voidReason(r);
+      const { short, reason } = voidCheck(r);
       return {
         ID: r.id,
         MaterialID: r.material_id,
@@ -570,6 +576,7 @@ registerRpc('apiGetPurchases', 'officer', async (ctx, args) => {
         Actor: r.actor,
         Voidable: reason === '',
         VoidReason: reason,
+        VoidShort: short,
       };
     }),
   };

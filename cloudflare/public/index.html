@@ -6064,7 +6064,8 @@ async function viewMaterials(){
       </form>`)}
     </div>
 
-    <div class="mt-5">${cardWrap('รายการจัดซื้อล่าสุด','fa-clock-rotate-left', `<div id="recentBuys" class="text-sm text-slate-400 py-4 text-center">กำลังโหลด...</div>`)}</div>
+    <div class="mt-5">${cardWrap('รายการจัดซื้อล่าสุด','fa-clock-rotate-left', `<div id="recentBuys" class="text-sm text-slate-400 py-4 text-center">กำลังโหลด...</div>`,
+      `<button type="button" id="lnkBuyHistory" class="min-h-[44px] px-3 rounded-xl text-sm font-semibold text-brand-600 hover:bg-brand-50 transition">ดูประวัติทั้งหมด <i class="fa-solid fa-arrow-right text-xs"></i></button>`)}</div>
 
     <div class="mt-5">
       ${cardWrap('รายการพัสดุทั้งหมด','fa-boxes-packing', `
@@ -6301,27 +6302,68 @@ async function viewMaterials(){
     const res = await api('apiGetPurchases', [{ limit: 20 }]);
     if(!res.ok){ box.textContent = res.message || 'โหลดรายการจัดซื้อไม่สำเร็จ'; return; }
     if(!res.data.length){ box.textContent = 'ยังไม่มีรายการจัดซื้อ'; return; }
-    box.className = 'overflow-x-auto';
-    box.innerHTML = `<table class="w-full text-sm min-w-[560px]">
-      <thead><tr class="text-left text-slate-500 border-b border-slate-200">
-        <th class="py-2 pr-3">วันที่ซื้อ</th><th class="py-2 pr-3">พัสดุ</th><th class="py-2 pr-3 text-right">จำนวน</th>
-        <th class="py-2 pr-3 text-right">ราคา/หน่วย</th><th class="py-2 pr-3 text-right">รวม</th><th class="py-2 pr-3">ผู้บันทึก</th>${isAdminUser ? '<th class="py-2"></th>' : ''}
-      </tr></thead><tbody>${res.data.map(r => `<tr class="border-b border-slate-100">
-        <td class="py-2 pr-3 whitespace-nowrap">${esc(r.PurchaseDate)}</td>
-        <td class="py-2 pr-3">${esc(r.Name)}</td>
+    const SHOW = 5;
+    const extraCls = i => i >= SHOW ? ' rb-extra hidden' : '';
+    const actorLine = r => r.Actor ? `<div class="text-[11px] text-slate-400">โดย ${esc(r.Actor)}</div>` : '';
+    const action = r => !isAdminUser ? '' : (r.Voidable
+      ? `<button type="button" data-void="${esc(r.ID)}" data-name="${esc(r.Name)}" class="min-h-[44px] px-3 rounded-xl bg-rose-50 text-rose-600 text-sm font-semibold hover:bg-rose-100 transition whitespace-nowrap"><i class="fa-solid fa-rotate-left"></i> ยกเลิก</button>`
+      : `<button type="button" data-why="${esc(r.VoidReason)}" title="${esc(r.VoidReason)}" class="min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-semibold whitespace-nowrap hover:bg-slate-200 transition"><i class="fa-solid fa-lock"></i> ${esc(r.VoidShort || 'ยกเลิกไม่ได้')}</button>`);
+
+    const tableRows = res.data.map((r, i) => `<tr class="rb-row border-b border-slate-100${extraCls(i)}">
+        <td class="py-2 pr-3 whitespace-nowrap text-slate-600">${esc(thaiDate(r.PurchaseDate, 'short'))}</td>
+        <td class="py-2 pr-3"><div class="font-semibold text-slate-700">${esc(r.Name)}</div>${actorLine(r)}</td>
         <td class="py-2 pr-3 text-right">${nf(r.Qty)}</td>
         <td class="py-2 pr-3 text-right">${money(r.UnitPrice)}</td>
-        <td class="py-2 pr-3 text-right">${money(r.Amount)}</td>
-        <td class="py-2 pr-3">${esc(r.Actor)}</td>
-        ${isAdminUser ? `<td class="py-2 text-right">${r.Voidable
-          ? `<button type="button" data-void="${esc(r.ID)}" data-name="${esc(r.Name)}" class="min-h-[44px] px-3 rounded-xl bg-rose-50 text-rose-600 font-semibold hover:bg-rose-100 transition"><i class="fa-solid fa-rotate-left"></i> ยกเลิก</button>`
-          : `<span class="inline-block min-h-[44px] px-3 leading-[44px] rounded-xl bg-slate-100 text-slate-400" title="${esc(r.VoidReason)}"><i class="fa-solid fa-lock"></i> ยกเลิกไม่ได้</span><div class="text-[11px] text-slate-400 max-w-[220px] ml-auto">${esc(r.VoidReason)}</div>`}</td>` : ''}
-      </tr>`).join('')}</tbody></table>`;
+        <td class="py-2 pr-3 text-right font-semibold text-slate-700">${money(r.Amount)}</td>
+        ${isAdminUser ? `<td class="py-1 text-right">${action(r)}</td>` : ''}
+      </tr>`).join('');
+
+    const cardRows = res.data.map((r, i) => `<div class="rb-row rounded-2xl border border-slate-100 p-3 flex items-center justify-between gap-2${extraCls(i)}">
+        <div class="min-w-0">
+          <div class="font-semibold text-slate-700 break-words">${esc(r.Name)}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${esc(thaiDate(r.PurchaseDate, 'short'))} · ${nf(r.Qty)} × ${money(r.UnitPrice)} = <span class="font-semibold text-slate-700">${money(r.Amount)}</span></div>
+          ${actorLine(r)}
+        </div>
+        ${isAdminUser ? `<div class="shrink-0">${action(r)}</div>` : ''}
+      </div>`).join('');
+
+    const extraCount = Math.max(0, res.data.length - SHOW);
+    box.className = '';
+    box.innerHTML = `
+      <div class="hidden lg:block overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+            <th class="py-2 pr-3 font-semibold">วันที่ซื้อ</th><th class="py-2 pr-3 font-semibold">พัสดุ</th>
+            <th class="py-2 pr-3 text-right font-semibold">จำนวน</th><th class="py-2 pr-3 text-right font-semibold">ราคา/หน่วย</th>
+            <th class="py-2 pr-3 text-right font-semibold">รวม</th>${isAdminUser ? '<th class="py-2"></th>' : ''}
+          </tr></thead><tbody>${tableRows}</tbody>
+        </table>
+      </div>
+      <div class="lg:hidden space-y-2">${cardRows}</div>
+      ${extraCount ? `<button type="button" data-rb-toggle data-more="${extraCount}" class="mt-3 w-full min-h-[44px] rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-sm font-semibold text-slate-600 transition">ดูเพิ่ม (${extraCount} รายการ) <i class="fa-solid fa-chevron-down text-xs"></i></button>` : ''}`;
   };
+
+  const lnkHistory = $('#lnkBuyHistory');
+  if(lnkHistory) lnkHistory.addEventListener('click', () => { S.mvPresetType = 'IN'; go('a-movement'); });
 
   const recentBox = $('#recentBuys');
   if(recentBox){
     recentBox.addEventListener('click', async e => {
+      const tgl = e.target.closest('[data-rb-toggle]');
+      if(tgl){
+        const open = tgl.dataset.open !== '1';
+        tgl.dataset.open = open ? '1' : '0';
+        $$('.rb-extra', recentBox).forEach(el => el.classList.toggle('hidden', !open));
+        tgl.innerHTML = open
+          ? 'ย่อรายการ <i class="fa-solid fa-chevron-up text-xs"></i>'
+          : `ดูเพิ่ม (${tgl.dataset.more} รายการ) <i class="fa-solid fa-chevron-down text-xs"></i>`;
+        return;
+      }
+      const why = e.target.closest('[data-why]');
+      if(why){
+        Swal.fire({ icon:'info', title:'ยกเลิกรายการนี้ไม่ได้', text: why.dataset.why, confirmButtonText:'ปิด' });
+        return;
+      }
       const btn = e.target.closest('[data-void]');
       if(!btn || btn.disabled) return;
       const ok = await Swal.fire({ icon:'warning', title:'ยกเลิกรายการจัดซื้อ?',
@@ -6740,6 +6782,12 @@ async function viewStockMovements(){
     el.addEventListener('input', filterMv);
     el.addEventListener('change', filterMv);
   });
+
+  if(S.mvPresetType){
+    const tsel = $('#mvType');
+    if(tsel){ tsel.value = S.mvPresetType; filterMv(); }
+    S.mvPresetType = '';
+  }
 
   const btnOpenClear = $('#btnOpenClearMv');
   if(btnOpenClear){
