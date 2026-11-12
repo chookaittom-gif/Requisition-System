@@ -2098,8 +2098,7 @@ $('#btnGuestTrack') && $('#btnGuestTrack').addEventListener('click', ()=> enterG
 function enterGuest(targetView){
   S.user = { ID:'GUEST', Username:'guest', Role:'guest', FullName:'ผู้ขอเบิก (อาจารย์ / บุคลากร)', Position:'ผู้ขอเบิก' };
   saveSession_(S.user);
-  enterApp();
-  if(targetView) go(targetView);
+  enterApp(targetView); // enterApp เปิดหน้าปลายทางเอง — ห้ามเรียก go() ซ้ำ ไม่เช่นนั้นฟอร์มถูกวาดสองรอบและข้อความที่พิมพ์หาย
 }
 
 $('#loginForm').addEventListener('submit', async e=>{
@@ -2123,7 +2122,7 @@ $('#loginForm').addEventListener('submit', async e=>{
   }
 });
 
-function enterApp(){
+function enterApp(forceView){
   $('#loginPage').classList.add('hidden');
   $('#splash').classList.add('hidden');
   $('#app').classList.remove('hidden');
@@ -2140,7 +2139,7 @@ function enterApp(){
 
   const role = u.Role || 'officer';
   const list = MENUS[role] || MENUS.officer;
-  let targetView = currentHash || pendingView || sessionStorage.getItem('supply_last_view');
+  let targetView = forceView || currentHash || pendingView || sessionStorage.getItem('supply_last_view');
 
   // หากเป็นผู้ใช้ทั่วไป (guest) และปลายทางคือ a-low ให้ map ไปที่ t-low อัตโนมัติ
   if(role === 'guest' && targetView === 'a-low') targetView = 't-low';
@@ -8869,7 +8868,9 @@ window.addEventListener('beforeunload', () => {
 async function viewRequestForm(){
   const c = $('#content');
   c.innerHTML = skTable(6);
+  const seq = S.reqFormSeq = (S.reqFormSeq || 0) + 1; // ถ้ามีการเรียกซ้อน ให้เฉพาะครั้งล่าสุดวาดฟอร์ม
   const r = await api('apiGetMaterials');
+  if(seq !== S.reqFormSeq) return;
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   S.cache.materials = r.data;
   S.reqItemSeq = 0;
@@ -9396,7 +9397,8 @@ async function viewRequestForm(){
             sel.value = it.MaterialID;
             sel.dispatchEvent(new Event('change'));
           }
-          if($(`[data-qty="${i}"]`) && (it.Qty !== undefined && it.Qty !== '')){
+          // กู้จำนวนเฉพาะเมื่อกู้รายการพัสดุได้จริง (พัสดุอาจหมดสต็อกแล้ว) ไม่เช่นนั้นจะเหลือจำนวนลอย ๆ ไม่มีรายการ
+          if(sel && sel.value && sel.value === it.MaterialID && $(`[data-qty="${i}"]`) && (it.Qty !== undefined && it.Qty !== '')){
             $(`[data-qty="${i}"]`).value = it.Qty;
           }
         }
