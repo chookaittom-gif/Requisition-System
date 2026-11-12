@@ -20,7 +20,20 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-12 Requisition Form UX for Authenticated Users)
+## 2.0 Session ล่าสุด (2026-11-12 Persona UX Test + Track-Status Privacy Fix)
+
+- **ทดสอบ UX/QA 6 Persona (guest, ไม่ส่งใบเบิกจริง):** รายงานเต็มที่ `docs/UX-TEST-REPORT-2026-11-12.md` (สรุป: NOT READY, Top 10 + แนวทางแก้) พร้อมภาคผนวกตรวจฝั่ง admin แบบอ่านอย่างเดียว
+- **fix(requests): ปิดช่องโหว่ PII ของ `apiTrackRequest` (public):**
+  - เดิม: ค้นด้วยชื่อบางส่วนได้ใบเบิกคนอื่นทั้งใบ (ชื่อ หน่วยงาน วัตถุประสงค์ รายการพัสดุ) โดยพิมพ์แค่ 1 ตัวอักษร
+  - ใหม่ (`cloudflare/src/api/requests.ts`): เลขที่ใบเบิก/ID ตรงเป๊ะ → รายละเอียดเต็มเหมือนเดิม; ค้นด้วยชื่อ → ต้อง ≥ 3 ตัวอักษร (`TRACK_NAME_MIN_CHARS`) และคืนเฉพาะสรุปแบบปิดบังชื่อ (`maskName`: `สม*** ใจ***`) ไม่มี Department/Purpose/Items/RejectReason/ApprovedBy และมี `Summary: true`
+  - Frontend (`cloudflare/public/index.html`, `viewPublicTrack`): แสดงการ์ดสรุปเมื่อ `Summary` + ข้อความแนะนำให้ใช้เลขที่ใบเบิกดูรายละเอียด
+  - Test: ปรับ `cloudflare/test/requests.test.ts` ("track by DocNo exact or FullName substring")
+  - **ยังไม่ได้ทำ:** rate limit ของ endpoint public; เลขที่ใบเบิกเดาได้ (รูปแบบ REQ-YYYY-NNNN ต่อเนื่อง) จึงยังไล่เดาได้ — พิจารณาเพิ่มรหัสยืนยัน (เช่น รหัสบุคลากร) หรือ rate limit ภายหลัง
+- **Verify:** `npm test` ใน `cloudflare/`: Cloudflare Vitest 12 files/199 tests + Node Vitest 3 files/50 tests ผ่านทั้งหมด
+
+---
+
+## 2. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-12 Requisition Form UX for Authenticated Users)
 
 ผ่านกระบวนการ Grill-me และ Plan-gate กับผู้ใช้:
 1. **ข้อสรุปด้านสถาปัตยกรรม (No Personnel Code for Admin/Officers):**

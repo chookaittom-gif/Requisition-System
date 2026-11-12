@@ -2321,7 +2321,7 @@ async function viewPublicTrack(){
     <div class="max-w-3xl mx-auto animate-fadeUp">
       ${cardWrap('ติดตามสถานะใบขอเบิกพัสดุ', 'fa-magnifying-glass', `
         <div class="space-y-4">
-          <p class="text-xs text-slate-500">กรอกเลขที่ใบขอเบิก (เช่น <span class="font-bold text-brand-600">REQ-2569-0001</span>) หรือระบุชื่อผู้ขอเบิก เพื่อตรวจสอบสถานะคำขอ</p>
+          <p class="text-xs text-slate-500">กรอกเลขที่ใบขอเบิก (เช่น <span class="font-bold text-brand-600">REQ-2569-0001</span>) หรือระบุชื่อผู้ขอเบิก (อย่างน้อย 3 ตัวอักษร) เพื่อตรวจสอบสถานะคำขอ — การค้นด้วยชื่อจะแสดงเฉพาะสรุป ใช้เลขที่ใบขอเบิกเพื่อดูรายละเอียดเต็ม</p>
           <div class="flex gap-2">
             <div class="relative flex-1">
               <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
@@ -2359,6 +2359,20 @@ async function viewPublicTrack(){
       const st = String(req.Status).toUpperCase();
       let badgeHtml = '<span class="px-3 py-1 rounded-full text-xs font-bold bg-amber2/20 text-orange2"><i class="fa-regular fa-clock mr-1"></i>รออนุมัติ</span>';
       if(st==='APPROVED') badgeHtml = '<span class="px-3 py-1 rounded-full text-xs font-bold bg-teal/15 text-teal"><i class="fa-solid fa-circle-check mr-1"></i>อนุมัติแล้ว</span>';
+
+      if(req.Summary){
+        return `
+        <div class="rounded-3xl border border-slate-200 p-4 bg-white shadow-soft">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p class="text-base font-extrabold text-brand-600">${esc(req.DocNo)}</p>
+              <p class="text-xs text-slate-600">${esc(req.FullName)} · ${thaiDate(req.RequestDate)} · ${nf(req.ItemCount||0)} รายการ</p>
+            </div>
+            <div>${badgeHtml}</div>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">ค้นหาด้วยเลขที่ใบขอเบิกด้านบนเพื่อดูรายละเอียดเต็ม</p>
+        </div>`;
+      }
 
       return `
         <div class="rounded-3xl border border-slate-200 p-5 bg-white shadow-soft transition">

@@ -368,8 +368,18 @@ describe('reads', () => {
     expect(Object.keys(byDoc.data[0])).not.toContain('UserID');
 
     expect((await guest('apiTrackRequest', ['REQ-9999']) ).ok).toBe(false);
-    expect((await guest('apiTrackRequest', ['ใจดี'])).data).toHaveLength(10);
+    // name search: masked summary only, never purpose/department/items
+    const byName = await guest('apiTrackRequest', ['ใจดี']);
+    expect(byName.data).toHaveLength(10);
+    expect(byName.data[0]).toMatchObject({ Summary: true, FullName: 'สม*** ใจ***' });
+    for (const k of ['Purpose', 'Department', 'Items', 'RejectReason', 'ApprovedBy']) expect(byName.data[0]).not.toHaveProperty(k);
     expect((await guest('apiTrackRequest', ['สมหญิง'])).data).toHaveLength(10);
+    // too-short name queries are refused (blocks single-character enumeration)
+    for (const short of ['ส', 'สม']) {
+      const r = await guest('apiTrackRequest', [short]);
+      expect(r.ok).toBe(false);
+      expect(r.message).toContain('อย่างน้อย 3');
+    }
     expect(await guest('apiTrackRequest', ['  '])).toEqual({ ok: false, message: 'กรุณาระบุเลขที่ใบขอเบิก หรือชื่อผู้ขอเบิก' });
     expect(await guest('apiTrackRequest', ['ไม่มีคนนี้'])).toEqual({ ok: false, message: 'ไม่พบข้อมูลใบขอเบิกที่ตรงกับคำค้นหา: ไม่มีคนนี้' });
   });

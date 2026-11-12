@@ -502,18 +502,54 @@ registerRpc('apiGetMyRequests', 'officer', async (ctx, args) => {
   return { ok: true, data };
 });
 
+const TRACK_NAME_MIN_CHARS = 3;
+
+/** Keep the first 2 characters of each word, mask the rest: "สมชาย ใจดี" -> "สม*** ใจ***". */
+function maskName(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => [...w].slice(0, 2).join('') + '***')
+    .join(' ');
+}
+
 registerRpc('apiTrackRequest', 'public', async (ctx, args) => {
   const raw = args[0];
   if (!raw || !String(raw).trim()) return fail('กรุณาระบุเลขที่ใบขอเบิก หรือชื่อผู้ขอเบิก');
   const q = String(raw).trim().toLowerCase();
   const db = ctx.env.DB;
-  const { results } = await db
-    .prepare(
-      'SELECT * FROM requests WHERE lower(doc_no) = ? OR lower(id) = ? OR instr(lower(full_name), ?) > 0 ORDER BY created_at DESC, doc_no DESC LIMIT 10',
-    )
-    .bind(q, q, q)
+  // Public endpoint: full details only for an exact document number (a secret-ish handle the requester holds).
+  const exact = await db
+    .prepare('SELECT * FROM requests WHERE lower(doc_no) = ? OR lower(id) = ? ORDER BY created_at DESC, doc_no DESC LIMIT 10')
+    .bind(q, q)
     .all<Obj>();
-  if (!results.length) return fail(`ไม่พบข้อมูลใบขอเบิกที่ตรงกับคำค้นหา: ${raw}`);
+  const results = exact.results;
+  if (!results.length) {
+    // Name lookup is enumerable by anyone, so require a minimum length and return a masked summary only.
+    if ([...q].length < TRACK_NAME_MIN_CHARS) {
+      return fail(`ค้นหาด้วยชื่อต้องระบุอย่างน้อย ${TRACK_NAME_MIN_CHARS} ตัวอักษร หรือใช้เลขที่ใบขอเบิก`);
+    }
+    const byName = await db
+      .prepare('SELECT * FROM requests WHERE instr(lower(full_name), ?) > 0 ORDER BY created_at DESC, doc_no DESC LIMIT 10')
+      .bind(q)
+      .all<Obj>();
+    if (!byName.results.length) return fail(`ไม่พบข้อมูลใบขอเบิกที่ตรงกับคำค้นหา: ${raw}`);
+    return {
+      ok: true,
+      data: byName.results.map((row) => {
+        const r = mapRequest(row);
+        return {
+          ID: r.ID,
+          DocNo: r.DocNo,
+          RequestDate: r.RequestDate,
+          FullName: maskName(String(r.FullName || '')),
+          Status: r.Status,
+          ItemCount: r.ItemCount || 0,
+          Summary: true,
+        };
+      }),
+    };
+  }
   const data = [];
   for (const row of results) {
     const r = mapRequest(row);
