@@ -15,6 +15,16 @@ class ValidationError extends Error {}
 
 const STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
 const MAX_ITEMS = 50;
+const QTY_MSG = 'จำนวนที่ขอเบิกต้องเป็นจำนวนเต็มที่มากกว่า 0';
+const FIELD_MAX = { fullName: 100, position: 100, department: 200, purpose: 500, note: 500, remark: 200 };
+const FIELD_LABEL: Record<string, string> = {
+  fullName: 'ชื่อผู้ขอเบิก', position: 'ตำแหน่ง', department: 'สังกัด', purpose: 'วัตถุประสงค์', note: 'หมายเหตุ', remark: 'หมายเหตุรายการ',
+};
+function checkFieldLengths(v: Record<'fullName' | 'position' | 'department' | 'purpose' | 'note', string>): void {
+  for (const k of Object.keys(v) as (keyof typeof v)[]) {
+    if ([...v[k]].length > FIELD_MAX[k]) throw new ValidationError(`${FIELD_LABEL[k]}ยาวเกิน ${FIELD_MAX[k]} ตัวอักษร`);
+  }
+}
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Set by Task 7 (notifications). Called through ctx.exec.waitUntil; failures never reach the RPC result. */
@@ -308,7 +318,7 @@ registerRpc('apiCreateRequest', 'public', (ctx, args) =>
     const wanted = rawItems.map((raw) => {
       const it = asObj(raw);
       const qty = typeof it.Qty === 'string' && it.Qty.trim() === '' ? NaN : Number(it.Qty);
-      if (!Number.isFinite(qty) || qty <= 0) throw new ValidationError('จำนวนที่ขอเบิกต้องเป็นตัวเลขที่มากกว่า 0');
+      if (!Number.isInteger(qty) || qty <= 0) throw new ValidationError(QTY_MSG);
       return { materialId: str(it.MaterialID), qty, remark: str(it.Remark) };
     });
     const ids = [...new Set(wanted.map((w) => w.materialId))];
@@ -353,6 +363,8 @@ registerRpc('apiCreateRequest', 'public', (ctx, args) =>
     }
     const purpose = str(p.Purpose);
     const note = str(p.Note);
+    checkFieldLengths({ fullName, position, department, purpose, note });
+    for (const w of wanted) if ([...w.remark].length > FIELD_MAX.remark) throw new ValidationError(`หมายเหตุรายการยาวเกิน ${FIELD_MAX.remark} ตัวอักษร`);
 
     await db.batch([
       db
@@ -517,6 +529,7 @@ registerRpc('apiTrackRequest', 'public', async (ctx, args) => {
   const raw = args[0];
   if (!raw || !String(raw).trim()) return fail('กรุณาระบุเลขที่ใบขอเบิก หรือชื่อผู้ขอเบิก');
   const q = String(raw).trim().toLowerCase();
+  if ([...q].length > 100) return fail('คำค้นหายาวเกินไป');
   const db = ctx.env.DB;
   // Public endpoint: full details only for an exact document number (a secret-ish handle the requester holds).
   const exact = await db
@@ -632,6 +645,7 @@ registerRpc('apiUpdateRequest', 'officer', (ctx, args) =>
     const department = p.Department !== undefined ? str(p.Department) : str(r.department);
     const purpose = p.Purpose !== undefined ? str(p.Purpose) : str(r.purpose);
     const note = p.Note !== undefined ? str(p.Note) : str(r.note);
+    checkFieldLengths({ fullName, position, department, purpose, note });
 
     const rawItems = Array.isArray(p.items) ? p.items : (Array.isArray(p.Items) ? p.Items : null);
 
@@ -657,7 +671,7 @@ registerRpc('apiUpdateRequest', 'officer', (ctx, args) =>
       const wanted = rawItems.map((raw) => {
         const it = asObj(raw);
         const qty = typeof it.Qty === 'string' && it.Qty.trim() === '' ? NaN : Number(it.Qty);
-        if (!Number.isFinite(qty) || qty <= 0) throw new ValidationError('จำนวนที่ขอเบิกต้องเป็นตัวเลขที่มากกว่า 0');
+        if (!Number.isInteger(qty) || qty <= 0) throw new ValidationError(QTY_MSG);
         const matId = str(it.MaterialID || it.materialId || it.material_id);
         return { materialId: matId, qty, remark: str(it.Remark || it.remark) };
       });

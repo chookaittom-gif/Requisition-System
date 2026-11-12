@@ -8945,10 +8945,10 @@ async function viewRequestForm(){
         <p id="personnelMsg" class="mt-2 text-xs font-medium hidden"></p>
       </div>
       <div class="grid sm:grid-cols-2 gap-4">
-        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">วันที่ <span class="text-rose2">*</span></label>
+        <div><label for="rDate" class="block text-sm font-bold text-slate-700 mb-1.5">วันที่ <span class="text-rose2">*</span></label>
           <input id="rDate" type="date" value="${todayYMD()}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
           <p class="mt-1 text-xs text-brand-600 font-semibold" id="rDateTh">${thaiDate(todayYMD())}</p></div>
-        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ตำแหน่ง <span class="text-rose2">*</span></label>
+        <div><label for="rPos" class="block text-sm font-bold text-slate-700 mb-1.5">ตำแหน่ง <span class="text-rose2">*</span></label>
           <select id="rPos" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
             <option value="">-- เลือกตำแหน่ง --</option>
             <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
@@ -8956,18 +8956,18 @@ async function viewRequestForm(){
           </select></div>
       </div>
 
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อ - สกุล <span class="text-rose2">*</span></label>
-        <input id="rName" required placeholder="ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
+      <div><label for="rName" class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อ - สกุล <span class="text-rose2">*</span></label>
+        <input id="rName" required maxlength="100" autocomplete="name" placeholder="ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
 
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
+      <div><label for="rDept" class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
         <select id="rDept" required class="w-full px-4 py-3 min-h-[48px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 font-medium text-slate-800 text-sm outline-none transition cursor-pointer">
-          ${renderDeptSelectOptions('สำนักงานศูนย์การศึกษา')}
+          ${renderDeptSelectOptions('')}
         </select>
       </div>
       `}
 
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">มีความจำเป็นต้องเบิกพัสดุเพื่อ <span class="text-rose2">*</span></label>
-        <input id="rPurpose" list="purposeList" required placeholder="เช่น เพื่อจัดการเรียนการสอนรายวิชา..., กิจกรรมนักศึกษา, งานสำนักงานประจำวัน" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
+      <div><label for="rPurpose" class="block text-sm font-bold text-slate-700 mb-1.5">มีความจำเป็นต้องเบิกพัสดุเพื่อ <span class="text-rose2">*</span></label>
+        <input id="rPurpose" list="purposeList" required maxlength="500" placeholder="เช่น เพื่อจัดการเรียนการสอนรายวิชา..., กิจกรรมนักศึกษา, งานสำนักงานประจำวัน" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
         <datalist id="purposeList">
           <option value="เพื่อจัดการเรียนการสอนรายวิชา...">
           <option value="เพื่อจัดกิจกรรมโครงการนักศึกษา...">
@@ -8979,16 +8979,16 @@ async function viewRequestForm(){
 
       <div class="rounded-3xl border-2 border-dashed border-brand-200 p-4 bg-brand-50/30">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <p class="font-extrabold text-slate-800"><i class="fa-solid fa-list-ul text-brand-600"></i> รายการพัสดุที่ขอเบิก</p>
-          <div class="flex gap-2">
-            <button type="button" id="btnScanItem" class="w-10 h-10 rounded-2xl bg-brand-600 text-white font-bold shadow hover:brightness-110 active:scale-95 transition" title="สแกน QR / บาร์โค้ด">
-              <i class="fa-solid fa-qrcode"></i>
+          <p class="font-extrabold text-slate-800"><i class="fa-solid fa-list-ul text-brand-600"></i> รายการพัสดุที่ขอเบิก <span class="text-rose2">*</span></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="btnScanItem" class="px-3 min-h-[48px] rounded-2xl bg-brand-600 text-white font-bold text-sm shadow hover:brightness-110 active:scale-95 transition inline-flex items-center gap-1.5" title="สแกน QR / บาร์โค้ด" aria-label="สแกน QR หรือบาร์โค้ด">
+              <i class="fa-solid fa-qrcode" aria-hidden="true"></i><span>สแกน QR</span>
             </button>
-            <button type="button" id="btnAddItem" class="w-10 h-10 rounded-2xl bg-teal text-white font-bold shadow hover:brightness-110 active:scale-95 transition" title="เพิ่มรายการ">
-              <i class="fa-solid fa-plus"></i>
+            <button type="button" id="btnAddItem" class="px-3 min-h-[48px] rounded-2xl bg-teal text-white font-bold text-sm shadow hover:brightness-110 active:scale-95 transition inline-flex items-center gap-1.5" title="เพิ่มรายการ" aria-label="เพิ่มรายการพัสดุ">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i><span>เพิ่มรายการ</span>
             </button>
-            <button type="button" id="btnDelItem" class="w-10 h-10 rounded-2xl bg-rose2 text-white font-bold shadow hover:brightness-110 active:scale-95 transition" title="ลบรายการล่าสุด">
-              <i class="fa-solid fa-minus"></i>
+            <button type="button" id="btnDelItem" class="px-3 min-h-[48px] rounded-2xl bg-rose2 text-white font-bold text-sm shadow hover:brightness-110 active:scale-95 transition inline-flex items-center gap-1.5" title="ลบรายการล่าสุด" aria-label="ลบรายการล่าสุด">
+              <i class="fa-solid fa-minus" aria-hidden="true"></i><span>ลบรายการล่าสุด</span>
             </button>
           </div>
         </div>
@@ -9015,9 +9015,10 @@ async function viewRequestForm(){
         </label>
       </div>` : ''}
 
+      <p class="text-xs text-slate-500">เมื่อส่งแล้วระบบจะแสดงเลขที่ใบขอเบิก โปรดจดไว้เพื่อใช้ติดตามสถานะในเมนู "ติดตามสถานะ"</p>
       <div class="flex flex-col sm:flex-row gap-3">
         <button type="submit" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-light text-white font-bold shadow-soft hover:brightness-110 active:scale-[.99] transition">
-          <i class="fa-solid fa-paper-plane"></i> บันทึกใบขอเบิก
+          <i class="fa-solid fa-paper-plane"></i> ส่งใบขอเบิก
         </button>
         <button type="reset" id="btnResetReq" class="sm:w-40 py-3.5 rounded-2xl bg-slate-200 text-slate-700 font-bold hover:bg-slate-300 transition">
           <i class="fa-solid fa-rotate-left"></i> ล้างฟอร์ม
@@ -9436,32 +9437,37 @@ async function viewRequestForm(){
 }
 
 
+const MAX_REQ_ROWS = 50; // ให้ตรงกับ MAX_ITEMS ฝั่ง server
 function addItemRow(selectedId = ''){
+  if($$('#itemRows > div').length >= MAX_REQ_ROWS){
+    toast('warning', `เพิ่มรายการได้ไม่เกิน ${MAX_REQ_ROWS} รายการต่อใบ`);
+    return;
+  }
   const i = ++S.reqItemSeq;
   const mats = S.cache.materials || [];
   const html = `<div class="rounded-2xl bg-white border border-slate-200 p-3.5" data-row="${i}">
     <div class="grid sm:grid-cols-12 gap-3 items-end">
       <div class="sm:col-span-5">
         <label class="block text-xs font-bold text-slate-600 mb-1">เลือกพัสดุ</label>
-        <input data-mq="${i}" type="text" placeholder="ค้นหาพัสดุ (ชื่อหรือรหัส)..." class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 text-sm mb-1.5">
-        <select data-sel="${i}" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm">
+        <input data-mq="${i}" type="text" maxlength="100" aria-label="ค้นหาพัสดุ (ชื่อหรือรหัส) แล้วกด Enter เพื่อเลือกรายการแรก" placeholder="ค้นหาพัสดุ (ชื่อหรือรหัส) แล้วกด Enter..." class="w-full px-3.5 py-2.5 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 text-sm mb-1.5">
+        <select data-sel="${i}" aria-label="เลือกรายการพัสดุ" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm">
           ${renderGroupedMaterialOptions(mats, selectedId, { onlyInStock: true })}
         </select>
       </div>
       <div class="sm:col-span-2">
         <label class="block text-xs font-bold text-slate-600 mb-1">รหัสพัสดุ</label>
-        <input data-code="${i}" readonly placeholder="-" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-100 text-sm text-center font-bold text-brand-600">
+        <input data-code="${i}" readonly tabindex="-1" aria-label="รหัสพัสดุ (แสดงอัตโนมัติ)" placeholder="-" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-100 text-sm text-center font-bold text-brand-600">
       </div>
       <div class="sm:col-span-2">
         <label class="block text-xs font-bold text-slate-600 mb-1">คงเหลือ</label>
-        <input data-stock="${i}" readonly placeholder="-" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-100 text-sm text-center font-bold">
+        <input data-stock="${i}" readonly tabindex="-1" aria-label="จำนวนคงเหลือ (แสดงอัตโนมัติ)" placeholder="-" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-100 text-sm text-center font-bold">
       </div>
       <div class="sm:col-span-2">
-        <label class="block text-xs font-bold text-slate-600 mb-1">จำนวนที่ขอเบิก</label>
-        <input data-qty="${i}" type="number" min="1" step="1" placeholder="0" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm text-center font-bold">
+        <label class="block text-xs font-bold text-slate-600 mb-1">จำนวนที่ขอเบิก <span data-unit="${i}" class="font-semibold text-slate-400"></span></label>
+        <input data-qty="${i}" type="number" min="1" step="1" inputmode="numeric" aria-label="จำนวนที่ขอเบิก (จำนวนเต็ม)" placeholder="0" class="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-sm text-center font-bold">
       </div>
       <div class="sm:col-span-1">
-        <button type="button" data-rm="${i}" class="w-full h-[42px] rounded-2xl bg-red2/10 text-red2 hover:bg-red2 hover:text-white transition"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" data-rm="${i}" aria-label="ลบรายการพัสดุแถวนี้" title="ลบรายการนี้" class="w-full h-[44px] rounded-2xl bg-red2/10 text-red2 hover:bg-red2 hover:text-white transition"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span class="sm:hidden ml-1 font-bold text-sm">ลบรายการนี้</span></button>
       </div>
     </div>
   </div>`;
@@ -9479,9 +9485,30 @@ function addItemRow(selectedId = ''){
       const qEl = $(`[data-qty="${i}"]`);
       qEl.value = ''; qEl.max = '';
     }
+    // เหลือผลลัพธ์เดียว → เลือกให้อัตโนมัติ
+    const only = [...sel.options].filter(o => o.value);
+    if(mq.value.trim() && only.length === 1 && sel.value !== only[0].value){
+      sel.value = only[0].value;
+      sel.dispatchEvent(new Event('change'));
+    }
+  });
+  mq.addEventListener('keydown', e=>{
+    if(e.key !== 'Enter') return;
+    e.preventDefault(); // ไม่ให้ Enter ในช่องค้นหาไปส่งฟอร์ม
+    const first = [...sel.options].find(o => o.value);
+    if(first){
+      sel.value = first.value;
+      sel.dispatchEvent(new Event('change'));
+      $(`[data-qty="${i}"]`).focus();
+    } else {
+      toast('warning', 'ไม่พบพัสดุที่ตรงกับคำค้นหา');
+    }
   });
   sel.addEventListener('change', ()=>{
     const o = sel.selectedOptions[0];
+    const mat = o && o.value ? mats.find(m => String(m.ID) === String(o.value)) : null;
+    const unitEl = $(`[data-unit="${i}"]`);
+    if(unitEl) unitEl.textContent = mat && mat.Unit ? `(${mat.Unit})` : '';
     $(`[data-code="${i}"]`).value  = o && o.value ? o.dataset.code : '';
     $(`[data-stock="${i}"]`).value = o && o.value ? nf(o.dataset.stock) : '';
     const q = $(`[data-qty="${i}"]`);
@@ -9496,6 +9523,8 @@ function addItemRow(selectedId = ''){
     saveReqDraft(false);
   });
   $(`[data-qty="${i}"]`).addEventListener('input', e=>{
+    const v = parseFloat(e.target.value);
+    if(!isNaN(v) && !Number.isInteger(v)) e.target.value = String(Math.floor(v)); // จำนวนเต็มเท่านั้น
     const max = parseFloat(e.target.max||0);
     if(max && parseFloat(e.target.value||0) > max){
       e.target.value = max; toast('warning','จำนวนที่ขอเบิกต้องไม่เกินจำนวนคงเหลือ ('+nf(max)+')');
@@ -9539,7 +9568,7 @@ async function submitRequestInner(e){
     const qtyInp = $(`[data-qty="${i}"]`);
     const qty = parseFloat(qtyInp?.value||0);
     if(!id) return;
-    if(!(qty>0)){
+    if(!(qty>0) || !Number.isInteger(qty)){
       valid = false;
       if(!firstInvalidQtyEl && qtyInp) firstInvalidQtyEl = qtyInp;
       return;
@@ -9547,13 +9576,13 @@ async function submitRequestInner(e){
     items.push({ MaterialID:id, Qty:qty, Remark: '' });
   });
 
+  if(!valid){
+    focusAndScroll(firstInvalidQtyEl, 'กรุณาระบุจำนวนที่ขอเบิกเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไปให้ครบทุกรายการ');
+    return;
+  }
   if(!items.length){
     const firstRowSel = $('[data-sel="1"]') || $('#btnAddItem') || $('#btnScanItem');
     focusAndScroll(firstRowSel, 'กรุณาเลือกพัสดุอย่างน้อย 1 รายการ');
-    return;
-  }
-  if(!valid){
-    focusAndScroll(firstInvalidQtyEl, 'กรุณาระบุจำนวนที่ขอเบิกให้ครบทุกรายการ');
     return;
   }
 
@@ -9595,8 +9624,8 @@ async function submitRequestInner(e){
     return;
   }
 
-  const cfm = await Swal.fire({ icon:'question', title:'ยืนยันบันทึกใบขอเบิก?', text:'รายการทั้งหมด '+items.length+' รายการ',
-    showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#0284c7', cancelButtonColor:'#94a3b8', reverseButtons:true });
+  const cfm = await Swal.fire({ icon:'question', title:'ยืนยันส่งใบขอเบิก?', text:'รายการทั้งหมด '+items.length+' รายการ — เมื่อส่งแล้วจะได้เลขที่ใบขอเบิกสำหรับติดตามสถานะ',
+    showCancelButton:true, focusCancel:true, confirmButtonText:'ส่งใบขอเบิก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#0284c7', cancelButtonColor:'#94a3b8', reverseButtons:true });
   if(!cfm.isConfirmed) return;
 
   showLoader('กำลังบันทึกใบขอเบิก...');

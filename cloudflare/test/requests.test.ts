@@ -355,6 +355,31 @@ describe('delete', () => {
   });
 });
 
+describe('create validation', () => {
+  it('rejects non-integer quantities', async () => {
+    for (const qty of [1.5, 0.0000001, 0, -1, 'abc', '']) {
+      const r = await createReq([{ MaterialID: 'M-A', Qty: qty }]);
+      expect(r.ok, String(qty)).toBe(false);
+      expect(r.message).toContain('จำนวนเต็ม');
+    }
+    expect(await rows('SELECT * FROM requests')).toHaveLength(0);
+  });
+
+  it('rejects over-long free-text fields and accepts the limit', async () => {
+    const long = (n: number) => 'ก'.repeat(n);
+    expect((await createReq([{ MaterialID: 'M-A', Qty: 1 }], { FullName: long(101) })).ok).toBe(false);
+    expect((await createReq([{ MaterialID: 'M-A', Qty: 1 }], { Purpose: long(501) })).ok).toBe(false);
+    expect((await createReq([{ MaterialID: 'M-A', Qty: 1 }], { Department: long(201) })).ok).toBe(false);
+    expect((await createReq([{ MaterialID: 'M-A', Qty: 1, Remark: long(201) }])).ok).toBe(false);
+    expect(await rows('SELECT * FROM requests')).toHaveLength(0);
+    expect((await createReq([{ MaterialID: 'M-A', Qty: 1 }], { FullName: long(100), Purpose: long(500) })).ok).toBe(true);
+  });
+
+  it('refuses over-long track queries', async () => {
+    expect((await guest('apiTrackRequest', ['ก'.repeat(101)])).ok).toBe(false);
+  });
+});
+
 describe('reads', () => {
   it('track by DocNo exact or FullName substring, max 10', async () => {
     await createReq([{ MaterialID: 'M-A', Qty: 1, Remark: 'หมายเหตุ' }], { FullName: 'สมชาย ใจดี' });
