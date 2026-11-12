@@ -30,12 +30,14 @@
    - รันคำสั่ง CLI อัตโนมัติด้วย flag ยืนยัน (`--yes`, `-y`) เสมอเพื่อป้องกันคำสั่งรอ Interactive TTY
    - หลีกเลี่ยงการใช้ RTK กับ Unix-native binary alias (`ls`, `find`) ที่ไม่มีใน Windows PATH ให้ใช้ PowerShell cmdlet หรือ RTK subcommands ที่รองรับแทน (`rtk git`, `rtk rg`, `rtk test`)
 
-7. **Standard Delivery & Completion Pipeline:**
-   - เมื่อดำเนินการเสร็จสิ้นและการทดสอบทั้งหมดผ่าน (`npm test` 100%):
-     1. อัปเดตบันทึกความคืบหน้าและประวัติการเปลี่ยนแปลงลงใน `docs/HANDOFF.md` เสมอ
-     2. บันทึก Git Commit ตามมาตรฐาน Conventional Commits (Sentry style)
-     3. ส่งการเปลี่ยนแปลงขึ้นรีโมท (`git push origin main`)
-     4. ติดตามและตรวจสอบผลการ Deploy ผ่าน GitHub Actions หรือ Cloudflare Deployment ให้ผ่านสมบูรณ์ทุกครั้ง
+7. **Standard Delivery, Deployment & Handoff Pipeline:**
+   - เมื่อการแก้ไขโค้ด/คอนฟิกเสร็จสิ้น ต้องดำเนินตามขั้นตอนต่อไปนี้ตามลำดับอย่างเคร่งครัด:
+     1. **Verify (ทดสอบ 100%):** รัน `npm test` ในไดเรกทอรี `cloudflare/` ต้องผ่านครบทุกชุด (Cloudflare + Node Vitest) ปราศจาก error
+     2. **Handoff Documentation:** บันทึกสรุปการเปลี่ยนแปลงและประวัติงานของ Session (ทั้งโค้ด, schema, config, การจัดการ skill/plugin) ลงใน `docs/HANDOFF.md` ก่อนทำ Git Commit เสมอ
+     3. **Conventional Commit:** บันทึก Git Commit ตามมาตรฐาน Sentry style (`feat(...)`, `fix(...)`, `ref(...)`, `docs(...)`) พร้อมคำอธิบายเหตุผลและสิ่งที่เปลี่ยน
+     4. **Push to Remote:** ส่งการเปลี่ยนแปลงขึ้นรีโมทด้วย `git push origin main`
+     5. **Monitor & Verify Deployment:** ใช้ `gh run list` หรือ `gh run watch <run-id>` ตรวจสอบ GitHub Actions workflow จนสถานะเป็น `completed / success` (ยืนยันผลการ Deploy บน Cloudflare Worker สำเร็จจริง)
+     6. **Refresh Context Graph:** รัน `graft build` เพื่อรีเฟรช context graph และ wiring graph ให้สอดคล้องกับโค้ดล่าสุด
 
 ## Project Context
 - **เทคโนโลยี:** Cloudflare Workers (TypeScript, RPC), Cloudflare D1 (SQLite), Single-Page Frontend (Vanilla JS, Tailwind), Google Apps Script (Legacy/Sync)

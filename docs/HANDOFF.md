@@ -42,6 +42,8 @@
 4. **การทดสอบและการตรวจสอบ:**
    - รันชุดการทดสอบ `npm test` ผ่าน 100% (Cloudflare Vitest 199 tests + Node Vitest 50 tests รวม 249 tests)
    - Deploy ขึ้น Cloudflare Workers ผ่าน GitHub Actions สำเร็จ (Run ID `43216418043`)
+5. **การยกระดับ Standard Delivery, Deployment & Handoff Pipeline:**
+   - ผ่านกระบวนการ `/learn`: ปรับปรุงกฎข้อ 7 ใน `AGENTS.md` ให้มี 6 ขั้นตอนตายตัว (Verify 100% -> Handoff doc -> Sentry commit -> Push main -> Verify Cloudflare deploy -> Refresh graft) เพื่อความถูกต้องและต่อเนื่องของทุก Session ในอนาคต
 
 ---
 
