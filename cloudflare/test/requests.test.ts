@@ -386,7 +386,17 @@ describe('reads', () => {
     const first = await lastReq();
     for (let i = 0; i < 11; i++) await createReq([{ MaterialID: 'M-A', Qty: 1 }], { FullName: 'สมหญิง ใจดี' });
 
-    const byDoc = await guest('apiTrackRequest', [first.doc_no.toLowerCase()]);
+    // full details need doc number + the requester's surname; wrong/missing surname is refused uniformly
+    const noSurname = await guest('apiTrackRequest', [first.doc_no]);
+    const wrongSurname = await guest('apiTrackRequest', [first.doc_no, 'ผิดนามสกุล']);
+    const nonexistent = await guest('apiTrackRequest', ['REQ-0000-0000', 'ใจดี']);
+    for (const r of [noSurname, wrongSurname]) {
+      expect(r.ok).toBe(false);
+      expect(r.message).toContain('นามสกุล');
+      expect(r.data).toBeUndefined();
+    }
+    expect(nonexistent).toEqual(wrongSurname); // indistinguishable from a real doc with the wrong surname
+    const byDoc = await guest('apiTrackRequest', [first.doc_no.toLowerCase(), 'ใจดี']);
     expect(byDoc.data).toHaveLength(1);
     expect(byDoc.data[0]).toMatchObject({ DocNo: first.doc_no, Status: 'PENDING', ItemCount: 1, TotalAmount: 10, FullName: 'สมชาย ใจดี' });
     expect(byDoc.data[0].Items).toEqual([{ Name: 'ปากกา', Qty: 1, Unit: 'ชิ้น', Remark: 'หมายเหตุ' }]);
@@ -406,7 +416,7 @@ describe('reads', () => {
       expect(r.message).toContain('อย่างน้อย 3');
     }
     expect(await guest('apiTrackRequest', ['  '])).toEqual({ ok: false, message: 'กรุณาระบุเลขที่ใบขอเบิก หรือชื่อผู้ขอเบิก' });
-    expect(await guest('apiTrackRequest', ['ไม่มีคนนี้'])).toEqual({ ok: false, message: 'ไม่พบข้อมูลใบขอเบิกที่ตรงกับคำค้นหา: ไม่มีคนนี้' });
+    expect(await guest('apiTrackRequest', ['ไม่มีคนนี้'])).toEqual({ ok: false, message: wrongSurname.message });
   });
 
   it('list filters, my requests, print', async () => {

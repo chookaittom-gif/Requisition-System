@@ -93,7 +93,13 @@ tailwind.config = {
   .ios-ico{ box-shadow:0 8px 18px -8px rgba(15,23,42,.45); }
 
   input,select,textarea{ outline:none; }
-  input:focus,select:focus,textarea:focus{ border-color:#0284c7; box-shadow:0 0 0 3px rgba(2,132,199,.15); }
+  input:focus,select:focus,textarea:focus{ border-color:#0284c7; box-shadow:0 0 0 3px rgba(2,132,199,.45); }
+  /* focus ring ที่เห็นชัดสำหรับคีย์บอร์ด (WCAG 2.4.7 / 1.4.11) */
+  button:focus-visible,a:focus-visible,[role="button"]:focus-visible,summary:focus-visible{ outline:3px solid #0284c7; outline-offset:2px; }
+  main:focus{ outline:none; }
+  ::placeholder{ color:#64748b; opacity:1; }
+  /* ฟอนต์ 16px บนมือถือ กัน iOS ซูมหน้าเมื่อโฟกัสช่องกรอก */
+  @media (max-width:767px){ input:not([type="checkbox"]):not([type="radio"]),select,textarea{ font-size:16px !important; } }
 
   /* Touch target >= 44px (AGENTS.md ข้อ 2) — ครอบคลุมทุกปุ่ม/ช่องกรอก; checkbox/radio ปล่อยตามขนาด native */
   button:not(.swal2-styled),[role="button"],select,
@@ -205,6 +211,7 @@ tailwind.config = {
 </head>
 
 <body class="font-sarabun bg-slate-50 text-slate-800 antialiased">
+<a href="#content" onclick="event.preventDefault(); var c=document.getElementById('content'); if(c){c.focus();}" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-3 focus:rounded-xl focus:bg-white focus:text-brand-700 focus:font-bold focus:shadow-lg">ข้ามไปเนื้อหาหลัก</a>
 
 <div id="splash" class="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-[#0c4a6e] via-[#075985] to-[#0284c7] overflow-hidden hidden" style="transition: opacity 0.45s; opacity: 0;">
   <div class="absolute inset-0 pointer-events-none opacity-[0.08]" style="background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cg transform='translate(6,4) rotate(-6)'%3E%3Cpath d='M25 6 L46 15 L46 37 L25 46 L4 37 L4 15 Z'/%3E%3Cpath d='M4 15 L25 24 L46 15'/%3E%3Cpath d='M25 24 L25 46'/%3E%3C/g%3E%3Cg transform='translate(150,14) rotate(4)'%3E%3Cpath d='M2 10 h20 l6 8 h34 v36 h-60 Z'/%3E%3Cline x1='2' y1='18' x2='62' y2='18'/%3E%3C/g%3E%3Cg transform='translate(46,112) rotate(3)'%3E%3Cpath d='M4 2 h30 l10 10 v42 h-40 Z'/%3E%3Cpath d='M34 2 v10 h10'/%3E%3Cline x1='10' y1='24' x2='38' y2='24'/%3E%3Cline x1='10' y1='34' x2='38' y2='34'/%3E%3Cline x1='10' y1='44' x2='30' y2='44'/%3E%3C/g%3E%3Cg transform='translate(168,120) rotate(18)'%3E%3Cpath d='M8 4 v40 a10 10 0 0 0 20 0 v-32 a6 6 0 0 0 -12 0 v28'/%3E%3C/g%3E%3Cg transform='translate(14,168) rotate(-28)'%3E%3Cpath d='M0 42 L5 30 L36 0 L44 8 L13 38 Z'/%3E%3Cline x1='5' y1='30' x2='13' y2='38'/%3E%3C/g%3E%3Cg transform='translate(120,180) rotate(-8)'%3E%3Cpath d='M2 2 h30 l8 8 v28 h-38 Z'/%3E%3Cpath d='M2 2 l19 16 l19 -16'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E&quot;); background-repeat:repeat; background-size:240px 240px; background-position:0 0;"></div>
@@ -260,11 +267,7 @@ tailwind.config = {
         <h2 class="relative mt-6 text-xl sm:text-2xl font-extrabold leading-snug">ระบบเบิกจ่ายพัสดุ</h2>
         <p id="loginSchool" class="relative mt-2 font-semibold text-white/95">กำลังโหลดข้อมูล.....</p>
         <p id="loginAffil" class="relative text-sm text-white/80"></p>
-        <div class="relative mt-6 flex gap-2 flex-wrap justify-center">
-          <span class="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold"><i class="fa-solid fa-boxes-packing mr-1"></i> จัดการพัสดุ</span>
-          <span class="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold"><i class="fa-solid fa-file-invoice mr-1"></i> ใบขอเบิก</span>
-          <span class="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold"><i class="fa-solid fa-chart-pie mr-1"></i> บัญชีพัสดุ</span>
-        </div>
+        <p class="relative mt-6 text-sm text-white/90 max-w-xs">อาจารย์และบุคลากรขอเบิกพัสดุออนไลน์ได้ทันที ไม่ต้องเข้าสู่ระบบ</p>
       </div>
 
       <div class="p-8 sm:p-10 flex flex-col justify-center">
@@ -287,26 +290,25 @@ tailwind.config = {
         </div>
         <!-- Guest Quick Actions -->
         <div class="mb-5 p-4 rounded-2xl bg-sky-50/90 border border-sky-100 flex flex-col gap-2.5 shadow-sm">
-          <p class="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-            <i class="fa-solid fa-users text-sky-600"></i> สำหรับอาจารย์ / บุคลากร (ทำรายการได้ทันที)
+          <p class="text-sm font-bold text-sky-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-users text-sky-600" aria-hidden="true"></i> สำหรับอาจารย์ / บุคลากร (ทำรายการได้ทันที)
           </p>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" id="btnGuestReq" class="px-3 py-2.5 rounded-xl bg-teal text-white font-bold text-xs shadow-sm hover:brightness-105 active:scale-95 transition flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-file-pen"></i> ขอเบิกพัสดุ
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button type="button" id="btnGuestReq" class="px-4 py-4 min-h-[56px] rounded-2xl bg-teal text-white font-extrabold text-lg shadow-sm hover:brightness-105 active:scale-95 transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-file-pen" aria-hidden="true"></i> ขอเบิกพัสดุ
             </button>
-            <button type="button" id="btnGuestTrack" class="px-3 py-2.5 rounded-xl bg-white border border-sky-200 text-sky-700 font-bold text-xs shadow-sm hover:bg-sky-50 active:scale-95 transition flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-magnifying-glass"></i> ติดตามสถานะ
+            <button type="button" id="btnGuestTrack" class="px-4 py-4 min-h-[56px] rounded-2xl bg-white border-2 border-sky-300 text-sky-800 font-extrabold text-lg shadow-sm hover:bg-sky-50 active:scale-95 transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> ติดตามสถานะ
             </button>
           </div>
         </div>
 
-        <div class="relative flex py-1 items-center mb-3">
-          <div class="flex-grow border-t border-slate-200"></div>
-          <span class="flex-shrink mx-3 text-[11px] font-bold text-slate-400">สำหรับเจ้าหน้าที่และผู้ดูแลระบบ</span>
-          <div class="flex-grow border-t border-slate-200"></div>
-        </div>
-
-        <h3 class="text-xl font-extrabold text-slate-800">เข้าสู่ระบบเจ้าหน้าที่</h3>
+        <details id="staffLoginBox" class="group">
+          <summary class="cursor-pointer select-none list-none flex items-center justify-between gap-2 min-h-[44px] px-1 text-sm font-bold text-slate-600 hover:text-brand-700">
+            <span><i class="fa-solid fa-user-shield mr-1.5" aria-hidden="true"></i> สำหรับเจ้าหน้าที่และผู้ดูแลระบบ — เข้าสู่ระบบ</span>
+            <i class="fa-solid fa-chevron-down text-xs transition group-open:rotate-180" aria-hidden="true"></i>
+          </summary>
+        <h3 class="mt-3 text-xl font-extrabold text-slate-800">เข้าสู่ระบบเจ้าหน้าที่</h3>
         <p class="text-xs text-slate-500 mt-0.5">กรอกชื่อผู้ใช้และรหัสผ่านเพื่อจัดการระบบ</p>
 
         <form id="loginForm" class="mt-4 space-y-4" autocomplete="off">
@@ -314,15 +316,15 @@ tailwind.config = {
             <label class="block text-sm font-semibold text-slate-700 mb-1.5">ชื่อผู้ใช้ (Username)</label>
             <div class="relative">
               <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-              <input id="liUser" type="text" required placeholder="username" class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/70 transition">
+              <input id="liUser" type="text" required autocomplete="username" aria-label="ชื่อผู้ใช้ (Username)" placeholder="username" class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/70 transition">
             </div>
           </div>
           <div>
             <label class="block text-sm font-semibold text-slate-700 mb-1.5">รหัสผ่าน (Password)</label>
             <div class="relative">
               <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-              <input id="liPass" type="password" required placeholder="••••••" class="w-full pl-11 pr-12 py-3 rounded-2xl border border-slate-200 bg-slate-50/70 transition">
-              <button type="button" id="togglePass" class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400">
+              <input id="liPass" type="password" required autocomplete="current-password" aria-label="รหัสผ่าน (Password)" placeholder="••••••" class="w-full pl-11 pr-12 py-3 rounded-2xl border border-slate-200 bg-slate-50/70 transition">
+              <button type="button" id="togglePass" aria-label="แสดงหรือซ่อนรหัสผ่าน" title="แสดง/ซ่อนรหัสผ่าน" class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400">
                 <i class="fa-regular fa-eye"></i>
               </button>
             </div>
@@ -332,6 +334,7 @@ tailwind.config = {
             <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ
           </button>
         </form>
+        </details>
 
         <div class="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-500 space-y-1">
           <p class="font-semibold text-slate-700">ระบบเบิกจ่ายพัสดุ v1.0 | © 2026 มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</p>
@@ -357,7 +360,7 @@ tailwind.config = {
     <p class="font-extrabold text-slate-800 leading-tight text-[15px]">ระบบเบิกจ่ายพัสดุ</p>
     <p id="sbSchool" class="text-[11px] text-slate-500 truncate">มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</p>
   </div>
-  <button id="btnCloseSb" class="ml-auto lg:hidden w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500">
+  <button id="btnCloseSb" aria-label="ปิดเมนู" class="ml-auto lg:hidden w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-500">
     <i class="fa-solid fa-xmark"></i>
   </button>
 </div>
@@ -371,7 +374,7 @@ tailwind.config = {
           <p id="sbName" class="text-sm font-bold text-slate-800 truncate">-</p>
           <p id="sbRole" class="text-[11px] text-slate-500 truncate">-</p>
         </div>
-        <button id="btnLogout" class="w-9 h-9 rounded-xl bg-white text-rose2 hover:bg-rose2 hover:text-white transition shadow-sm" title="ออกจากระบบ">
+        <button id="btnLogout" aria-label="ออกจากระบบ" class="w-9 h-9 rounded-xl bg-white text-rose2 hover:bg-rose2 hover:text-white transition shadow-sm" title="ออกจากระบบ">
           <i class="fa-solid fa-arrow-right-from-bracket"></i>
         </button>
       </div>
@@ -382,7 +385,7 @@ tailwind.config = {
 
     <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-100">
       <div class="px-4 sm:px-6 h-16 flex items-center gap-3">
-        <button id="btnOpenSb" class="lg:hidden w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 hover:bg-brand-50 hover:text-brand-600 transition">
+        <button id="btnOpenSb" aria-label="เปิดเมนู" class="lg:hidden w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 hover:bg-brand-50 hover:text-brand-600 transition">
           <i class="fa-solid fa-bars"></i>
         </button>
         <div class="min-w-0">
@@ -393,7 +396,7 @@ tailwind.config = {
           <span id="todayBadge" class="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-brand-50 text-brand-700 text-xs font-bold">
             <i class="fa-regular fa-calendar"></i><span>-</span>
           </span>
-          <button id="btnRefresh" class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 hover:bg-brand-600 hover:text-white transition" title="รีเฟรช">
+          <button id="btnRefresh" aria-label="รีเฟรชข้อมูล" class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 hover:bg-brand-600 hover:text-white transition" title="รีเฟรช">
             <i class="fa-solid fa-rotate"></i>
           </button>
         </div>
@@ -407,7 +410,7 @@ tailwind.config = {
       </div>
     </div>
 
-    <main id="content" class="flex-1 p-4 sm:p-6 pb-32 lg:pb-8"></main>
+    <main id="content" tabindex="-1" class="flex-1 p-4 sm:p-6 pb-32 lg:pb-8"></main>
 
     <footer class="border-t border-slate-200/80 bg-white px-4 sm:px-6 py-4 pb-28 lg:pb-4">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
@@ -1970,6 +1973,11 @@ const BOOT_KEY = 'supply_boot';
 function showLogin_(){
   $('#splash').classList.add('hidden');
   $('#loginPage').classList.remove('hidden');
+  // เปิดลิงก์ตรงมายังหน้าเจ้าหน้าที่ (#a-*, #t-*) → กางฟอร์ม login ให้เลย
+  try{
+    const h = (window.location.hash || '').replace(/^#/, '');
+    if(/^(a|t)-/.test(h) && h !== 't-form' && $('#staffLoginBox')) $('#staffLoginBox').open = true;
+  }catch(e){}
 }
 
 async function init(){
@@ -2158,9 +2166,9 @@ function renderMenu(){
     </button>`).join('');
 
   $('#mobileNavInner').innerHTML = list.slice(0,5).map(m=>`
-    <button data-go="${m.id}" data-mn="${m.id}" class="mn-item flex flex-col items-center gap-1 py-2 rounded-2xl transition">
-      <i class="fa-solid ${m.icon} text-[17px]"></i>
-      <span class="text-[9.5px] font-bold leading-none text-center">${esc(m.title.length>10?m.title.substring(0,9)+'…':m.title)}</span>
+    <button data-go="${m.id}" data-mn="${m.id}" aria-label="${esc(m.title)}" class="mn-item flex flex-col items-center justify-center gap-1 py-2 rounded-2xl transition">
+      <i class="fa-solid ${m.icon} text-[17px]" aria-hidden="true"></i>
+      <span class="text-[11px] font-bold leading-tight text-center break-words px-0.5" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(m.title)}</span>
     </button>`).join('');
 
   $('#shortcutGrid').innerHTML = list.map(m=>`
@@ -2272,6 +2280,7 @@ async function go(view, keepCache){
   if(window.innerWidth < 1024 && !$('#sbBackdrop').classList.contains('hidden')) toggleSidebar();
   $('#shortcutBar').classList.toggle('hidden', !(view==='a-dash'||view==='t-dash'));
   window.scrollTo({ top:0, behavior:'smooth' });
+  try{ $('#content').focus({ preventScroll:true }); }catch(e){} // ย้ายโฟกัสไปเนื้อหาใหม่ (คีย์บอร์ด/screen reader)
 
   // Guard: If non-admin tries to access admin-only views
   if((view==='a-user'||view==='a-setting'||view==='a-audit'||view==='a-personnel') && role!=='admin'){
@@ -2326,17 +2335,18 @@ async function viewPublicTrack(){
     <div class="max-w-3xl mx-auto animate-fadeUp">
       ${cardWrap('ติดตามสถานะใบขอเบิกพัสดุ', 'fa-magnifying-glass', `
         <div class="space-y-4">
-          <p class="text-xs text-slate-500">กรอกเลขที่ใบขอเบิก (เช่น <span class="font-bold text-brand-600">REQ-2569-0001</span>) หรือระบุชื่อผู้ขอเบิก (อย่างน้อย 3 ตัวอักษร) เพื่อตรวจสอบสถานะคำขอ — การค้นด้วยชื่อจะแสดงเฉพาะสรุป ใช้เลขที่ใบขอเบิกเพื่อดูรายละเอียดเต็ม</p>
-          <div class="flex gap-2">
+          <p class="text-sm text-slate-600">วิธีที่ 1 (ดูรายละเอียดเต็ม): กรอก <b>เลขที่ใบขอเบิก</b> (เช่น <span class="font-bold text-brand-600">REQ-2569-0001</span>) และ <b>นามสกุลผู้ขอเบิก</b><br>วิธีที่ 2 (ลืมเลขที่): กรอกชื่อผู้ขอเบิกอย่างน้อย 3 ตัวอักษร จะแสดงเฉพาะสรุป แล้วนำเลขที่ที่ได้ไปค้นตามวิธีที่ 1</p>
+          <div class="flex flex-col sm:flex-row gap-2">
             <div class="relative flex-1">
-              <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-              <input id="trackQuery" type="text" placeholder="ระบุเลขที่ใบขอเบิก หรือ ชื่อ-นามสกุล..." class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition text-sm font-semibold">
+              <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true"></i>
+              <input id="trackQuery" type="text" maxlength="100" aria-label="เลขที่ใบขอเบิก หรือ ชื่อ-นามสกุล" placeholder="ระบุเลขที่ใบขอเบิก หรือ ชื่อ-นามสกุล..." class="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition text-sm font-semibold">
             </div>
+            <input id="trackSurname" type="text" maxlength="100" autocomplete="family-name" aria-label="นามสกุลผู้ขอเบิก (ใช้คู่กับเลขที่ใบขอเบิก)" placeholder="นามสกุลผู้ขอเบิก (ใช้คู่กับเลขที่ใบขอเบิก)" class="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition text-sm font-semibold">
             <button id="btnDoTrack" class="px-5 py-3 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-soft hover:brightness-110 active:scale-95 transition flex items-center gap-2">
               <i class="fa-solid fa-search"></i> ค้นหา
             </button>
           </div>
-          <div id="trackResult" class="mt-6 space-y-4">
+          <div id="trackResult" class="mt-6 space-y-4" role="status" aria-live="polite">
             <div class="p-8 text-center text-slate-400 text-sm rounded-2xl border border-dashed border-slate-200">
               <i class="fa-solid fa-file-circle-question text-4xl mb-2 text-slate-300"></i>
               <p>กรอกเลขที่ใบขอเบิกหรือชื่อ และกดปุ่มค้นหาเพื่อดูข้อมูล</p>
@@ -2357,13 +2367,14 @@ async function viewPublicTrack(){
     if(btnT) btnT.disabled = true;
     $('#trackResult').innerHTML = '<div class="py-8 text-center text-slate-500"><i class="fa-solid fa-spinner animate-spin text-2xl text-brand-600 mb-2"></i><p>กำลังค้นหาข้อมูล...</p></div>';
     let r;
-    try{ r = await api('apiTrackRequest', [q]); }
+    try{ r = await api('apiTrackRequest', q, ($('#trackSurname') && $('#trackSurname').value.trim()) || ''); }
     catch(err){ r = { ok:false, message:'ค้นหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }; }
     finally{ trackBusy = false; if(btnT) btnT.disabled = false; }
     if(!r || !r.ok || !r.data || !r.data.length){
       $('#trackResult').innerHTML = `<div class="p-6 rounded-2xl bg-rose-50 border border-rose-100 text-rose-700 text-center text-sm font-semibold">
         <i class="fa-solid fa-circle-exclamation text-xl mb-1 text-rose-500"></i>
         <p>${esc((r && r.message) || 'ไม่พบข้อมูลใบขอเบิกที่ตรงกับคำค้นหา')}</p>
+        <p class="mt-2 text-xs font-normal text-rose-600">ลองตรวจเลขที่ใบขอเบิกอีกครั้ง หรือค้นด้วยชื่อ-นามสกุล (อย่างน้อย 3 ตัวอักษร) เพื่อดูเลขที่ใบขอเบิก หากยังไม่พบ โปรดติดต่อเจ้าหน้าที่พัสดุ</p>
       </div>`;
       return;
     }
@@ -2422,6 +2433,7 @@ async function viewPublicTrack(){
 
   $('#btnDoTrack').addEventListener('click', doSearch);
   $('#trackQuery').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
+  $('#trackSurname').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
 }
 
 /* =================================================================================
@@ -3375,7 +3387,8 @@ async function viewLowStock(){
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   const key='low';
   const outN = r.data.filter(m=>m.StockState==='OUT').length;
-  const poBtn = r.data.length
+  const isStaffView = Boolean(S.user && S.user.Role !== 'guest');
+  const poBtn = r.data.length && isStaffView
     ? btn('btnLowToPo','fa-file-invoice','ส่งไปทำใบสั่งซื้อ','bg-brand-600 text-white hover:bg-brand-700 shadow-soft')
     : '';
 
@@ -3386,10 +3399,10 @@ async function viewLowStock(){
     </div>
     <div class="mt-5">
       ${cardWrap('รายการพัสดุที่หมด/ใกล้หมด','fa-bell', `<div>${renderLow(r.data, key)}</div>`,
-        viewToggle(key) + btn('btnPrintLow','fa-print','พิมพ์รายงาน','bg-slate-800 text-white hover:bg-slate-700') + poBtn)}
+        viewToggle(key) + (isStaffView ? btn('btnPrintLow','fa-print','พิมพ์รายงาน','bg-slate-800 text-white hover:bg-slate-700') : '') + poBtn)}
     </div>`;
 
-  $('#btnPrintLow').addEventListener('click', ()=> printLowStock(r.data));
+  if($('#btnPrintLow')) $('#btnPrintLow').addEventListener('click', ()=> printLowStock(r.data));
   const btnToPo = $('#btnLowToPo');
   if(btnToPo){
     btnToPo.addEventListener('click', () => {
@@ -3411,7 +3424,7 @@ function renderLow(list, key){
         <p class="mt-2 font-bold text-slate-800">${esc(m.Name)}</p>
         <div class="mt-3 flex items-end justify-between">
           <div><p class="text-xs text-slate-500">คงเหลือ</p><p class="text-2xl font-extrabold ${m.StockState==='OUT'?'text-red2':'text-orange2'}">${nf(m.StockQty)}</p></div>
-          <p class="text-xs text-slate-500">${esc(m.Unit)} • จุดสั่งซื้อ ${nf(m.MinQty)}</p>
+          <p class="text-xs text-slate-500">${esc(m.Unit)} • ระดับขั้นต่ำ ${nf(m.MinQty)}</p>
         </div>
       </div>`).join('')}</div>`;
   }
@@ -3422,7 +3435,7 @@ function renderLow(list, key){
         <th class="px-3 py-3 text-left">ชื่อพัสดุ</th>
         <th class="px-3 py-3 text-center">หน่วยนับ</th>
         <th class="px-3 py-3 text-center">คงเหลือ</th>
-        <th class="px-3 py-3 text-center">จุดสั่งซื้อ</th>
+        <th class="px-3 py-3 text-center">ระดับขั้นต่ำ</th>
         <th class="px-3 py-3 text-center rounded-r-xl">สถานะ</th>
       </tr></thead>
       <tbody class="divide-y divide-slate-100">${list.map(m=>`

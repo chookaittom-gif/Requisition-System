@@ -515,6 +515,8 @@ registerRpc('apiGetMyRequests', 'officer', async (ctx, args) => {
 });
 
 const TRACK_NAME_MIN_CHARS = 3;
+// Same text for "no such document", "wrong surname" and "no name match" so a guessed number can't be confirmed.
+const TRACK_NO_MATCH = 'ไม่พบข้อมูลที่ตรงกัน กรุณาตรวจสอบเลขที่ใบขอเบิก และกรอกนามสกุลผู้ขอเบิกให้ถูกต้อง';
 
 /** Keep the first 2 characters of each word, mask the rest: "สมชาย ใจดี" -> "สม*** ใจ***". */
 function maskName(name: string): string {
@@ -524,6 +526,8 @@ function maskName(name: string): string {
     .map((w) => [...w].slice(0, 2).join('') + '***')
     .join(' ');
 }
+
+const lastWord = (s: string): string => s.trim().toLowerCase().split(/\s+/).filter(Boolean).pop() ?? '';
 
 registerRpc('apiTrackRequest', 'public', async (ctx, args) => {
   const raw = args[0];
@@ -536,7 +540,11 @@ registerRpc('apiTrackRequest', 'public', async (ctx, args) => {
     .prepare('SELECT * FROM requests WHERE lower(doc_no) = ? OR lower(id) = ? ORDER BY created_at DESC, doc_no DESC LIMIT 10')
     .bind(q, q)
     .all<Obj>();
-  const results = exact.results;
+  // Document numbers are sequential (guessable), so details also need the requester's surname.
+  // One uniform message for "no such doc" vs "wrong surname" so the endpoint can't confirm a guessed number.
+  const surname = lastWord(String(args[1] ?? ''));
+  const results = exact.results.filter((row) => surname !== '' && lastWord(String(row.full_name ?? '')) === surname);
+  if (exact.results.length && !results.length) return fail(TRACK_NO_MATCH);
   if (!results.length) {
     // Name lookup is enumerable by anyone, so require a minimum length and return a masked summary only.
     if ([...q].length < TRACK_NAME_MIN_CHARS) {
@@ -546,7 +554,7 @@ registerRpc('apiTrackRequest', 'public', async (ctx, args) => {
       .prepare('SELECT * FROM requests WHERE instr(lower(full_name), ?) > 0 ORDER BY created_at DESC, doc_no DESC LIMIT 10')
       .bind(q)
       .all<Obj>();
-    if (!byName.results.length) return fail(`ไม่พบข้อมูลใบขอเบิกที่ตรงกับคำค้นหา: ${raw}`);
+    if (!byName.results.length) return fail(TRACK_NO_MATCH);
     return {
       ok: true,
       data: byName.results.map((row) => {
