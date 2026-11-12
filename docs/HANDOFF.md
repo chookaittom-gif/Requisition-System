@@ -35,6 +35,10 @@
   - `viewPublicTrack` → `doSearch`: flag `trackBusy`, disable `#btnDoTrack`, ครอบ try/catch/finally (เครือข่ายล้มแล้วไม่ค้าง spinner)
   - ไม่มี unit test ใหม่ (โค้ด frontend ล้วน) — ยังไม่ได้ทดสอบ double-click จริงบน browser หลัง deploy ผ่านการส่งใบเบิกจริง (production)
 
+- **fix(frontend): Touch target ≥ 44px (Top 10 ข้อ 2)** ใน `cloudflare/public/index.html` (บล็อก `<style>` หลัง `input:focus`): กฎ CSS ส่วนกลาง `min-height:44px` สำหรับ button/[role=button]/select/input (ยกเว้น checkbox/radio/hidden/range/file และปุ่ม SweetAlert) และ `min-width:44px` สำหรับ button
+  - พรีวิวด้วยการฉีด CSS บนหน้า production (ฝั่ง client เท่านั้น): ควบคุมที่เล็กกว่า 44px ในหน้า จัดการพัสดุ ลดจาก 137 เหลือเฉพาะ checkbox 16px (ตั้งใจไม่ขยาย), หน้าอื่นที่ตรวจเหลือ 0–2; ไม่มี horizontal overflow
+  - ยังไม่ได้ตรวจบนมือถือจริงและหน้า guest/login หลัง deploy จริง
+
 ---
 
 ## 2. สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-12 Requisition Form UX for Authenticated Users)
