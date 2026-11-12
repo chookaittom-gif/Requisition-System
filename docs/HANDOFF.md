@@ -20,7 +20,27 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-12 Department & Position Standardization + Mobile Requisition Fix)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-12 Requisition Form UX for Authenticated Users)
+
+ผ่านกระบวนการ Grill-me และ Plan-gate กับผู้ใช้:
+1. **ข้อสรุปด้านสถาปัตยกรรม (No Personnel Code for Admin/Officers):**
+   - ไม่จำเป็นต้องเพิ่มรหัสบุคลากรให้กับตารางผู้ใช้งาน (`users`) เนื่องจากผู้ดูแลระบบและเจ้าหน้าที่มีบัญชีและยืนยันตัวตนผ่าน Session (Username/Password) อยู่แล้ว
+   - การดึงชื่อ ตำแหน่ง และสังกัด ทำได้โดยตรงจาก Session Profile ป้องกันความซ้ำซ้อน
+2. **ปรับปรุงแบบฟอร์มขอเบิกพัสดุ (`cloudflare/public/index.html`):**
+   - **กรณีผู้ใช้ล็อกอิน (Admin / Officer):**
+     - ซ่อนกล่องค้นหารหัสบุคลากร (`rPersonnelCode`) ทั้งหมด ไม่ให้เกิดความสับสน
+     - แสดงการ์ดสรุปข้อมูลผู้ขอเบิก (Verified Requester Card) ดีไซน์ oil-ui-pro พร้อมป้ายสถานะ `เข้าสู่ระบบแล้ว (@username)` และล็อกฟิลด์ (Readonly with lock icon) ป้องกันข้อมูลคลาดเคลื่อน
+     - ปรับช่องวันที่ขอเบิกให้อยู่ถัดลงมาอย่างเป็นระเบียบ ไม่ซ้ำซ้อน
+     - ใน `submitRequest`: ข้ามการตรวจสอบรหัสบุคลากร (`doLookupPersonnel_`) และส่ง `UserID = S.user.ID` พร้อมดึงชื่อ-ตำแหน่ง-สังกัดของผู้ล็อกอินลงใบเบิกโดยตรง
+     - ใน `loadReqDraft`: ป้องกันการเขียนทับข้อมูลผู้ล็อกอินจากแบบร่างเก่า
+   - **กรณีผู้ใช้งานทั่วไป / ไม่ได้ล็อกอิน (Guest):**
+     - แสดงกล่องค้นหารหัสบุคลากรเพื่อดึงข้อมูลอัตโนมัติจากทะเบียนบุคลากรตามปกติ 100%
+3. **การทดสอบและการตรวจสอบ:**
+   - รันชุดการทดสอบ `npm test` ผ่าน 100% (Cloudflare Vitest 199 tests + Node Vitest 50 tests รวม 249 tests)
+
+---
+
+## 2.1 สิ่งที่ทำสำเร็จใน Session ก่อนหน้า (2026-11-12 Department & Position Standardization + Mobile Requisition Fix)
 
 ผ่านกระบวนการ Grill-me และ Plan-gate กับผู้ใช้:
 1. **กำหนดมาตรฐานสังกัดและตำแหน่งผู้ใช้งาน:**

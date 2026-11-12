@@ -8833,11 +8833,61 @@ async function viewRequestForm(){
   if(!r.ok) return (c.innerHTML = emptyBox(r.message));
   S.cache.materials = r.data;
   S.reqItemSeq = 0;
+  const isAuthUser = Boolean(S.user && S.user.Role !== 'guest');
 
   c.innerHTML = `<div class="max-w-4xl mx-auto animate-fadeUp">${cardWrap('แบบฟอร์มขอเบิกพัสดุ','fa-file-pen', `
     <div id="draftAlertContainer"></div>
     <form id="frmReq" class="space-y-5" novalidate>
-      <!-- ค้นหารหัสบุคลากร -->
+      ${isAuthUser ? `
+      <!-- ข้อมูลผู้ขอเบิก (ผู้ใช้งานที่เข้าสู่ระบบ) -->
+      <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-sky-50/90 via-blue-50/50 to-indigo-50/30 border border-sky-100 shadow-2xs">
+        <div class="flex items-center justify-between mb-3.5 flex-wrap gap-2.5">
+          <div class="flex items-center gap-2.5">
+            <span class="w-9 h-9 rounded-xl bg-sky-600 text-white inline-flex items-center justify-center text-sm shadow-sm ring-4 ring-sky-100/70">
+              <i class="fa-solid fa-user-check"></i>
+            </span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-sm font-bold text-slate-800 leading-tight">ข้อมูลผู้ขอเบิก</h4>
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  <i class="fa-solid fa-circle-check text-[10px]"></i> เข้าสู่ระบบแล้ว
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">ระบบดึงข้อมูลจากบัญชีผู้ใช้ (@${esc(S.user.Username || '')}) เพื่อความถูกต้องของเอกสาร</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-sky-100/70">
+          <div class="bg-white/90 backdrop-blur-xs p-3 rounded-xl border border-sky-100/60 shadow-2xs">
+            <span class="text-[11px] font-medium text-slate-400 block mb-1 flex items-center gap-1">
+              <i class="fa-regular fa-user text-sky-500"></i> ชื่อ - นามสกุล <i class="fa-solid fa-lock text-slate-300 text-[10px] ml-auto" title="ล็อกฟิลด์ตามบัญชีผู้ใช้"></i>
+            </span>
+            <input id="rName" value="${esc(S.user.FullName || '')}" readonly class="w-full bg-transparent font-bold text-slate-800 text-sm focus:outline-none cursor-not-allowed">
+          </div>
+          <div class="bg-white/90 backdrop-blur-xs p-3 rounded-xl border border-sky-100/60 shadow-2xs">
+            <span class="text-[11px] font-medium text-slate-400 block mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-briefcase text-sky-500"></i> ตำแหน่ง <i class="fa-solid fa-lock text-slate-300 text-[10px] ml-auto" title="ล็อกฟิลด์ตามบัญชีผู้ใช้"></i>
+            </span>
+            <input id="rPos" value="${esc(S.user.Position || 'เจ้าหน้าที่')}" readonly class="w-full bg-transparent font-bold text-slate-800 text-sm focus:outline-none cursor-not-allowed">
+          </div>
+          <div class="bg-white/90 backdrop-blur-xs p-3 rounded-xl border border-sky-100/60 shadow-2xs">
+            <span class="text-[11px] font-medium text-slate-400 block mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-building text-sky-500"></i> สังกัด / ฝ่ายงาน <i class="fa-solid fa-lock text-slate-300 text-[10px] ml-auto" title="ล็อกฟิลด์ตามบัญชีผู้ใช้"></i>
+            </span>
+            <input id="rDept" value="${esc(S.user.Department || 'สำนักงานศูนย์การศึกษา')}" readonly class="w-full bg-transparent font-bold text-slate-800 text-sm focus:outline-none cursor-not-allowed truncate" title="${esc(S.user.Department || 'สำนักงานศูนย์การศึกษา')}">
+          </div>
+        </div>
+        <input type="hidden" id="rPersonnelCode" value="">
+      </div>
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-1.5">วันที่ขอเบิก <span class="text-rose2">*</span></label>
+        <div class="flex items-center gap-3">
+          <input id="rDate" type="date" value="${todayYMD()}" required class="w-full max-w-xs px-4 py-3 min-h-[44px] rounded-2xl border border-slate-200 bg-slate-50/60 font-medium text-slate-800 text-sm">
+          <p class="text-xs text-brand-600 font-semibold" id="rDateTh">${thaiDate(todayYMD())}</p>
+        </div>
+      </div>
+      ` : `
+      <!-- ค้นหารหัสบุคลากร (สำหรับผู้ใช้งานทั่วไป) -->
       <div class="p-4 sm:p-4.5 rounded-2xl bg-gradient-to-r from-sky-50/70 via-blue-50/40 to-slate-50 border border-sky-100 shadow-2xs">
         <div class="flex items-center justify-between mb-2">
           <label for="rPersonnelCode" class="block text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -8872,27 +8922,22 @@ async function viewRequestForm(){
           <input id="rDate" type="date" value="${todayYMD()}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60">
           <p class="mt-1 text-xs text-brand-600 font-semibold" id="rDateTh">${thaiDate(todayYMD())}</p></div>
         <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ตำแหน่ง <span class="text-rose2">*</span></label>
-          ${S.user && S.user.Role !== 'guest' && S.user.Position
-            ? `<input id="rPos" value="${esc(S.user.Position)}" readonly class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed">`
-            : `<select id="rPos" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
-                 <option value="">-- เลือกตำแหน่ง --</option>
-                 <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
-                 <option value="อาจารย์">อาจารย์</option>
-               </select>`
-          }</div>
+          <select id="rPos" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
+            <option value="">-- เลือกตำแหน่ง --</option>
+            <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
+            <option value="อาจารย์">อาจารย์</option>
+          </select></div>
       </div>
 
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อ - สกุล <span class="text-rose2">*</span></label>
-        ${S.user && S.user.Role !== 'guest' && S.user.FullName
-          ? `<input id="rName" value="${esc(S.user.FullName)}" readonly class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed">`
-          : `<input id="rName" required placeholder="ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">`
-        }</div>
+        <input id="rName" required placeholder="ระบุชื่อ - นามสกุลเต็ม เช่น สมรักษ์ คำดี (ต้องระบุทั้งชื่อและนามสกุล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
 
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
         <select id="rDept" required class="w-full px-4 py-3 min-h-[48px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 font-medium text-slate-800 text-sm outline-none transition cursor-pointer">
-          ${renderDeptSelectOptions((S.user && S.user.Role !== 'guest' && (S.user.Department || 'สำนักงานศูนย์การศึกษา')) || '')}
+          ${renderDeptSelectOptions('สำนักงานศูนย์การศึกษา')}
         </select>
       </div>
+      `}
 
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">มีความจำเป็นต้องเบิกพัสดุเพื่อ <span class="text-rose2">*</span></label>
         <input id="rPurpose" list="purposeList" required placeholder="เช่น เพื่อจัดการเรียนการสอนรายวิชา..., กิจกรรมนักศึกษา, งานสำนักงานประจำวัน" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
@@ -9271,7 +9316,7 @@ async function viewRequestForm(){
 
   if(draft && draft.data){
     const d = draft.data;
-    if(d.PersonnelCode && $('#rPersonnelCode')){
+    if(!isAuthUser && d.PersonnelCode && $('#rPersonnelCode')){
       $('#rPersonnelCode').value = d.PersonnelCode;
       if(d.PersonnelVerified){
         doLookupPersonnel_(d.PersonnelCode, true);
@@ -9281,8 +9326,8 @@ async function viewRequestForm(){
       $('#rDate').value = d.Date;
       if($('#rDateTh')) $('#rDateTh').textContent = thaiDate(d.Date);
     }
-    if($('#rPos') && !$('#rPos').readOnly && d.Position) $('#rPos').value = d.Position;
-    if($('#rName') && !$('#rName').readOnly && d.FullName) $('#rName').value = d.FullName;
+    if(!isAuthUser && $('#rPos') && !$('#rPos').readOnly && d.Position) $('#rPos').value = d.Position;
+    if(!isAuthUser && $('#rName') && !$('#rName').readOnly && d.FullName) $('#rName').value = d.FullName;
     if($('#rDept') && d.Department){
       const el = $('#rDept');
       if(el.tagName === 'SELECT'){
@@ -9475,8 +9520,9 @@ async function submitRequest(e){
     return;
   }
 
-  const pCode = ($('#rPersonnelCode') && $('#rPersonnelCode').value.trim()) || '';
-  if(pCode && !S.reqPersonnel){
+  const isAuthUser = Boolean(S.user && S.user.Role !== 'guest');
+  const pCode = (!isAuthUser && $('#rPersonnelCode') && $('#rPersonnelCode').value.trim()) || '';
+  if(!isAuthUser && pCode && !S.reqPersonnel){
     showLoader('กำลังตรวจสอบรหัสบุคลากร...');
     const ok = await doLookupPersonnel_(pCode, true);
     hideLoader();
@@ -9486,12 +9532,12 @@ async function submitRequest(e){
     }
   }
 
-  const reqDept = (S.reqPersonnel && S.reqPersonnel.Department) || ($('#rDept') && $('#rDept').value.trim()) || '';
+  const reqDept = (isAuthUser && S.user.Department) || (S.reqPersonnel && S.reqPersonnel.Department) || ($('#rDept') && $('#rDept').value.trim()) || '';
   if(!reqDept){
     focusAndScroll($('#rDept'), 'กรุณาระบุ สังกัด / ฝ่ายงาน / หลักสูตร');
     return;
   }
-  const reqPos = (S.reqPersonnel && S.reqPersonnel.Position) || ($('#rPos') && $('#rPos').value.trim()) || (S.user && S.user.Position) || '';
+  const reqPos = (isAuthUser && S.user.Position) || (S.reqPersonnel && S.reqPersonnel.Position) || ($('#rPos') && $('#rPos').value.trim()) || '';
   if(!reqPos){
     focusAndScroll($('#rPos'), 'กรุณาเลือกตำแหน่ง (อาจารย์ หรือ เจ้าหน้าที่)');
     return;
@@ -9501,7 +9547,7 @@ async function submitRequest(e){
     return;
   }
 
-  const reqName = (S.reqPersonnel && S.reqPersonnel.FullName) || ($('#rName') && $('#rName').value.trim()) || (S.user && S.user.FullName) || '';
+  const reqName = (isAuthUser && S.user.FullName) || (S.reqPersonnel && S.reqPersonnel.FullName) || ($('#rName') && $('#rName').value.trim()) || '';
   if(!reqName) {
     focusAndScroll($('#rName'), 'กรุณากรอกชื่อ-นามสกุลผู้ขอเบิก');
     return;
@@ -9521,7 +9567,7 @@ async function submitRequest(e){
 
     const autoApprove = Boolean($('#chkAutoApprove') && $('#chkAutoApprove').checked);
     const res = await api('apiCreateRequest', {
-      PersonnelCode: (S.reqPersonnel && S.reqPersonnel.Code) || pCode || undefined,
+      PersonnelCode: (!isAuthUser && ((S.reqPersonnel && S.reqPersonnel.Code) || pCode)) || undefined,
       RequestDate: $('#rDate').value, Department: reqDept,
       UserID: (S.user && S.user.ID) || 'GUEST', FullName: reqName, Position: reqPos,
       Purpose: $('#rPurpose').value.trim(), Note: '',
