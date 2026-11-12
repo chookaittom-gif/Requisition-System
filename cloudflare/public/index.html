@@ -961,7 +961,7 @@ const DEPT_GROUPS = [
 ];
 
 function renderDeptSelectOptions(selectedVal = '', placeholder = '-- เลือกสังกัด / ฝ่ายงาน / หลักสูตร --') {
-  let html = `<option value="" disabled ${!selectedVal ? 'selected' : ''}>${esc(placeholder)}</option>`;
+  let html = `<option value="" ${!selectedVal ? 'selected' : ''}>${esc(placeholder)}</option>`;
   let found = false;
   DEPT_GROUPS.forEach(g => {
     html += `<optgroup label="${esc(g.group)}">`;
@@ -2015,6 +2015,13 @@ async function init(){
       S.settings = res.settings;
       localStorage.setItem(BOOT_KEY, JSON.stringify(res.settings));
       applyBranding();
+      if(res.user && S.user && S.user.Role !== 'guest' && String(res.user.ID) === String(S.user.ID)){
+        S.user = { ...S.user, ...res.user };
+        localStorage.setItem('supply_user', JSON.stringify(S.user));
+        sessionStorage.setItem('supply_user', JSON.stringify(S.user));
+        if($('#sbName')) $('#sbName').textContent = S.user.FullName;
+        if($('#sbRole')) $('#sbRole').textContent = getRoleLabel(S.user.Role) + (S.user.Position ? ' • ' + S.user.Position : '');
+      }
     }
   }).catch(()=>{});
 }
@@ -5858,7 +5865,8 @@ function renderUsers(list, key){
         </div>
         <div class="mt-3 flex items-center gap-2 flex-wrap">
           <span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${u.Role==='admin'?'bg-grape/15 text-grape':'bg-sky-100 text-sky-800'}">${u.Role==='admin'?'ผู้ดูแลระบบ':'เจ้าหน้าที่พัสดุ'}</span>
-          <span class="text-xs text-slate-500">${esc(u.Position||'-')}</span>
+          <span class="text-xs text-slate-600 font-medium">${esc(u.Position||'เจ้าหน้าที่')}</span>
+          <span class="text-xs text-slate-400">• ${esc(u.Department||'สำนักงานศูนย์การศึกษา')}</span>
         </div>
         <div class="mt-4 flex gap-2">
           <button data-edit-user="${esc(u.ID)}" class="flex-1 py-2 rounded-2xl bg-blue2/10 text-blue2 text-sm font-bold hover:bg-blue2 hover:text-white transition"><i class="fa-solid fa-pen"></i> แก้ไข</button>
@@ -5874,6 +5882,7 @@ function renderUsers(list, key){
         <th class="px-3 py-3 text-left">ชื่อ-นามสกุล</th>
         <th class="px-3 py-3 text-center">สิทธิ์</th>
         <th class="px-3 py-3 text-left">ตำแหน่ง</th>
+        <th class="px-3 py-3 text-left">สังกัด / ฝ่ายงาน</th>
         <th class="px-3 py-3 text-center">วันที่สร้าง</th>
         <th class="px-3 py-3 text-center rounded-r-xl">จัดการ</th>
       </tr></thead>
@@ -5883,7 +5892,8 @@ function renderUsers(list, key){
           <td class="px-3 py-3 font-bold text-brand-600">@${esc(u.Username)}</td>
           <td class="px-3 py-3 font-semibold text-slate-700">${esc(u.FullName)}</td>
           <td class="px-3 py-3 text-center"><span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${u.Role==='admin'?'bg-grape/15 text-grape':'bg-sky-100 text-sky-800'}">${u.Role==='admin'?'ผู้ดูแลระบบ':'เจ้าหน้าที่พัสดุ'}</span></td>
-          <td class="px-3 py-3 text-slate-600">${esc(u.Position||'-')}</td>
+          <td class="px-3 py-3 text-slate-600">${esc(u.Position||'เจ้าหน้าที่')}</td>
+          <td class="px-3 py-3 text-slate-600">${esc(u.Department||'สำนักงานศูนย์การศึกษา')}</td>
           <td class="px-3 py-3 text-center text-slate-500 text-xs">${thaiDate(u.CreatedAt,'short')}</td>
           <td class="px-3 py-3">
             <div class="flex items-center justify-center gap-1.5">
@@ -5959,7 +5969,19 @@ function userModal(u){
             <option value="admin" ${isEdit&&u.Role==='admin'?'selected':''}>ผู้ดูแลระบบ (Admin)</option>
           </select></div>
         <div id="posWrap"><label class="block text-sm font-bold text-slate-700 mb-1.5">ตำแหน่ง</label>
-          <input id="uPos" value="${isEdit?esc(u.Position||''):''}" placeholder="เช่น เจ้าหน้าที่พัสดุ" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
+          <input id="uPos" list="uPosSuggestions" value="${isEdit?esc(u.Position||'เจ้าหน้าที่'):'เจ้าหน้าที่'}" placeholder="เช่น เจ้าหน้าที่" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
+          <datalist id="uPosSuggestions">
+            <option value="เจ้าหน้าที่">
+            <option value="อาจารย์">
+            <option value="ผู้ช่วยศาสตราจารย์">
+            <option value="รองศาสตราจารย์">
+          </datalist>
+        </div>
+      </div>
+      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
+        <select id="uDept" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition font-medium">
+          ${renderDeptSelectOptions(isEdit ? (u.Department || 'สำนักงานศูนย์การศึกษา') : 'สำนักงานศูนย์การศึกษา')}
+        </select>
       </div>
       <input type="hidden" id="uID" value="${isEdit?esc(u.ID):''}">
     </form>`,
@@ -5968,9 +5990,7 @@ function userModal(u){
   });
 
   const toggle = ()=>{
-    const r = $('#uRole').value;
-    if(r==='officer' && !$('#uPos').value.trim()) $('#uPos').value = 'เจ้าหน้าที่พัสดุ';
-    if(r==='admin' && !$('#uPos').value.trim()) $('#uPos').value = 'ผู้ดูแลระบบ';
+    if(!$('#uPos').value.trim()) $('#uPos').value = 'เจ้าหน้าที่';
   };
   $('#uRole').addEventListener('change', toggle); toggle();
 
@@ -5984,9 +6004,10 @@ function userModal(u){
   $('#mSave').addEventListener('click', async ()=>{
     const role = $('#uRole').value;
     const pass = $('#uPass').value.trim();
+    const pos = ($('#uPos')?.value || 'เจ้าหน้าที่').trim();
+    const dept = ($('#uDept')?.value || 'สำนักงานศูนย์การศึกษา').trim();
     if(!$('#uUser').value.trim() || !$('#uName').value.trim()) return toast('warning','กรุณากรอกข้อมูลให้ครบถ้วน');
     if(!isEdit && !pass) return toast('warning','กรุณากำหนดรหัสผ่าน');
-    if(role!=='admin' && !$('#uPos').value.trim()) return toast('warning','กรุณากรอกตำแหน่งของผู้ใช้งาน');
 
     showLoader('กำลังบันทึกข้อมูล...');
     const res = await api('apiSaveUsers', [{
@@ -5996,11 +6017,25 @@ function userModal(u){
       Password: pass,                       // ว่าง = ไม่เปลี่ยน (ฝั่งเซิร์ฟเวอร์จัดการ)
       FullName: $('#uName').value.trim(),
       Role: role,
-      Position: $('#uPos').value.trim(),
+      Position: pos,
+      Department: dept,
       actor: S.user.Username
     }]);
     hideLoader();
     if(!res.ok) return alertErr(res.message);
+
+    // อัปเดตเซสชันและป้ายชื่อของตัวเองทันที หากเป็นการแก้ไขบัญชีปัจจุบัน
+    if(isEdit && S.user && String(S.user.ID) === String($('#uID').value)){
+      S.user.FullName = $('#uName').value.trim();
+      S.user.Role = role;
+      S.user.Position = pos;
+      S.user.Department = dept;
+      localStorage.setItem('supply_user', JSON.stringify(S.user));
+      sessionStorage.setItem('supply_user', JSON.stringify(S.user));
+      if($('#sbName')) $('#sbName').textContent = S.user.FullName;
+      if($('#sbRole')) $('#sbRole').textContent = getRoleLabel(S.user.Role) + (S.user.Position ? ' • ' + S.user.Position : '');
+    }
+
     closeModal(); await alertOk(res.message); go('a-user', true);
   });
 }
@@ -8649,10 +8684,24 @@ async function viewProfile(){
           </div>
         </div>
       </div>
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อ-นามสกุล</label>
-        <input id="pName" value="${esc(me.FullName)}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
-      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ตำแหน่ง</label>
-        <input id="pPos" value="${esc(me.Position||'')}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ชื่อ-นามสกุล</label>
+          <input id="pName" value="${esc(me.FullName)}" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition"></div>
+        <div><label class="block text-sm font-bold text-slate-700 mb-1.5">ตำแหน่ง</label>
+          <input id="pPos" list="pPosSuggestions" value="${esc(me.Position||'เจ้าหน้าที่')}" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
+          <datalist id="pPosSuggestions">
+            <option value="เจ้าหน้าที่">
+            <option value="อาจารย์">
+            <option value="ผู้ช่วยศาสตราจารย์">
+            <option value="รองศาสตราจารย์">
+          </datalist>
+        </div>
+      </div>
+      <div><label class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร</label>
+        <select id="pDept" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition font-medium">
+          ${renderDeptSelectOptions(me.Department || 'สำนักงานศูนย์การศึกษา')}
+        </select>
+      </div>
       <button type="submit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-light text-white font-bold shadow-soft hover:brightness-110 transition">
         <i class="fa-solid fa-floppy-disk"></i> อัปเดตข้อมูลส่วนตัว
       </button>
@@ -8669,7 +8718,7 @@ async function viewProfile(){
     showLoader('กำลังอัปเดตข้อมูล...');
     const res = await api('apiUpdateProfile', {
       ID: me.ID, Username:$('#pUser').value.trim(), Password:$('#pPass').value.trim(),   // ว่าง = ไม่เปลี่ยนรหัส
-      FullName:$('#pName').value.trim(), Position:$('#pPos').value.trim()
+      FullName:$('#pName').value.trim(), Position:$('#pPos').value.trim(), Department:$('#pDept').value.trim()
     });
     hideLoader();
     if(!res.ok) return alertErr(res.message);
@@ -8787,7 +8836,7 @@ async function viewRequestForm(){
 
   c.innerHTML = `<div class="max-w-4xl mx-auto animate-fadeUp">${cardWrap('แบบฟอร์มขอเบิกพัสดุ','fa-file-pen', `
     <div id="draftAlertContainer"></div>
-    <form id="frmReq" class="space-y-5">
+    <form id="frmReq" class="space-y-5" novalidate>
       <!-- ค้นหารหัสบุคลากร -->
       <div class="p-4 sm:p-4.5 rounded-2xl bg-gradient-to-r from-sky-50/70 via-blue-50/40 to-slate-50 border border-sky-100 shadow-2xs">
         <div class="flex items-center justify-between mb-2">
@@ -8827,8 +8876,8 @@ async function viewRequestForm(){
             ? `<input id="rPos" value="${esc(S.user.Position)}" readonly class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed">`
             : `<select id="rPos" required class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
                  <option value="">-- เลือกตำแหน่ง --</option>
-                 <option value="อาจารย์">อาจารย์</option>
                  <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
+                 <option value="อาจารย์">อาจารย์</option>
                </select>`
           }</div>
       </div>
@@ -8840,12 +8889,10 @@ async function viewRequestForm(){
         }</div>
 
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">สังกัด / ฝ่ายงาน / หลักสูตร <span class="text-rose2">*</span></label>
-        ${S.user && S.user.Role !== 'guest' && S.user.Department
-          ? `<input id="rDept" value="${esc(S.user.Department)}" readonly class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed">`
-          : `<select id="rDept" required class="w-full px-4 py-3 min-h-[48px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 font-medium text-slate-800 text-sm outline-none transition cursor-pointer">
-               ${renderDeptSelectOptions((S.user && S.user.Role !== 'guest' && S.user.Department) || '')}
-             </select>`
-        }</div>
+        <select id="rDept" required class="w-full px-4 py-3 min-h-[48px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white focus:border-brand-500 font-medium text-slate-800 text-sm outline-none transition cursor-pointer">
+          ${renderDeptSelectOptions((S.user && S.user.Role !== 'guest' && (S.user.Department || 'สำนักงานศูนย์การศึกษา')) || '')}
+        </select>
+      </div>
 
       <div><label class="block text-sm font-bold text-slate-700 mb-1.5">มีความจำเป็นต้องเบิกพัสดุเพื่อ <span class="text-rose2">*</span></label>
         <input id="rPurpose" list="purposeList" required placeholder="เช่น เพื่อจัดการเรียนการสอนรายวิชา..., กิจกรรมนักศึกษา, งานสำนักงานประจำวัน" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
@@ -9109,19 +9156,14 @@ async function viewRequestForm(){
     // Reset Department
     const deptInp = $('#rDept');
     if(deptInp){
-      if(S.user && S.user.Role !== 'guest' && S.user.Department){
-        deptInp.value = S.user.Department;
-        if(deptInp.tagName === 'SELECT') deptInp.disabled = true;
-        else deptInp.readOnly = true;
+      const defaultDept = (S.user && S.user.Role !== 'guest' && (S.user.Department || 'สำนักงานศูนย์การศึกษา')) || '';
+      deptInp.value = defaultDept;
+      if(deptInp.tagName === 'SELECT'){
+        deptInp.disabled = false;
       } else {
-        deptInp.value = '';
-        if(deptInp.tagName === 'SELECT'){
-          deptInp.disabled = false;
-        } else {
-          deptInp.readOnly = false;
-        }
-        deptInp.classList.remove('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
+        deptInp.readOnly = false;
       }
+      deptInp.classList.remove('bg-slate-100', 'text-slate-600', 'cursor-not-allowed');
     }
     if($('#btnToggleDept')) $('#btnToggleDept').classList.remove('hidden');
 
@@ -9371,8 +9413,14 @@ function addItemRow(selectedId = ''){
     $(`[data-code="${i}"]`).value  = o && o.value ? o.dataset.code : '';
     $(`[data-stock="${i}"]`).value = o && o.value ? nf(o.dataset.stock) : '';
     const q = $(`[data-qty="${i}"]`);
-    q.max = o && o.value ? o.dataset.stock : '';
-    q.value = '';
+    const avail = o && o.value ? parseFloat(o.dataset.stock || 0) : 0;
+    q.max = avail > 0 ? avail : '';
+    if(avail > 0){
+      if(!q.value || parseFloat(q.value) <= 0) q.value = '1';
+      else if(parseFloat(q.value) > avail) q.value = String(avail);
+    } else {
+      q.value = '';
+    }
     saveReqDraft(false);
   });
   $(`[data-qty="${i}"]`).addEventListener('input', e=>{
@@ -9391,19 +9439,41 @@ function addItemRow(selectedId = ''){
 
 async function submitRequest(e){
   e.preventDefault();
+
+  const focusAndScroll = (el, msg) => {
+    if(el){
+      try { el.scrollIntoView({ behavior:'smooth', block:'center' }); } catch(err){}
+      setTimeout(()=>{ try { el.focus(); } catch(err){} }, 200);
+    }
+    if(msg) toast('warning', msg);
+  };
+
   const items = [];
   let valid = true;
+  let firstInvalidQtyEl = null;
   $$('#itemRows > div').forEach(row=>{
     const i = row.dataset.row;
-    const id = $(`[data-sel="${i}"]`).value;
-    const qty = parseFloat($(`[data-qty="${i}"]`).value||0);
+    const id = $(`[data-sel="${i}"]`)?.value;
+    const qtyInp = $(`[data-qty="${i}"]`);
+    const qty = parseFloat(qtyInp?.value||0);
     if(!id) return;
-    if(!(qty>0)){ valid = false; return; }
+    if(!(qty>0)){
+      valid = false;
+      if(!firstInvalidQtyEl && qtyInp) firstInvalidQtyEl = qtyInp;
+      return;
+    }
     items.push({ MaterialID:id, Qty:qty, Remark: '' });
   });
 
-  if(!items.length) return toast('warning','กรุณาเลือกพัสดุอย่างน้อย 1 รายการ');
-  if(!valid) return toast('warning','กรุณาระบุจำนวนที่ขอเบิกให้ครบทุกรายการ');
+  if(!items.length){
+    const firstRowSel = $('[data-sel="1"]') || $('#btnAddItem') || $('#btnScanItem');
+    focusAndScroll(firstRowSel, 'กรุณาเลือกพัสดุอย่างน้อย 1 รายการ');
+    return;
+  }
+  if(!valid){
+    focusAndScroll(firstInvalidQtyEl, 'กรุณาระบุจำนวนที่ขอเบิกให้ครบทุกรายการ');
+    return;
+  }
 
   const pCode = ($('#rPersonnelCode') && $('#rPersonnelCode').value.trim()) || '';
   if(pCode && !S.reqPersonnel){
@@ -9411,25 +9481,35 @@ async function submitRequest(e){
     const ok = await doLookupPersonnel_(pCode, true);
     hideLoader();
     if(!ok){
-      return toast('warning', 'รหัสบุคลากรไม่ถูกต้องหรือไม่พบในระบบ กรุณาตรวจสอบหรือกดปุ่มเปลี่ยนรหัสก่อนบันทึก');
+      focusAndScroll($('#rPersonnelCode'), 'รหัสบุคลากรไม่ถูกต้องหรือไม่พบในระบบ กรุณาตรวจสอบหรือกดปุ่มเปลี่ยนรหัสก่อนบันทึก');
+      return;
     }
   }
 
   const reqDept = (S.reqPersonnel && S.reqPersonnel.Department) || ($('#rDept') && $('#rDept').value.trim()) || '';
-  if(!reqDept) return toast('warning','กรุณาระบุ สังกัด / ฝ่ายงาน / หลักสูตร');
+  if(!reqDept){
+    focusAndScroll($('#rDept'), 'กรุณาระบุ สังกัด / ฝ่ายงาน / หลักสูตร');
+    return;
+  }
   const reqPos = (S.reqPersonnel && S.reqPersonnel.Position) || ($('#rPos') && $('#rPos').value.trim()) || (S.user && S.user.Position) || '';
-  if(!reqPos) return toast('warning','กรุณาเลือกตำแหน่ง (อาจารย์ หรือ เจ้าหน้าที่)');
-  if(!$('#rPurpose').value.trim()) return toast('warning','กรุณาระบุความจำเป็นในการเบิกพัสดุ');
+  if(!reqPos){
+    focusAndScroll($('#rPos'), 'กรุณาเลือกตำแหน่ง (อาจารย์ หรือ เจ้าหน้าที่)');
+    return;
+  }
+  if(!$('#rPurpose').value.trim()){
+    focusAndScroll($('#rPurpose'), 'กรุณาระบุความจำเป็นในการเบิกพัสดุ');
+    return;
+  }
 
   const reqName = (S.reqPersonnel && S.reqPersonnel.FullName) || ($('#rName') && $('#rName').value.trim()) || (S.user && S.user.FullName) || '';
   if(!reqName) {
-    if($('#rName')) $('#rName').focus();
-    return toast('warning','กรุณากรอกชื่อ-นามสกุลผู้ขอเบิก');
+    focusAndScroll($('#rName'), 'กรุณากรอกชื่อ-นามสกุลผู้ขอเบิก');
+    return;
   }
   const nameParts = reqName.split(/\s+/).filter(Boolean);
   if(nameParts.length < 2){
-    if($('#rName')) $('#rName').focus();
-    return toast('warning','กรุณาระบุชื่อและนามสกุลเต็ม (เช่น สมรักษ์ คำดี)');
+    focusAndScroll($('#rName'), 'กรุณาระบุชื่อและนามสกุลเต็ม (เช่น สมรักษ์ คำดี)');
+    return;
   }
 
   const cfm = await Swal.fire({ icon:'question', title:'ยืนยันบันทึกใบขอเบิก?', text:'รายการทั้งหมด '+items.length+' รายการ',

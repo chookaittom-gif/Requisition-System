@@ -162,6 +162,20 @@ describe('auth rpc', () => {
     expect(body).toEqual({ ok: false, message: 'ชื่อผู้ใช้ "OTHER" มีอยู่แล้วในระบบ' });
   });
 
+  it('profile saves department and bootstrap returns authenticated user', async () => {
+    await seedUser();
+    const { cookie } = await loginCookie();
+    const updateRes = (await (await post('apiUpdateProfile', [{ Username: 'u', FullName: 'Updated Name', Position: 'เจ้าหน้าที่', Department: 'สำนักงานศูนย์การศึกษา' }], cookie)).json()) as any;
+    expect(updateRes.ok).toBe(true);
+    expect(updateRes.user.Department).toBe('สำนักงานศูนย์การศึกษา');
+
+    const bootRes = (await (await post('apiGetBootstrap', [], cookie)).json()) as any;
+    expect(bootRes.ok).toBe(true);
+    expect(bootRes.user).toBeDefined();
+    expect(bootRes.user.Department).toBe('สำนักงานศูนย์การศึกษา');
+    expect(bootRes.user.Position).toBe('เจ้าหน้าที่');
+  });
+
   it('bootstrap never exposes telegram token', async () => {
     await env.DB.prepare(
       "INSERT INTO settings (id, school_name, telegram_bot_token, telegram_chat_id, updated_at) VALUES (1, 'โรงเรียน', '123:ABC', '99', '2026-01-01 00:00:00')",

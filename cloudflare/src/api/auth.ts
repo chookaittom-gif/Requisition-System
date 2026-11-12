@@ -27,6 +27,11 @@ registerRpc('apiGetBootstrap', 'public', async (ctx) => {
   const s = await ctx.env.DB.prepare(
     'SELECT school_name, affiliation, logo_url, banner_url, address, phone FROM settings WHERE id = 1',
   ).first<Obj>();
+  let user: Obj | null = null;
+  if (ctx.session?.id) {
+    const u = await ctx.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(ctx.session.id).first<Obj>();
+    if (u) user = sanitizeUser(u);
+  }
   return {
     ok: true,
     settings: {
@@ -37,6 +42,7 @@ registerRpc('apiGetBootstrap', 'public', async (ctx) => {
       Address: s?.address ?? '',
       Phone: s?.phone ?? '',
     },
+    ...(user ? { user } : {}),
   };
 });
 

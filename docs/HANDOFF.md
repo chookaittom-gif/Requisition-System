@@ -1,4 +1,4 @@
-# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-07)
+# Handoff: ระบบเบิกจ่ายพัสดุ (2026-11-12)
 
 **Written for:** Agent หรือ Developer ที่จะรับช่วงต่องานใน repository `D:\Webapp\ระบบเบิกจ่ายพัสดุ` (Cloudflare Workers + D1 Database + Static Frontend SPA)
 **Repository:** https://github.com/chookaittom-gif/Requisition-System
@@ -20,7 +20,29 @@
 
 ---
 
-## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-11 Thai BE Date Under Purchase Date Field)
+## 2. สิ่งที่ทำสำเร็จใน Session ล่าสุด (2026-11-12 Department & Position Standardization + Mobile Requisition Fix)
+
+ผ่านกระบวนการ Grill-me และ Plan-gate กับผู้ใช้:
+1. **กำหนดมาตรฐานสังกัดและตำแหน่งผู้ใช้งาน:**
+   - Migration `0013_users_default_position_department.sql`: อัปเดตข้อมูลผู้ใช้งานในตาราง `users` ให้มี `department = 'สำนักงานศูนย์การศึกษา'` (กรณีว่าง) และปรับ `position = 'เจ้าหน้าที่'` (กรณีเป็นค่าว่างหรือค่าตามสิทธิ์เดิม เช่น ผู้ดูแลระบบ, เจ้าหน้าที่พัสดุ)
+   - ปรับ `apiSaveUsers` ใน `admin.ts`: รองรับบันทึก `Department` พร้อมตั้งค่า default `Position: 'เจ้าหน้าที่'` และ `Department: 'สำนักงานศูนย์การศึกษา'` เมื่อสร้าง/แก้ไข
+   - ปรับ `apiGetBootstrap` ใน `auth.ts`: หากมี session ล็อกอินอยู่ จะส่ง `user: sanitizeUser(u)` กลับไป เพื่อให้ client ซิงค์ตำแหน่ง/สังกัดล่าสุดลง `localStorage` / `sessionStorage` ทันทีโดยไม่ต้องล็อกเอาต์
+2. **ปรับปรุงหน้าจอจัดการผู้ใช้งานและโปรไฟล์:**
+   - หน้า `a-user` (`index.html`): เพิ่มคอลัมน์ "สังกัด / ฝ่ายงาน" ในตารางรายชื่อผู้ใช้ และแสดงป้ายสังกัดในการ์ด
+   - Modal เพิ่ม/แก้ไขผู้ใช้ (`userModal`): เพิ่มช่องเลือกสังกัด (`#uDept`) พร้อมค่าเริ่มต้น "สำนักงานศูนย์การศึกษา", ปรับตำแหน่ง (`#uPos`) เริ่มต้นเป็น "เจ้าหน้าที่" พร้อม datalist แนะนำ, ซิงค์ `S.user` ทันทีเมื่อแก้ไขบัญชีตนเอง
+   - หน้าแก้ไขข้อมูลส่วนตัว (`viewProfile`): เพิ่มช่องเลือกสังกัด (`#pDept`) และส่งอัปเดตผ่าน `apiUpdateProfile`
+3. **แก้ไขปัญหาการกดเบิกพัสดุบนมือถือและปรับฟอร์มขอเบิก:**
+   - ใส่ `novalidate` บน `<form id="frmReq">` ป้องกันปัญหา HTML5 silent validation บนมือถือที่บล็อกการ submit เมื่อช่องด้านบนอยู่นอกหน้าจอ
+   - ปรับช่อง `#rDept` เป็น `<select>` เสมอ โดยเลือกค่าสังกัดของผู้ใช้ (`สำนักงานศูนย์การศึกษา`) ให้อัตโนมัติ และเปิดให้คลิกเปลี่ยนสังกัดได้ตามต้องการ
+   - เมื่อกด "เปลี่ยนรหัส" ในฟอร์มขอเบิก (`doClearPersonnel_`) คืนค่า `#rDept` เป็นสังกัดของผู้ใช้ที่ล็อกอินอยู่พร้อมปลดล็อกให้เลือกได้
+   - ใน `addItemRow`: เมื่อเลือกพัสดุในช่องเลือก ระบบจะเติมจำนวนเริ่มต้นเป็น `1` อัตโนมัติ (หากช่องจำนวนยังว่าง)
+   - ใน `submitRequest`: เพิ่มฟังก์ชัน `focusAndScroll` เลื่อนหน้าจอไปยังช่องที่กรอกไม่ครบ/ไม่ถูกต้องพร้อมแสดงแจ้งเตือน toast บนมือถืออย่างชัดเจน
+   - ใน `renderDeptSelectOptions`: นำ `disabled` ออกจาก `<option value="">` เพื่อป้องกันบั๊ก iOS Safari Wheel Picker
+4. **การทดสอบ:**
+   - `npm test` ผ่าน 100% (ทั้ง Cloudflare Vitest 199 tests และ Node Vitest 50 tests รวม 249 tests)
+   - `npm run typecheck` ผ่าน 100% ปราศจากข้อผิดพลาด
+
+---
 
 - **เปลี่ยน:** ฟอร์ม "จัดซื้อพัสดุเพิ่ม" (`#buyDate` ใน `cloudflare/public/index.html`) เพิ่มบรรทัด `#buyDateTh` ใต้ช่อง แสดงวันที่ พ.ศ. ด้วย `thaiDate()` และอัปเดตตอน `change` (ทำตาม pattern เดิมของ `#mAcquiredDateTh`) เพราะ `<input type="date">` แสดงปีตามภาษาเบราว์เซอร์ เปลี่ยนเป็น พ.ศ. ตรง ๆ ไม่ได้ ค่าที่ส่ง API ยังเป็น `YYYY-MM-DD`
 - **ยังไม่ทำ:** ช่องวันที่ native อื่น (`repDate`, `accFrom/accTo`, `poDate`, `rDate`, `mvFrom/mvTo`, ฯลฯ) ยังแสดง ค.ศ.

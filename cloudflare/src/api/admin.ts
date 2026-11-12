@@ -290,13 +290,14 @@ registerRpc('apiSaveUsers', 'admin', async (ctx, args) => {
       const role = item.Role === undefined ? normRole(old.role) : normRole(item.Role);
       if (!role) return fail('สิทธิ์ผู้ใช้งานไม่ถูกต้อง');
       const hash = pw ? await hashPassword(pw) : old.password_hash;
-      const department = item.Department !== undefined ? str(item.Department) : old.department;
+      const position = str(item.Position) || 'เจ้าหน้าที่';
+      const department = item.Department !== undefined ? (str(item.Department) || 'สำนักงานศูนย์การศึกษา') : (old.department || 'สำนักงานศูนย์การศึกษา');
       stmts.push(
         db
           .prepare(
             'UPDATE users SET username = ?, password_hash = ?, full_name = ?, role = ?, position = ?, department = ?, email = ?, updated_at = ? WHERE id = ?',
           )
-          .bind(username, hash, str(item.FullName), role, str(item.Position), department, str(item.Email), now, id),
+          .bind(username, hash, str(item.FullName), role, position, department, str(item.Email), now, id),
       );
       if (pw || role !== normRole(old.role)) stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id));
       stmts.push(logAudit(db, { action: 'UPDATE', entity: 'User', entityId: id, detail: username, actor }));
@@ -307,15 +308,17 @@ registerRpc('apiSaveUsers', 'admin', async (ctx, args) => {
       if (!role) return fail('สิทธิ์ผู้ใช้งานไม่ถูกต้อง');
       const newId = genId('U');
       const hash = await hashPassword(pw);
+      const position = str(item.Position) || 'เจ้าหน้าที่';
+      const department = str(item.Department) || 'สำนักงานศูนย์การศึกษา';
       stmts.push(
         db
           .prepare(
             'INSERT INTO users (id, username, password_hash, full_name, role, position, department, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
-          .bind(newId, username, hash, str(item.FullName), role, str(item.Position), str(item.Department), str(item.Email), now, now),
+          .bind(newId, username, hash, str(item.FullName), role, position, department, str(item.Email), now, now),
       );
       stmts.push(logAudit(db, { action: 'CREATE', entity: 'User', entityId: '', detail: username, actor }));
-      users.set(newId, { id: newId, username, password_hash: hash, role, department: str(item.Department) });
+      users.set(newId, { id: newId, username, password_hash: hash, role, department });
     }
   }
   if (stmts.length) await db.batch(stmts);
