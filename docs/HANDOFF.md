@@ -35,8 +35,13 @@
      - ใน `loadReqDraft`: ป้องกันการเขียนทับข้อมูลผู้ล็อกอินจากแบบร่างเก่า
    - **กรณีผู้ใช้งานทั่วไป / ไม่ได้ล็อกอิน (Guest):**
      - แสดงกล่องค้นหารหัสบุคลากรเพื่อดึงข้อมูลอัตโนมัติจากทะเบียนบุคลากรตามปกติ 100%
-3. **การทดสอบและการตรวจสอบ:**
+3. **การจัดการ Skill Superpowers ที่ซ้ำซ้อน:**
+   - ตรวจพบ Superpowers skill ติดตั้งซ้ำ 2 จุด: Global plugin (`~/.gemini/config/plugins/superpowers`) และ Local repository (`.agents/skills`)
+   - อัปเดต Global Superpowers Plugin สู่เวอร์ชันล่าสุด (`v7.0.2` commit `22f0b46`)
+   - ลบโฟลเดอร์ซ้ำซ้อน `.agents/skills`, `.agents` และไฟล์ `skills-lock.json` ออกจากโปรเจกต์ทั้งหมด เพื่อรวมศูนย์การเรียกใช้ Skill ไว้ที่ Global แหล่งเดียว
+4. **การทดสอบและการตรวจสอบ:**
    - รันชุดการทดสอบ `npm test` ผ่าน 100% (Cloudflare Vitest 199 tests + Node Vitest 50 tests รวม 249 tests)
+   - Deploy ขึ้น Cloudflare Workers ผ่าน GitHub Actions สำเร็จ (Run ID `43216418043`)
 
 ---
 
