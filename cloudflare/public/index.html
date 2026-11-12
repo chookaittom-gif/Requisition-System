@@ -2342,11 +2342,19 @@ async function viewPublicTrack(){
     </div>
   `;
 
+  let trackBusy = false;
   const doSearch = async ()=>{
+    if(trackBusy) return;
     const q = $('#trackQuery').value.trim();
     if(!q) return toast('warning','กรุณากรอกเลขที่ใบเบิกหรือชื่อผู้ขอเบิก');
+    trackBusy = true;
+    const btnT = $('#btnDoTrack');
+    if(btnT) btnT.disabled = true;
     $('#trackResult').innerHTML = '<div class="py-8 text-center text-slate-500"><i class="fa-solid fa-spinner animate-spin text-2xl text-brand-600 mb-2"></i><p>กำลังค้นหาข้อมูล...</p></div>';
-    const r = await api('apiTrackRequest', [q]);
+    let r;
+    try{ r = await api('apiTrackRequest', [q]); }
+    catch(err){ r = { ok:false, message:'ค้นหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' }; }
+    finally{ trackBusy = false; if(btnT) btnT.disabled = false; }
     if(!r || !r.ok || !r.data || !r.data.length){
       $('#trackResult').innerHTML = `<div class="p-6 rounded-2xl bg-rose-50 border border-rose-100 text-rose-700 text-center text-sm font-semibold">
         <i class="fa-solid fa-circle-exclamation text-xl mb-1 text-rose-500"></i>
@@ -9496,8 +9504,18 @@ function addItemRow(selectedId = ''){
   });
 }
 
+/* Double-submit guard: one in-flight submit at a time; button disabled and always restored. */
 async function submitRequest(e){
   e.preventDefault();
+  if(S.submitting) return;
+  S.submitting = true;
+  const btn = (e.submitter) || $('#frmReq button[type="submit"]');
+  if(btn) btn.disabled = true;
+  try{ await submitRequestInner(e); }
+  finally{ S.submitting = false; if(btn) btn.disabled = false; }
+}
+
+async function submitRequestInner(e){
 
   const focusAndScroll = (el, msg) => {
     if(el){

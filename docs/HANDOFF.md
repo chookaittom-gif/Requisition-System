@@ -30,6 +30,10 @@
   - Test: ปรับ `cloudflare/test/requests.test.ts` ("track by DocNo exact or FullName substring")
   - **ยังไม่ได้ทำ:** rate limit ของ endpoint public; เลขที่ใบเบิกเดาได้ (รูปแบบ REQ-YYYY-NNNN ต่อเนื่อง) จึงยังไล่เดาได้ — พิจารณาเพิ่มรหัสยืนยัน (เช่น รหัสบุคลากร) หรือ rate limit ภายหลัง
 - **Verify:** `npm test` ใน `cloudflare/`: Cloudflare Vitest 12 files/199 tests + Node Vitest 3 files/50 tests ผ่านทั้งหมด
+- **fix(frontend): Double-submit guard (Top 10 ข้อ 9)** ใน `cloudflare/public/index.html`:
+  - `submitRequest` เป็น wrapper: flag `S.submitting` + disable ปุ่ม submit และคืนสถานะใน `finally`; ตรรกะเดิมย้ายไป `submitRequestInner`
+  - `viewPublicTrack` → `doSearch`: flag `trackBusy`, disable `#btnDoTrack`, ครอบ try/catch/finally (เครือข่ายล้มแล้วไม่ค้าง spinner)
+  - ไม่มี unit test ใหม่ (โค้ด frontend ล้วน) — ยังไม่ได้ทดสอบ double-click จริงบน browser หลัง deploy ผ่านการส่งใบเบิกจริง (production)
 
 ---
 
