@@ -98,8 +98,14 @@ const DEFAULT_SETTINGS = {
   SchoolName: '', Affiliation: '', LogoUrl: '', Address: '', Phone: '', UpdatedAt: '',
   NotifyEmail: '', TelegramBotToken: '', TelegramChatId: '', LineToken: '', LineTo: '',
   NotifyOnNewRequest: 'YES', NotifyOnStatusChange: 'YES', NotifyLowStock: 'YES', BannerUrl: '',
-  NotifyTelegram: 'YES', NotifyLine: 'YES',
+  NotifyTelegram: 'YES', NotifyLine: 'YES', DailyTaskView: 'a-dash',
 };
+
+/** Menu ids the admin may pin first in the mobile shortcut grid (must match MENUS.admin in public/index.html). */
+export const DAILY_TASK_VIEWS = [
+  'a-dash', 'a-report', 'a-account', 'a-material', 'a-shop', 'a-po', 'a-movement', 'a-stockcard',
+  'a-request', 'a-low', 't-form', 't-my', 'a-audit', 'a-personnel', 'a-user', 'a-setting', 't-profile',
+];
 
 async function readSettings(env: Env): Promise<{ legacy: Obj; token: string; lineToken: string }> {
   const row = await env.DB.prepare('SELECT * FROM settings WHERE id = 1').first<Obj>();
@@ -149,6 +155,9 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
   const token = incoming && !isMaskedToken(incoming) ? incoming : currentSettings.token;
   const incomingLine = str(p.LineToken);
   const lineToken = incomingLine && !isMaskedToken(incomingLine) ? incomingLine : currentSettings.lineToken;
+  const incomingTask = str(p.DailyTaskView);
+  if (incomingTask && !DAILY_TASK_VIEWS.includes(incomingTask)) return fail('งานประจำวันที่เลือกไม่ถูกต้อง', 'VALIDATION');
+  const dailyTaskView = incomingTask || str(currentSettings.legacy.DailyTaskView) || 'a-dash';
   const now = nowBkk();
   const d = {
     school_name: schoolName, affiliation, logo_url: logo.value, address: str(p.Address), phone: str(p.Phone),
@@ -160,17 +169,17 @@ registerRpc('apiSaveSettings', 'admin', async (ctx, args) => {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, line_to, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, notify_telegram, notify_line, updated_at)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO settings (id, school_name, affiliation, logo_url, address, phone, notify_email, telegram_bot_token, telegram_chat_id, line_token, line_to, notify_on_new_request, notify_on_status_change, notify_low_stock, banner_url, notify_telegram, notify_line, daily_task_view, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET school_name = excluded.school_name, affiliation = excluded.affiliation, logo_url = excluded.logo_url,
            address = excluded.address, phone = excluded.phone, notify_email = excluded.notify_email, telegram_bot_token = excluded.telegram_bot_token,
            telegram_chat_id = excluded.telegram_chat_id, line_token = excluded.line_token, line_to = excluded.line_to, notify_on_new_request = excluded.notify_on_new_request,
            notify_on_status_change = excluded.notify_on_status_change, notify_low_stock = excluded.notify_low_stock,
-           banner_url = excluded.banner_url, notify_telegram = excluded.notify_telegram, notify_line = excluded.notify_line, updated_at = excluded.updated_at`,
+           banner_url = excluded.banner_url, notify_telegram = excluded.notify_telegram, notify_line = excluded.notify_line, daily_task_view = excluded.daily_task_view, updated_at = excluded.updated_at`,
       )
       .bind(
         d.school_name, d.affiliation, d.logo_url, d.address, d.phone, d.notify_email, token, d.telegram_chat_id, d.line_token, d.line_to,
-        d.notify_on_new_request, d.notify_on_status_change, d.notify_low_stock, d.banner_url, d.notify_telegram, d.notify_line, now,
+        d.notify_on_new_request, d.notify_on_status_change, d.notify_low_stock, d.banner_url, d.notify_telegram, d.notify_line, dailyTaskView, now,
       ),
     logAudit(db, { action: 'UPDATE', entity: 'Settings', entityId: '', detail: 'บันทึกการตั้งค่าระบบ', actor: str(p.actor) }),
   ]);

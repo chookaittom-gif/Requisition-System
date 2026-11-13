@@ -68,6 +68,7 @@ const MAPS: Record<TableName, ColumnMap> = {
     notify_on_new_request: 'NotifyOnNewRequest', notify_on_status_change: 'NotifyOnStatusChange',
     notify_low_stock: 'NotifyLowStock', banner_url: 'BannerUrl',
     notify_telegram: 'NotifyTelegram', notify_line: 'NotifyLine',
+    daily_task_view: 'DailyTaskView',
   },
   shops: {
     id: 'ID',

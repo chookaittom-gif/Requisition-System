@@ -159,6 +159,20 @@ describe('settings', () => {
     expect(bad2).toMatchObject({ ok: false, code: 'VALIDATION' });
   });
 
+  it('daily task view: defaults to a-dash, saves a valid menu id, keeps it when omitted, rejects unknown', async () => {
+    expect((await rpc('apiGetSettings', [])).data.DailyTaskView).toBe('a-dash');
+    const saved = await rpc('apiSaveSettings', [validSettings({ DailyTaskView: 'a-low' })]);
+    expect(saved.ok).toBe(true);
+    expect(saved.data.DailyTaskView).toBe('a-low');
+    expect((await rows('SELECT daily_task_view v FROM settings'))[0].v).toBe('a-low');
+    // omitted or empty keeps the stored value
+    expect((await rpc('apiSaveSettings', [validSettings()])).data.DailyTaskView).toBe('a-low');
+    expect((await rpc('apiSaveSettings', [validSettings({ DailyTaskView: '' })])).data.DailyTaskView).toBe('a-low');
+    // unknown id is rejected and nothing changes
+    expect(await rpc('apiSaveSettings', [validSettings({ DailyTaskView: 'a-nope' })])).toMatchObject({ ok: false, code: 'VALIDATION' });
+    expect((await rows('SELECT daily_task_view v FROM settings'))[0].v).toBe('a-low');
+  });
+
   it('settings RPCs are admin only', async () => {
     expect(await rpc('apiGetSettings', [], officerCookie)).toMatchObject({ ok: false, code: 'FORBIDDEN' });
     expect(await rpc('apiSaveSettings', [validSettings()], officerCookie)).toMatchObject({ code: 'FORBIDDEN' });

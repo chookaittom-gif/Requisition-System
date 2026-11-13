@@ -20,6 +20,17 @@
 
 ---
 
+## 2.00000 Session ล่าสุด (2026-11-13 Admin-Pinned Daily Task in Mobile Shortcuts)
+
+ผ่าน grill-me (Q1–Q6): ผู้ดูแลเลือก "งานประจำวัน" ให้เป็นช่องแรกของเมนูทางลัดบนมือถือ ค่าเดียวใช้ร่วมกันทุกคน เปลี่ยนได้ทุกเมื่อ
+- **Migration (additive) `0014_settings_daily_task_view.sql`:** `settings.daily_task_view TEXT NOT NULL DEFAULT 'a-dash'` (ผู้ใช้อนุมัติ) ย้อนกลับ: ไม่ต้องแก้ข้อมูล ค่าเริ่มต้นให้ลำดับเดิม; ผลกับ production เกิดเมื่อ push ขึ้น `main` (workflow รัน D1 migrations)
+- **Backend:** `rows.ts` map `daily_task_view` → `DailyTaskView`; `admin.ts` เพิ่ม `DAILY_TASK_VIEWS` (17 id ตาม `MENUS.admin`), `apiSaveSettings` ตรวจ id (ไม่ถูกต้อง → `VALIDATION`, ว่าง/ไม่ส่ง → คงค่าเดิม); `auth.ts` `apiGetBootstrap` ส่ง `DailyTaskView` ให้ทุกบทบาท
+- **Frontend (`index.html`):** แยก `renderShortcuts()` ย้ายงานที่เลือกไปช่องแรกของ `#shortcutGrid` (ถ้าไม่มีในเมนูของบทบาทนั้นใช้ลำดับปกติ); dropdown `#fDailyTask` ในหน้าตั้งค่า (ผู้ดูแลเท่านั้น); เรียก `renderShortcuts()` หลัง bootstrap และหลังบันทึก; ไม่แตะเมนูด้านข้างและแถบนำทางล่าง
+- **Test:** เพิ่มเทสต์ใน `test/admin.test.ts`, ปรับรายการคีย์ใน `test/auth.test.ts`; `npm test` ผ่าน (Cloudflare 203 + Node 50), `npm run typecheck` ผ่าน
+- **ยังไม่ได้ทดสอบบนเบราว์เซอร์จริง** (UI dropdown และการสลับลำดับทางลัดบนมือถือ); เมนูผู้ดูแลมี 17 รายการ (ไม่ใช่ 11 ตามที่เคยแจ้งตอน grill)
+
+---
+
 ## 2.0000 Session ล่าสุด (2026-11-13 Concise-Output Default in AGENTS.md)
 
 - เพิ่มข้อ 8 "Output (ประหยัด token)" ใน `AGENTS.md`: ใช้สกิว `concise-output` เป็นค่าเริ่มต้นทุกคำตอบ คงพาธ/คำสั่ง/error ให้ตรงต้นฉบับ

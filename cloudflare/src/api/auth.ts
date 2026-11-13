@@ -25,7 +25,7 @@ function sanitizeUser(row: Obj): Obj {
 
 registerRpc('apiGetBootstrap', 'public', async (ctx) => {
   const s = await ctx.env.DB.prepare(
-    'SELECT school_name, affiliation, logo_url, banner_url, address, phone FROM settings WHERE id = 1',
+    'SELECT school_name, affiliation, logo_url, banner_url, address, phone, daily_task_view FROM settings WHERE id = 1',
   ).first<Obj>();
   let user: Obj | null = null;
   if (ctx.session?.id) {
@@ -41,6 +41,7 @@ registerRpc('apiGetBootstrap', 'public', async (ctx) => {
       BannerUrl: s?.banner_url ?? '',
       Address: s?.address ?? '',
       Phone: s?.phone ?? '',
+      DailyTaskView: s?.daily_task_view ?? 'a-dash',
     },
     ...(user ? { user } : {}),
   };

@@ -189,6 +189,7 @@ describe('auth rpc', () => {
       'Address',
       'Affiliation',
       'BannerUrl',
+      'DailyTaskView',
       'LogoUrl',
       'Phone',
       'SchoolName',
