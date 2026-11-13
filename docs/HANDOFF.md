@@ -20,6 +20,16 @@
 
 ---
 
+## 2.0000 Session ล่าสุด (2026-11-13 Concise-Output Default in AGENTS.md)
+
+- เพิ่มข้อ 8 "Output (ประหยัด token)" ใน `AGENTS.md`: ใช้สกิว `concise-output` เป็นค่าเริ่มต้นทุกคำตอบ คงพาธ/คำสั่ง/error ให้ตรงต้นฉบับ
+- บันทึก memory ฝั่ง Claude (`concise-output-always-on.md`) ไม่อยู่ใน repo
+- ไม่มีการเปลี่ยนโค้ด/schema/config/migration
+- Verify: `npm test` ใน `cloudflare/` ผ่าน (Cloudflare Vitest 202 + Node Vitest 50)
+- ยังไม่ได้ทำ: `graft build` (ขั้นตอนที่ 6) จะรันหลัง push
+
+---
+
 ## 2.000 Session ล่าสุด (2026-11-13 Dashboard "วัสดุใช้ไป" Definition Aligned with Account)
 
 - ตรวจตัวเลขกับ D1 จริง (SELECT อย่างเดียว): คงคลัง 26,138.40 = ผลรวมมูลค่า `material_lots`, 44 รายการ, แจ้งเตือน 11 ตรงกันทุกหน้า
