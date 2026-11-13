@@ -39,6 +39,10 @@
      5. **Monitor & Verify Deployment:** ใช้ `gh run list` หรือ `gh run watch <run-id>` ตรวจสอบ GitHub Actions workflow จนสถานะเป็น `completed / success` (ยืนยันผลการ Deploy บน Cloudflare Worker สำเร็จจริง)
      6. **Refresh Context Graph:** รัน `graft build` เพื่อรีเฟรช context graph และ wiring graph ให้สอดคล้องกับโค้ดล่าสุด
 
+8. **Output (ประหยัด token):**
+   - ใช้สกิว `concise-output` เป็นค่าเริ่มต้นทุกคำตอบ: ตอบสั้น ใช้ bullet ไม่ขึ้นต้นด้วยคำนำ ไม่สรุปซ้ำสิ่งที่ผู้ใช้พูด
+   - คงพาธ, คำสั่ง, และข้อความ error ให้ตรงตามต้นฉบับเสมอ
+
 ## Project Context
 - **เทคโนโลยี:** Cloudflare Workers (TypeScript, RPC), Cloudflare D1 (SQLite), Single-Page Frontend (Vanilla JS, Tailwind), Google Apps Script (Legacy/Sync)
 - **ทางเข้าหลัก:** `cloudflare/public/index.html`, Backend `cloudflare/src/api/*.ts`
