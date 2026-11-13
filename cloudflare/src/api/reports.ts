@@ -244,18 +244,6 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
       .all<{ status: string; n: number }>();
     const n = (s: string) => statuses.find((r) => r.status === s)?.n ?? 0;
     const counters: Counters = { approved: n('APPROVED'), pending: n('PENDING'), rejected: n('REJECTED') };
-    const used = await db
-      .prepare(
-        // Value of what was issued = the lots actually consumed; legacy approvals with no recorded
-        // allocation keep the price stamped on the request line.
-        `SELECT
-           COALESCE((SELECT SUM(a.qty * a.unit_price) FROM request_lot_allocations a JOIN requests r ON r.id = a.request_id WHERE r.status = 'APPROVED'), 0)
-           + COALESCE((SELECT SUM(COALESCE(i.approved_qty, i.qty) * i.unit_price) FROM request_items i JOIN requests r ON r.id = i.request_id
-                        WHERE r.status = 'APPROVED'
-                          AND NOT EXISTS (SELECT 1 FROM request_lot_allocations a WHERE a.request_id = i.request_id AND a.material_id = i.material_id)), 0) AS value,
-           COALESCE((SELECT SUM(COALESCE(i.approved_qty, i.qty)) FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED'), 0) AS qty`,
-      )
-      .first<{ value: number; qty: number }>();
     const { results: byName } = await db
       .prepare(
         "SELECT i.name AS name, SUM(COALESCE(i.approved_qty, i.qty)) AS qty FROM request_items i JOIN requests r ON r.id = i.request_id WHERE r.status = 'APPROVED' AND COALESCE(i.approved_qty, i.qty) > 0 GROUP BY i.name ORDER BY MIN(i.rowid)",
@@ -297,8 +285,10 @@ registerRpc('apiGetAdminDashboard', 'officer', (ctx) =>
       summary: {
         totalMaterials: materials.length,
         remainValue: invAcc.summary.remainValue,
-        usedValue: num(used?.value),
-        usedQty: num(used?.qty),
+        // Same definition as the Account / Inventory Report pages: current fiscal year to date,
+        // so opening + received - used = remaining holds on every screen.
+        usedValue: invAcc.summary.usedValue,
+        usedQty: invAcc.total.UsedQty,
         lowStock: materials.filter((m) => m.StockState !== 'OK').length,
       },
       counters,

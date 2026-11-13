@@ -1,6 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import '../src/api/reports';
+import { currentFiscalYear } from '../src/lib/time';
 
 const SALT = 'SALT';
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -245,7 +246,11 @@ describe('dashboards', () => {
   it('admin dashboard remainValue matches inventory account remainValue for current fiscal year', async () => {
     const r = await asOfficer('apiGetAdminDashboard');
     expect(r.ok).toBe(true);
-    expect(r.summary).toEqual({ totalMaterials: 3, remainValue: 240, usedValue: 5670, usedQty: 68, lowStock: 1 });
+    // "Used" is current-fiscal-year-to-date, identical to the Account page (not all-time).
+    expect(r.summary).toEqual({ totalMaterials: 3, remainValue: 240, usedValue: 40, usedQty: 4, lowStock: 1 });
+    const acc = await asOfficer('apiGetInventoryAccount', { fiscalYear: currentFiscalYear() });
+    expect(r.summary.usedValue).toBe(acc.summary.usedValue);
+    expect(r.summary.usedQty).toBe(acc.total.UsedQty);
     expect(r.counters).toEqual({ approved: 5, pending: 1, rejected: 1 });
     expect(r.chartStatus).toEqual([
       { label: 'อนุมัติแล้ว', value: 5 },

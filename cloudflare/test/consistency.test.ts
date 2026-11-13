@@ -77,8 +77,10 @@ describe('every screen agrees on quantity and value', () => {
 
     const dash = await rpc('apiGetAdminDashboard');
     expect(dash.summary.remainValue).toBe(expectedValue);
-    // The one approved request (1 pc) was issued from the @20 lot even though it was raised at 10.
-    expect(dash.summary.usedValue).toBe(20);
+    // Dashboard "used" now equals the Account page (FY to date): the approved 1 pc from the @20 lot
+    // plus the manual stock reduction of 1 pc at the @10 lot = 30, and it balances against remaining.
+    expect(dash.summary.usedValue).toBe(30);
+    expect(dash.summary.usedValue).toBe(acc.summary.usedValue);
 
     // And the books balance: opening + received - issued = remaining, in money as well as quantity.
     const row = acc.data.find((x: any) => x.Code === 'A-1');
