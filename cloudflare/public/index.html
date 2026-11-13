@@ -2242,6 +2242,7 @@ $('#btnRefresh').addEventListener('click', ()=>{
 
 $('#btnLogout').addEventListener('click', async ()=>{
   if(S.user && S.user.Role === 'guest'){
+    clearDraftsOnLogout_();
     backToLoginPage();
     return;
   }
@@ -2251,6 +2252,7 @@ $('#btnLogout').addEventListener('click', async ()=>{
     cancelButtonText:'ยกเลิก', confirmButtonColor:'#0284c7', cancelButtonColor:'#94a3b8', reverseButtons:true
   });
   if(!r.isConfirmed) return;
+  clearDraftsOnLogout_();
   showLoader('กำลังออกจากระบบ...');
   try{ await api('apiLogout', S.user.Username); }catch(e){}
   hideLoader();
@@ -6991,7 +6993,7 @@ async function viewStockMovements(){
  *  VIEW : ใบสั่งซื้อ (Purchase Order) — กรอกข้อมูลแล้วส่งออก Excel A4 (ไม่บันทึกลงฐานข้อมูล)
  * ================================================================================= */
 const PO_MIN_ROWS = 16;               // จำนวนแถวตามแบบฟอร์มมาตรฐาน
-const PO_DRAFT_KEY = () => 'po_draft_' + (S?.user?.Username || 'default');
+const PO_DRAFT_KEY = () => 'po_draft_' + String(S?.user?.Username || 'default').toLowerCase();
 const PO_DRAFT_FIELDS = ['To', 'IssName', 'IssPos'];   // จำเฉพาะข้อมูลที่ใช้ซ้ำ ไม่จำรายการ/จำนวน/ราคา
 
 function poRowAmount(r){
@@ -8825,7 +8827,13 @@ async function viewProfile(){
 /* =================================================================================
  *  VIEW : REQUEST FORM (แบบฟอร์มขอเบิกพัสดุ)
  * ================================================================================= */
-const REQ_DRAFT_KEY = () => 'req_form_draft_v1_' + (S?.user?.Username || S?.user?.ID || 'guest');
+// ชื่อผู้ใช้ไม่แยกตัวพิมพ์เล็ก/ใหญ่ (lib/username.ts) คีย์แบบร่างจึงต้องเป็นตัวพิมพ์เล็กเพื่อไม่ให้แตกเป็นหลายใบ
+const REQ_DRAFT_KEY = () => 'req_form_draft_v1_' + String(S?.user?.Username || S?.user?.ID || 'guest').toLowerCase();
+// ล้างแบบร่างของบัญชีปัจจุบันตอนกดออกจากระบบ (กันเครื่องที่หลายคนใช้ร่วมกัน)
+function clearDraftsOnLogout_(){
+  try { localStorage.removeItem(REQ_DRAFT_KEY()); }catch(e){}
+  try { localStorage.removeItem(PO_DRAFT_KEY()); }catch(e){}
+}
 const REQ_DRAFT_TTL_MS = 30 * 60 * 1000; // 30 นาที
 
 function clearReqDraft(){
