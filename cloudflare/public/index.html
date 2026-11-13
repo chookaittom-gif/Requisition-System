@@ -969,37 +969,34 @@ const DEPT_GROUPS = [
 ];
 
 /* ความจำเป็นต้องเบิกพัสดุ: select แสดงครบทุกข้อ (+ อื่น ๆ) ส่วน #rPurpose เป็นช่องเก็บค่าจริงที่ส่งไป API
-   prefix=true → ให้พิมพ์ต่อท้าย (เช่น ชื่อรายวิชา) */
+   ช่องพิมพ์แสดงเฉพาะเมื่อเลือก "อื่น ๆ" */
 const PURPOSE_OPTIONS = [
-  { v:'เพื่อจัดการเรียนการสอนรายวิชา', prefix:true },
-  { v:'เพื่อจัดกิจกรรมโครงการนักศึกษา', prefix:true },
-  { v:'เพื่อการดำเนินงานสำนักงานประจำวัน' },
-  { v:'เพื่อโครงการบริการวิชาการแก่ชุมชน' },
-  { v:'เพื่อการสอบและประเมินผลการเรียนรู้' }
+  'เพื่อจัดการเรียนการสอนรายวิชา',
+  'เพื่อจัดกิจกรรมโครงการนักศึกษา',
+  'เพื่อการดำเนินงานสำนักงานประจำวัน',
+  'เพื่อโครงการบริการวิชาการแก่ชุมชน',
+  'เพื่อการสอบและประเมินผลการเรียนรู้'
 ];
 const PURPOSE_DEFAULT = 'เพื่อการดำเนินงานสำนักงานประจำวัน'; // เลือกไว้ให้ตอนเปิดฟอร์มใหม่
 const PURPOSE_OTHER = '__other';
 function purposeSelectOptions_(){
   return '<option value="">-- เลือกความจำเป็นในการเบิก --</option>'
-    + PURPOSE_OPTIONS.map(p => `<option value="${esc(p.v)}">${esc(p.v + (p.prefix ? '...' : ''))}</option>`).join('')
+    + PURPOSE_OPTIONS.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')
     + `<option value="${PURPOSE_OTHER}">อื่น ๆ (พิมพ์เอง)</option>`;
 }
 function setPurposeUi_(val){
   const sel = $('#rPurposeSel'), inp = $('#rPurpose');
   if(!sel || !inp) return;
   val = String(val || '');
-  const hit = PURPOSE_OPTIONS.find(p => p.prefix ? val.startsWith(p.v) : val === p.v);
-  sel.value = !val ? '' : (hit ? hit.v : PURPOSE_OTHER);
+  sel.value = !val ? '' : (PURPOSE_OPTIONS.includes(val) ? val : PURPOSE_OTHER);
   inp.value = val;
-  inp.classList.toggle('hidden', !(sel.value === PURPOSE_OTHER || (hit && hit.prefix)));
+  inp.classList.toggle('hidden', sel.value !== PURPOSE_OTHER);
 }
 function onPurposeSelect_(){
   const sel = $('#rPurposeSel'), inp = $('#rPurpose');
-  const p = PURPOSE_OPTIONS.find(x => x.v === sel.value);
-  inp.value = p ? (p.prefix ? p.v + ' ' : p.v) : '';
-  const showInput = sel.value === PURPOSE_OTHER || (p && p.prefix);
-  inp.classList.toggle('hidden', !showInput);
-  if(showInput) inp.focus();
+  inp.value = PURPOSE_OPTIONS.includes(sel.value) ? sel.value : '';
+  inp.classList.toggle('hidden', sel.value !== PURPOSE_OTHER);
+  if(sel.value === PURPOSE_OTHER) inp.focus();
 }
 
 function renderDeptSelectOptions(selectedVal = '', placeholder = '-- เลือกสังกัด / ฝ่ายงาน / หลักสูตร --') {
@@ -9033,7 +9030,7 @@ async function viewRequestForm(){
 
       <div><label for="rPurpose" class="block text-sm font-bold text-slate-700 mb-1.5">มีความจำเป็นต้องเบิกพัสดุเพื่อ <span class="text-rose2">*</span></label>
         <select id="rPurposeSel" aria-label="ความจำเป็นต้องเบิกพัสดุ" class="w-full px-4 py-3 min-h-[48px] rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">${purposeSelectOptions_()}</select>
-        <input id="rPurpose" required maxlength="500" aria-label="รายละเอียดความจำเป็นต้องเบิกพัสดุ" placeholder="พิมพ์รายละเอียด เช่น ชื่อรายวิชา / ชื่อโครงการ" class="hidden mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
+        <input id="rPurpose" required maxlength="500" aria-label="รายละเอียดความจำเป็นต้องเบิกพัสดุ" placeholder="พิมพ์ความจำเป็นในการเบิกพัสดุ" class="hidden mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/60 focus:bg-white transition">
       </div>
 
       <div class="rounded-3xl border-2 border-dashed border-brand-200 p-4 bg-brand-50/30">
@@ -9673,10 +9670,8 @@ async function submitRequestInner(e){
   }
   const purposeVal = $('#rPurpose').value.trim();
   const purposeSel = $('#rPurposeSel');
-  const purposePrefix = purposeSel && PURPOSE_OPTIONS.find(p => p.prefix && p.v === purposeSel.value);
-  if(!purposeVal || (purposePrefix && purposeVal === purposePrefix.v)){
-    focusAndScroll((purposeSel && !purposeSel.value) ? purposeSel : $('#rPurpose'),
-      purposeVal ? 'กรุณาพิมพ์รายละเอียดต่อท้าย (เช่น ชื่อรายวิชา / ชื่อโครงการ)' : 'กรุณาระบุความจำเป็นในการเบิกพัสดุ');
+  if(!purposeVal){
+    focusAndScroll((purposeSel && !purposeSel.value) ? purposeSel : $('#rPurpose'), 'กรุณาระบุความจำเป็นในการเบิกพัสดุ');
     return;
   }
 
