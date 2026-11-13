@@ -977,6 +977,7 @@ const PURPOSE_OPTIONS = [
   { v:'เพื่อโครงการบริการวิชาการแก่ชุมชน' },
   { v:'เพื่อการสอบและประเมินผลการเรียนรู้' }
 ];
+const PURPOSE_DEFAULT = 'เพื่อการดำเนินงานสำนักงานประจำวัน'; // เลือกไว้ให้ตอนเปิดฟอร์มใหม่
 const PURPOSE_OTHER = '__other';
 function purposeSelectOptions_(){
   return '<option value="">-- เลือกความจำเป็นในการเบิก --</option>'
@@ -8891,7 +8892,7 @@ function doSaveReqDraft_(){
   const hasContent = !!(
     (data.PersonnelCode && data.PersonnelCode.trim()) ||
     (data.Department && data.Department.trim()) ||
-    (data.Purpose && data.Purpose.trim()) ||
+    (data.Purpose && data.Purpose.trim() && data.Purpose.trim() !== PURPOSE_DEFAULT) ||
     (data.Note && data.Note.trim()) ||
     (items.length > 0 && items.some(it => it.MaterialID || parseFloat(it.Qty) > 0 || (it.Remark && it.Remark.trim()))) ||
     ($('#rName') && !$('#rName').readOnly && data.FullName && data.FullName.trim()) ||
@@ -9482,6 +9483,7 @@ async function viewRequestForm(){
   }
 
   $('#rPurposeSel').addEventListener('change', onPurposeSelect_);
+  if(!$('#rPurpose').value) setPurposeUi_(PURPOSE_DEFAULT);
 
   // Bind draft save events
   $('#frmReq').addEventListener('input', () => saveReqDraft(false));
@@ -9689,7 +9691,7 @@ async function submitRequestInner(e){
     return;
   }
 
-  const cfm = await Swal.fire({ icon:'question', title:'ยืนยันส่งใบขอเบิก?', text:'รายการทั้งหมด '+items.length+' รายการ — เมื่อส่งแล้วจะได้เลขที่ใบขอเบิกสำหรับติดตามสถานะ',
+  const cfm = await Swal.fire({ icon:'question', title:'ยืนยันส่งใบขอเบิก?', html:'รายการทั้งหมด '+items.length+' รายการ<br>ความจำเป็น: <b>'+esc(purposeVal)+'</b><br><span class="text-sm">เมื่อส่งแล้วจะได้เลขที่ใบขอเบิกสำหรับติดตามสถานะ</span>',
     showCancelButton:true, focusCancel:true, confirmButtonText:'ส่งใบขอเบิก', cancelButtonText:'ยกเลิก', confirmButtonColor:'#0284c7', cancelButtonColor:'#94a3b8', reverseButtons:true });
   if(!cfm.isConfirmed) return;
 
