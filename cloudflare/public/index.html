@@ -5606,7 +5606,9 @@ async function viewSettings(){
           </div>
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-bold text-slate-700 mb-1.5">Telegram Bot Token</label>
+              <div class="flex items-center h-7 mb-1.5">
+                <label for="fTgToken" class="block text-sm font-bold text-slate-700">Telegram Bot Token</label>
+              </div>
               <div class="relative">
                 <input id="fTgToken" type="password" autocomplete="off" value="${esc(d.TelegramBotToken||'')}" placeholder="123456:ABC-DEF..." class="w-full pl-4 pr-11 py-3 rounded-2xl border border-slate-200 bg-white">
                 <button type="button" id="toggleTgToken" aria-label="แสดงหรือซ่อน Telegram Token" class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition flex items-center justify-center">
@@ -5615,9 +5617,9 @@ async function viewSettings(){
               </div>
             </div>
             <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <label class="block text-sm font-bold text-slate-700">Telegram Chat ID</label>
-                <button type="button" id="btnTestTg" class="text-xs text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 transition">
+              <div class="flex items-center justify-between h-7 mb-1.5">
+                <label for="fTgChat" class="block text-sm font-bold text-slate-700">Telegram Chat ID</label>
+                <button type="button" id="btnTestTg" class="min-h-[44px] -my-2 px-1 text-xs text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 transition">
                   <i class="fa-solid fa-paper-plane"></i> ทดสอบส่งข้อความ
                 </button>
               </div>
@@ -5625,9 +5627,9 @@ async function viewSettings(){
             </div>
           </div>
           <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="block text-sm font-bold text-slate-700">LINE Channel access token</label>
-              <button type="button" id="btnTestLine" class="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 transition">
+            <div class="flex items-center justify-between h-7 mb-1.5">
+              <label for="fLineToken" class="block text-sm font-bold text-slate-700">LINE Channel access token</label>
+              <button type="button" id="btnTestLine" class="min-h-[44px] -my-2 px-1 text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1 transition">
                 <i class="fa-brands fa-line text-base text-emerald-500"></i> ทดสอบส่งข้อความ LINE
               </button>
             </div>
@@ -5640,7 +5642,9 @@ async function viewSettings(){
             <p class="text-[11px] text-slate-400 mt-1">ได้จาก LINE Developers Console แท็บ Messaging API (ส่งข้อความผ่านบอทของ LINE Official Account)</p>
           </div>
           <div>
-            <label class="block text-sm font-bold text-slate-700 mb-1.5">LINE Group ID หรือ User ID (ผู้รับแจ้งเตือน)</label>
+            <div class="flex items-center h-7 mb-1.5">
+              <label for="fLineTo" class="block text-sm font-bold text-slate-700">LINE Group ID หรือ User ID (ผู้รับแจ้งเตือน)</label>
+            </div>
             <input id="fLineTo" autocomplete="off" value="${esc(d.LineTo||'')}" placeholder="Cxxxxxxxxxxxxxxxx (กลุ่ม) หรือ Uxxxxxxxxxxxxxxxx (บุคคล)" class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white">
             <p class="text-[11px] text-slate-400 mt-1">แจ้งเตือนเมื่อมีใบขอเบิกใหม่ ต้องเชิญบอทเข้ากลุ่มก่อน</p>
           </div>
