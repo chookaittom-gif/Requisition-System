@@ -20,6 +20,14 @@
 
 ---
 
+## 2.00 Session ล่าสุด (2026-11-13 Staff Login Heading Text)
+
+- แก้หัวข้อฟอร์มเข้าสู่ระบบหน้าแรกใน `cloudflare/public/index.html:311` จาก "สำหรับเจ้าหน้าที่และผู้ดูแลระบบ — เข้าสู่ระบบ" เป็น "เข้าสู่ระบบสำหรับเจ้าหน้าที่" (เปลี่ยนเฉพาะข้อความ ไม่แตะไอคอน/สไตล์/layout)
+- Verify: `npm test` ผ่าน (Worker 202 + Node 50)
+- ไม่มีการเปลี่ยน schema/config/skill/plugin
+
+---
+
 ## 2.0 Session ล่าสุด (2026-11-12 Persona UX Test + Track-Status Privacy Fix)
 
 - **ทดสอบ UX/QA 6 Persona (guest, ไม่ส่งใบเบิกจริง):** รายงานเต็มที่ `docs/UX-TEST-REPORT-2026-11-12.md` (สรุป: NOT READY, Top 10 + แนวทางแก้) พร้อมภาคผนวกตรวจฝั่ง admin แบบอ่านอย่างเดียว
