@@ -8939,13 +8939,15 @@ async function viewRequestForm(){
   c.innerHTML = `<div class="max-w-4xl mx-auto animate-fadeUp">${cardWrap('แบบฟอร์มขอเบิกพัสดุ','fa-file-pen', `
     <div id="draftAlertContainer"></div>
     <form id="frmReq" class="space-y-5" novalidate>
+      ${(!S.user || S.user.Role === 'guest' || S.user.Role === 'staff') ? `
       <div class="p-3.5 rounded-2xl bg-brand-50 border border-brand-100 flex items-start gap-2.5 text-xs text-brand-800">
         <i class="fa-solid fa-clock text-brand-600 mt-0.5 text-sm flex-shrink-0"></i>
         <div>
-          <p class="font-bold">เวลาทำการรับ-จ่ายพัสดุ: 08:30–16:30 น. ทุกวันทำการ</p>
+          <p class="font-bold">เวลาทำการรับ-จ่ายพัสดุ: จ.–ศ. 08:30–16:30 น.</p>
           <p class="text-slate-600 mt-0.5">ใบขอเบิกที่ยื่นนอกเวลาทำการ จะได้รับการพิจารณาในเช้าวันทำการถัดไป (กรณีด่วน ติดต่อเจ้าหน้าที่พัสดุเพื่อขออนุมัติทางไกล)</p>
         </div>
       </div>
+      ` : ''}
       ${isAuthUser ? `
       <!-- ข้อมูลผู้ขอเบิก (ผู้ใช้งานที่เข้าสู่ระบบ) -->
       <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-sky-50/90 via-blue-50/50 to-indigo-50/30 border border-sky-100 shadow-2xs">
